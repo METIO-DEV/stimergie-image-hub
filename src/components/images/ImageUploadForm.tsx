@@ -1,4 +1,4 @@
-import { useState, useRef, ChangeEvent, useEffect, KeyboardEvent } from 'react';
+import { useState, useRef, ChangeEvent, useEffect, KeyboardEvent, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -54,14 +54,7 @@ export function ImageUploadForm({ isOpen, onClose, onSuccess, userRole = 'user' 
   const tagInputRef = useRef<HTMLInputElement>(null);
   const [autoAnalyzeEnabled, setAutoAnalyzeEnabled] = useState<boolean>(true);
 
-
-  useEffect(() => {
-    if (isOpen && user) {
-      fetchProjects();
-    }
-  }, [isOpen, user]);
-
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
     if (!user) return;
     
     setIsLoadingProjects(true);
@@ -73,15 +66,25 @@ export function ImageUploadForm({ isOpen, onClose, onSuccess, userRole = 'user' 
       if (userRole === 'admin_client') {
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
-          .select('id_client')
+          .select('id_client, client_ids')
           .eq('id', user.id)
           .single();
           
         if (profileError) throw profileError;
-        
-        if (profileData?.id_client) {
-          query = query.eq('id_client', profileData.id_client);
+
+        const clientIds = [
+          ...(profileData?.id_client ? [profileData.id_client] : []),
+          ...(profileData?.client_ids || [])
+        ];
+        const uniqueClientIds = [...new Set(clientIds)].filter(Boolean);
+
+        if (uniqueClientIds.length === 0) {
+          setProjects([]);
+          setSelectedProject('');
+          return;
         }
+
+        query = query.in('id_client', uniqueClientIds);
       }
       
       const { data, error } = await query.order('nom_projet');
@@ -89,15 +92,30 @@ export function ImageUploadForm({ isOpen, onClose, onSuccess, userRole = 'user' 
       if (error) throw error;
       
       setProjects(data || []);
-      if (data && data.length === 1) {
-        setSelectedProject(data[0].id);
-      }
+      setSelectedProject(currentProject => {
+        if (data && data.length === 1) {
+          return data[0].id;
+        }
+
+        if (currentProject && !data?.some(project => project.id === currentProject)) {
+          return '';
+        }
+
+        return currentProject;
+      });
     } catch (error) {
       console.error('Error fetching projects:', error);
+      setProjects([]);
     } finally {
       setIsLoadingProjects(false);
     }
-  };
+  }, [user, userRole]);
+
+  useEffect(() => {
+    if (isOpen && user) {
+      fetchProjects();
+    }
+  }, [fetchProjects, isOpen, user]);
 
   const resetForm = () => {
     setTitle('');

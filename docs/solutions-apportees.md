@@ -155,3 +155,25 @@ Verification effectuee :
 - test HTTP direct sur `VALRHONA_BARISTA_2210250385` : `200 image/jpeg`, donc le serveur d'images fonctionne pour les fichiers presents ;
 - `npx eslint` cible sur les fichiers d'affichage images : succes avec un warning historique dans `ImageSelector.tsx` ;
 - `npm run build` : succes, avec warnings Vite deja presents.
+
+## P1 - Upload image pour `admin_client` multi-client
+
+Statut : corrige sur la branche `dev/supabase-environment`.
+
+Probleme traite :
+
+- le formulaire d'upload d'image filtrait les projets d'un `admin_client` uniquement avec `profiles.id_client` ;
+- le champ multi-client `profiles.client_ids` n'etait pas pris en compte ;
+- un `admin_client` rattache a plusieurs clients pouvait donc ne voir qu'une partie de ses projets autorises.
+
+Solution appliquee :
+
+- `ImageUploadForm` lit maintenant `id_client` et `client_ids` depuis `profiles` ;
+- les deux sources sont fusionnees et dedupliquees ;
+- la requete projets utilise `.in('id_client', clientIds)` pour afficher tous les projets des clients rattaches ;
+- le comportement mono-client existant est conserve.
+
+Verification effectuee :
+
+- `npx eslint src/components/images/ImageUploadForm.tsx` : succes ;
+- `npm run build` : succes, avec warnings Vite deja presents.
