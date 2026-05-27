@@ -5,9 +5,13 @@ VALUES ('zip_downloads', 'ZIP Downloads', true)
 ON CONFLICT (id) DO UPDATE
 SET public = true; -- Make it public for easier access to download links
 
--- Clear existing policies to avoid conflicts
-DELETE FROM storage.policies 
-WHERE bucket_id = 'zip_downloads';
+-- Clear existing policies to avoid conflicts.
+-- Supabase storage policies are PostgreSQL RLS policies on storage.objects.
+DROP POLICY IF EXISTS "Authenticated users can read ZIPs" ON storage.objects;
+DROP POLICY IF EXISTS "Service role can upload ZIPs" ON storage.objects;
+DROP POLICY IF EXISTS "Service role can update ZIP objects" ON storage.objects;
+DROP POLICY IF EXISTS "Service role can delete ZIP objects" ON storage.objects;
+DROP POLICY IF EXISTS "Public can download ZIPs" ON storage.objects;
 
 -- Create policy for authenticated users to read ZIPs
 CREATE POLICY "Authenticated users can read ZIPs"

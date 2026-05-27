@@ -2,12 +2,16 @@
 // This function will be called daily to cache images from the server
 
 // First, we import the necessary modules
-const FUNCTION_ENDPOINT = Deno.env.get('PUBLIC_URL') || 'https://mjhbugzaqmtfnbxaqpss.supabase.co'
+const FUNCTION_ENDPOINT = Deno.env.get('PUBLIC_URL') || Deno.env.get('SUPABASE_URL')
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || ''
 
 // Handle the cron job request
 Deno.serve(async (_req) => {
   try {
+    if (!FUNCTION_ENDPOINT || !ANON_KEY) {
+      throw new Error('Missing PUBLIC_URL/SUPABASE_URL or SUPABASE_ANON_KEY')
+    }
+
     console.log('Starting daily image cache refresh job')
     
     // Call the cache images function

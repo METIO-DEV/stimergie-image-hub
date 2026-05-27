@@ -5,9 +5,12 @@ VALUES ('zip-downloads', 'ZIP Downloads', false)
 ON CONFLICT (id) DO UPDATE
 SET public = false; -- Ensure it's not public for security
 
--- Remove any existing policies for the zip-downloads bucket to prevent conflicts
-DELETE FROM storage.policies 
-WHERE bucket_id = 'zip-downloads';
+-- Remove any existing policies for the zip-downloads bucket to prevent conflicts.
+-- Supabase storage policies are PostgreSQL RLS policies on storage.objects.
+DROP POLICY IF EXISTS "Authenticated users can download their ZIPs" ON storage.objects;
+DROP POLICY IF EXISTS "System can upload ZIPs" ON storage.objects;
+DROP POLICY IF EXISTS "System can update ZIP objects" ON storage.objects;
+DROP POLICY IF EXISTS "System can delete ZIP objects" ON storage.objects;
 
 -- Allow authenticated users to read from the bucket with signed URLs
 CREATE POLICY "Authenticated users can download their ZIPs"

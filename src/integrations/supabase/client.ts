@@ -2,10 +2,38 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = "https://mjhbugzaqmtfnbxaqpss.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qaGJ1Z3phcW10Zm5ieGFxcHNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQwMjQxODksImV4cCI6MjA1OTYwMDE4OX0.7ZXXLWe-1pV8uEi4ZwqhniG4pj8OrxPuUvzdoTr1aas";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_PUBLISHABLE_KEY =
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
+const SUPABASE_PROJECT_ID = import.meta.env.VITE_SUPABASE_PROJECT_ID || getProjectIdFromUrl(SUPABASE_URL);
+
+if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+  throw new Error('Missing Supabase environment variables: VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY');
+}
+
+function getProjectIdFromUrl(url: string | undefined) {
+  if (!url) return '';
+
+  try {
+    return new URL(url).hostname.split('.')[0] || '';
+  } catch {
+    return '';
+  }
+}
+
+export const supabaseAuthStorageKey = SUPABASE_PROJECT_ID
+  ? `sb-${SUPABASE_PROJECT_ID}-auth-token`
+  : undefined;
+
+export const clearSupabaseAuthStorage = () => {
+  if (supabaseAuthStorageKey) {
+    localStorage.removeItem(supabaseAuthStorageKey);
+  }
+};
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  auth: supabaseAuthStorageKey ? { storageKey: supabaseAuthStorageKey } : undefined,
+});

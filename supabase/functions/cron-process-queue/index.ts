@@ -2,13 +2,17 @@
 // Ultra-optimized cron job handler for process-queue function
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-// Define constants with fallback values
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || 'https://mjhbugzaqmtfnbxaqpss.supabase.co';
-const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qaGJ1Z3phcW10Zm5ieGFxcHNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEzODU2MDQsImV4cCI6MjA1Njk2MTYwNH0.JLcLHyBk3G0wO6MuhJ4WMqv8ImbGxmcExEzGG2xWIsk';
+// Supabase injects these secrets for deployed Edge Functions.
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 
 // Handle the cron job with proper error handling
 serve(async (_req) => {
   try {
+    if (!SUPABASE_URL || !ANON_KEY) {
+      throw new Error('Missing SUPABASE_URL or SUPABASE_ANON_KEY');
+    }
+
     console.log('🕒 Starting scheduled ZIP queue processing job');
     
     // Add shorter timeout to avoid function hanging

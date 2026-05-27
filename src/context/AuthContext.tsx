@@ -1,7 +1,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
+import { clearSupabaseAuthStorage, supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 type UserRole = 'admin' | 'admin_client' | 'user' | string;
@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error("❌ Error getting initial session:", error.message);
         
         // Clear any invalid session data from localStorage
-        localStorage.removeItem('sb-mjhbugzaqmtfnbxaqpss-auth-token');
+        clearSupabaseAuthStorage();
         
         setSession(null);
         setUser(null);
@@ -73,7 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.error("❌ Token refresh failed - no session returned - forcing logout");
             
             // Clear all invalid tokens from storage
-            localStorage.removeItem('sb-mjhbugzaqmtfnbxaqpss-auth-token');
+            clearSupabaseAuthStorage();
             
             // Reset all auth state
             setSession(null);
@@ -102,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log("👋 User signed out");
           
           // Clear all auth data
-          localStorage.removeItem('sb-mjhbugzaqmtfnbxaqpss-auth-token');
+          clearSupabaseAuthStorage();
           
           setSession(null);
           setUser(null);
@@ -147,7 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error("❌ Session invalide détectée lors de la vérification périodique:", error?.message);
           
           // Clear invalid tokens from storage
-          localStorage.removeItem('sb-mjhbugzaqmtfnbxaqpss-auth-token');
+          clearSupabaseAuthStorage();
           
           // Reset all auth state
           setSession(null);
@@ -212,7 +212,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error("🔐 Authentication error detected, signing out...");
           
           // Clear storage and sign out
-          localStorage.removeItem('sb-mjhbugzaqmtfnbxaqpss-auth-token');
+          clearSupabaseAuthStorage();
           
           toast({
             title: "Session invalide",
@@ -245,7 +245,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (isAuthError) {
           console.error("🔐 Authentication error in catch, signing out...");
-          localStorage.removeItem('sb-mjhbugzaqmtfnbxaqpss-auth-token');
+          clearSupabaseAuthStorage();
           await supabase.auth.signOut();
           return;
         }

@@ -54,8 +54,6 @@ export function ImageUploadForm({ isOpen, onClose, onSuccess, userRole = 'user' 
   const tagInputRef = useRef<HTMLInputElement>(null);
   const [autoAnalyzeEnabled, setAutoAnalyzeEnabled] = useState<boolean>(true);
 
-  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://mjhbugzaqmtfnbxaqpss.supabase.co";
-  const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qaGJ1Z3phcW10Zm5ieGFxcHNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEzODU2MDQsImV4cCI6MjA1Njk2MTYwNH0.JLcLHyBk3G0wO6MuhJ4WMqv8ImbGxmcExEzGG2xWIsk";
 
   useEffect(() => {
     if (isOpen && user) {
@@ -184,27 +182,21 @@ export function ImageUploadForm({ isOpen, onClose, onSuccess, userRole = 'user' 
       const base64Data = await fileToBase64(imageFile);
       console.log("Image converted to base64");
       
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/analyze-image-ai`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-        },
-        body: JSON.stringify({ imageBase64: base64Data })
+      const { data, error } = await supabase.functions.invoke('analyze-image-ai', {
+        body: { imageBase64: base64Data },
       });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Error from analyze-image-ai function:", errorData);
-        throw new Error(errorData.error || 'Failed to analyze image');
+
+      if (error) {
+        console.error("Error from analyze-image-ai function:", error);
+        throw new Error(error.message || 'Failed to analyze image');
       }
+
+      const tags = data?.tags;
+      console.log("Tags received from AI:", tags);
       
-      const data = await response.json();
-      console.log("Tags received from AI:", data.tags);
-      
-      if (data.tags && Array.isArray(data.tags) && data.tags.length > 0) {
-        setSuggestedTags(data.tags);
-        setTags(data.tags);
+      if (Array.isArray(tags) && tags.length > 0) {
+        setSuggestedTags(tags);
+        setTags(tags);
       } else {
         console.warn("No tags returned from AI function");
         setTagError("Aucun tag n'a pu être généré. Essayez d'ajouter des tags manuellement.");

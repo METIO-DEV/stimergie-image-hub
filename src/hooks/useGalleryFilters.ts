@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { clearSupabaseAuthStorage, supabase } from '@/integrations/supabase/client';
 
 export function useGalleryFilters() {
   const navigate = useNavigate();
@@ -36,7 +36,7 @@ export function useGalleryFilters() {
               console.error('🔐 Authentication error in get_user_client_ids - forcing logout');
               
               // Clear invalid tokens from storage
-              localStorage.removeItem('sb-mjhbugzaqmtfnbxaqpss-auth-token');
+              clearSupabaseAuthStorage();
               
               // Force redirect to auth page
               window.location.href = '/auth';
@@ -70,7 +70,7 @@ export function useGalleryFilters() {
               (error.message?.includes('Invalid Refresh Token') || 
                error.message?.includes('JWT expired'))) {
             console.error('🔐 Auth exception in get_user_client_ids - forcing logout');
-            localStorage.removeItem('sb-mjhbugzaqmtfnbxaqpss-auth-token');
+            clearSupabaseAuthStorage();
             window.location.href = '/auth';
           }
         }
