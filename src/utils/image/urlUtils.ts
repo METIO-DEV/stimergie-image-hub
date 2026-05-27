@@ -59,8 +59,7 @@ function extractDomain(url: string): string {
  * @returns A URL for a small placeholder version of the image
  */
 export function getPlaceholderUrl(originalUrl: string | null, size: number = 20): string {
-  // Toujours utiliser une image PNG de placeholder, jamais de SVG
-  return `/placeholder.png?size=${size}`;
+  return `/placeholder.svg?size=${size}`;
 }
 
 /**
@@ -120,7 +119,7 @@ export function debugImageUrl(url: string): void {
     url,
     isValid: Boolean(url) && url.startsWith('http'),
     length: url?.length || 0,
-    containsSpecialChars: /[^a-zA-Z0-9\-_\.\/:]/.test(url),
+    containsSpecialChars: /[^a-zA-Z0-9._/:-]/.test(url),
     domain: url ? extractDomain(url) : 'none',
     isPNG: url.toLowerCase().endsWith('.png'),
     isJPG: url.toLowerCase().endsWith('.jpg') || url.toLowerCase().endsWith('.jpeg'),

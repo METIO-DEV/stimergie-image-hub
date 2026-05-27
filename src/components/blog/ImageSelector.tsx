@@ -194,7 +194,7 @@ export function ImageSelector({ selectedImage, onSelectImage }: ImageSelectorPro
                         onError={(e) => {
                           console.error('Image load error:', e);
                           const imgElement = e.target as HTMLImageElement;
-                          imgElement.src = '/placeholder.png';
+                          imgElement.src = '/placeholder.svg';
                         }}
                       />
                     </div>

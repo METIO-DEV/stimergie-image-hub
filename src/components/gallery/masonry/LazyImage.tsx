@@ -30,6 +30,11 @@ export const LazyImage = memo(function LazyImage({
   const imgRef = useRef<HTMLImageElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
 
+  useEffect(() => {
+    setIsLoaded(false);
+    setHasError(!src);
+  }, [src]);
+
   // Intersection Observer pour détecter quand l'image entre dans le viewport
   useEffect(() => {
     if (!imgRef.current) return;
@@ -95,7 +100,7 @@ export const LazyImage = memo(function LazyImage({
       {/* Image réelle */}
       {isInView && (
         <img
-          src={hasError ? '/image-not-available.png' : src}
+          src={hasError || !src ? '/placeholder.svg' : src}
           alt={alt}
           className={cn(
             'absolute inset-0 w-full h-full object-cover transition-opacity duration-500',

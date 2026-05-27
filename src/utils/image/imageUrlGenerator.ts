@@ -3,6 +3,33 @@
  * Génère les URLs pour les images sur le serveur Stimergie
  */
 
+const STIMERGIE_PHOTOS_BASE_URL = 'https://www.stimergie.fr/photos';
+
+function stripImageExtension(imageTitle: string): string {
+  return imageTitle.replace(/\.(jpg|jpeg|png|webp)$/i, '').trim();
+}
+
+function encodePathPreservingSlashes(path: string): string {
+  return path
+    .trim()
+    .split('/')
+    .filter(Boolean)
+    .map(segment => encodeURIComponent(segment.trim()))
+    .join('/');
+}
+
+function buildStimergieImageUrl(folderName: string, imageTitle: string, qualityFolder?: 'JPG'): string {
+  if (!folderName || !imageTitle) {
+    return '';
+  }
+
+  const encodedFolder = encodePathPreservingSlashes(folderName);
+  const encodedTitle = encodeURIComponent(stripImageExtension(imageTitle));
+  const qualitySegment = qualityFolder ? `/${qualityFolder}` : '';
+
+  return `${STIMERGIE_PHOTOS_BASE_URL}/${encodedFolder}${qualitySegment}/${encodedTitle}.jpg`;
+}
+
 /**
  * Génère l'URL d'affichage pour une image (format JPG pour affichage)
  * Format: https://www.stimergie.fr/photos/[nom du dossier]/JPG/[titre].jpg
@@ -12,18 +39,8 @@ export function generateDisplayImageUrl(folderName: string, imageTitle: string):
     console.warn(`Nom de dossier ou titre d'image manquant pour générer l'URL d'affichage: ${folderName || 'dossier manquant'} / ${imageTitle || 'titre manquant'}`);
     return '';
   }
-  
-  // Nettoyer le titre d'image pour l'URL (enlever l'extension si présente)
-  const cleanImageTitle = imageTitle.replace(/\.(jpg|jpeg|png)$/i, '');
-  
-  // Encoder correctement les composants de l'URL pour éviter les problèmes avec les caractères spéciaux
-  const encodedFolder = encodeURIComponent(folderName.trim());
-  const encodedTitle = encodeURIComponent(cleanImageTitle.trim());
-  
-  // Ajouter un log pour le debugging
-  console.log(`Generated display URL for ${imageTitle}: https://www.stimergie.fr/photos/${encodedFolder}/JPG/${encodedTitle}.jpg`);
-  
-  return `https://www.stimergie.fr/photos/${encodedFolder}/JPG/${encodedTitle}.jpg`;
+
+  return buildStimergieImageUrl(folderName, imageTitle, 'JPG');
 }
 
 /**
@@ -35,17 +52,8 @@ export function generateDownloadImageSDUrl(folderName: string, imageTitle: strin
     console.warn(`Nom de dossier ou titre d'image manquant pour générer l'URL de téléchargement SD: ${folderName || 'dossier manquant'} / ${imageTitle || 'titre manquant'}`);
     return '';
   }
-  
-  // Nettoyer le titre d'image pour l'URL (enlever l'extension si présente)
-  const cleanImageTitle = imageTitle.replace(/\.(jpg|jpeg|png)$/i, '');
-  
-  const encodedFolder = encodeURIComponent(folderName.trim());
-  const encodedTitle = encodeURIComponent(cleanImageTitle.trim());
-  
-  // Ajouter un log pour le debugging
-  console.log(`Generated SD download URL for ${imageTitle}: https://www.stimergie.fr/photos/${encodedFolder}/JPG/${encodedTitle}.jpg`);
-  
-  return `https://www.stimergie.fr/photos/${encodedFolder}/JPG/${encodedTitle}.jpg`;
+
+  return buildStimergieImageUrl(folderName, imageTitle, 'JPG');
 }
 
 /**
@@ -58,17 +66,8 @@ export function generateDownloadImageHDUrl(folderName: string, imageTitle: strin
     console.warn(`Nom de dossier ou titre d'image manquant pour générer l'URL de téléchargement HD: ${folderName || 'dossier manquant'} / ${imageTitle || 'titre manquant'}`);
     return '';
   }
-  
-  // Nettoyer le titre d'image pour l'URL (enlever l'extension si présente)
-  const cleanImageTitle = imageTitle.replace(/\.(jpg|jpeg|png)$/i, '');
-  
-  const encodedFolder = encodeURIComponent(folderName.trim());
-  const encodedTitle = encodeURIComponent(cleanImageTitle.trim());
-  
-  // Ajouter un log pour le debugging
-  console.log(`Generated HD download URL for ${imageTitle}: https://www.stimergie.fr/photos/${encodedFolder}/${encodedTitle}.jpg`);
-  
-  return `https://www.stimergie.fr/photos/${encodedFolder}/${encodedTitle}.jpg`;
+
+  return buildStimergieImageUrl(folderName, imageTitle);
 }
 
 /**
@@ -105,7 +104,7 @@ export async function validateAndFixImageUrl(url: string): Promise<string> {
     }
     
     // En dernier recours, utiliser une image de remplacement
-    return '/placeholder.png';
+    return '/placeholder.svg';
   }
 }
 

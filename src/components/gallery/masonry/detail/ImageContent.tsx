@@ -184,8 +184,8 @@ export const ImageContent = ({
     setCurrentTags(newTags);
   };
 
-  const imageSrc = imageError 
-    ? '/image-not-available.png' 
+  const imageSrc = imageError
+    ? '/placeholder.svg'
     : (image?.display_url || image?.url_miniature || image?.src || image?.url || '');
 
   return (

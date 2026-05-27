@@ -225,7 +225,7 @@ async function fetchWithRetry(request, cache) {
 
 // Fonction pour récupérer une image de remplacement
 async function fetchPlaceholderImage(cache) {
-  const placeholderUrl = '/placeholder.png';
+  const placeholderUrl = '/placeholder.svg';
   
   try {
     // Vérifier d'abord si l'image de remplacement est en cache

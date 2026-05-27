@@ -53,6 +53,10 @@ export const ImageCard = memo(function ImageCard({
     }
   }, [src]);
 
+  useEffect(() => {
+    setImageError(false);
+  }, [src]);
+
   const handleImageLoad = () => {
     if (!mountedRef.current) return;
     
@@ -135,7 +139,7 @@ export const ImageCard = memo(function ImageCard({
 
   const aspectRatio = getAspectRatio();
   const shouldUseAspectRatio = aspectRatio !== undefined;
-  const imageSrc = imageError ? '/image-not-available.png' : src;
+  const imageSrc = imageError ? '/placeholder.svg' : src;
 
   return (
     <div 
@@ -155,7 +159,6 @@ export const ImageCard = memo(function ImageCard({
             <LazyImage
               src={imageSrc}
               alt={alt}
-              aspectRatio={aspectRatio}
               className="w-full h-full"
               onLoad={handleImageLoad}
               onError={handleImageError}
@@ -165,6 +168,7 @@ export const ImageCard = memo(function ImageCard({
           <LazyImage
             src={imageSrc}
             alt={alt}
+            aspectRatio={4 / 3}
             className="w-full"
             onLoad={handleImageLoad}
             onError={handleImageError}

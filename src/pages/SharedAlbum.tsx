@@ -11,12 +11,14 @@ import { saveAs } from 'file-saver';
 import { Image } from '@/utils/image/types';
 import { useToast } from '@/hooks/use-toast';
 import { Json } from '@/integrations/supabase/types';
+import { generateDisplayImageUrl, generateDownloadImageHDUrl } from '@/utils/image/imageUrlGenerator';
 
 interface AlbumImage {
   id: number;
   title: string;
   description?: string | null;
   url: string;
+  url_miniature?: string | null;
   width?: number | null;
   height?: number | null;
   orientation?: string | null;
@@ -47,13 +49,18 @@ interface RawImageData {
   id: string | number;
   title?: string;
   url?: string;
+  url_miniature?: string | null;
   description?: string | null;
   width?: number | null;
   height?: number | null;
   orientation?: string | null;
   id_projet?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
+
+const firstNonEmpty = (...values: Array<string | null | undefined>): string => {
+  return values.find(value => typeof value === 'string' && value.trim() !== '')?.trim() || '';
+};
 
 const SharedAlbum = () => {
   const params = useParams<{ albumKey?: string; shareKey?: string }>();
@@ -126,6 +133,7 @@ const SharedAlbum = () => {
           id: id,
           title: String(imgData.title || ''),
           url: String(imgData.url || ''),
+          url_miniature: typeof imgData.url_miniature === 'string' ? imgData.url_miniature : null,
           description: imgData.description as string | null,
           width: typeof imgData.width === 'number' ? imgData.width : null,
           height: typeof imgData.height === 'number' ? imgData.height : null,
@@ -220,10 +228,7 @@ const SharedAlbum = () => {
           let downloadUrl = image.url; // URL par défaut
           
           if (folderName && image.title) {
-            // Générer l'URL HD au format https://www.stimergie.fr/photos/[nom_du_dossier]/[titre_image].jpg
-            const cleanTitle = image.title.replace(/\.(jpg|jpeg|png)$/i, '');
-            downloadUrl = `https://www.stimergie.fr/photos/${encodeURIComponent(folderName)}/${encodeURIComponent(cleanTitle)}.jpg`;
-            console.log(`Generated HD URL for download: ${downloadUrl}`);
+            downloadUrl = generateDownloadImageHDUrl(folderName, image.title);
           }
           
           const response = await fetch(downloadUrl);
@@ -267,7 +272,11 @@ const SharedAlbum = () => {
     if (!album || !album.images || !Array.isArray(album.images)) return [];
     
     return album.images.map((image: AlbumImage) => {
-      const display_url = image.url;
+      const folderName = image.id_projet ? folderNames[image.id_projet] || '' : '';
+      const generatedDisplayUrl = folderName && image.title ? generateDisplayImageUrl(folderName, image.title) : '';
+      const generatedDownloadUrl = folderName && image.title ? generateDownloadImageHDUrl(folderName, image.title) : '';
+      const display_url = firstNonEmpty(image.url_miniature, generatedDisplayUrl, image.url, '/placeholder.svg');
+      const download_url = firstNonEmpty(generatedDownloadUrl, image.url, display_url);
       
       // Pour l'URL de téléchargement, on utilise simplement l'URL fournie
       // ImageCard gérera la transformation si nécessaire
@@ -275,11 +284,16 @@ const SharedAlbum = () => {
         id: image.id.toString(),
         src: display_url,
         display_url: display_url,
+        download_url,
+        download_url_sd: display_url,
         url: image.url, // URL originale
         alt: image.title || 'Image partagée',
         title: image.title || 'Sans titre',
         author: 'Album partagé',
         orientation: image.orientation || 'landscape',
+        width: image.width || undefined,
+        height: image.height || undefined,
+        id_projet: image.id_projet
       } as Image;
     });
   };
