@@ -32,8 +32,6 @@ export const ImageCard = memo(function ImageCard({
   const [isHovered, setIsHovered] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState(0);
-  const [downloadComplete, setDownloadComplete] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [naturalRatio, setNaturalRatio] = useState<number | undefined>(undefined);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -46,12 +44,14 @@ export const ImageCard = memo(function ImageCard({
   }, []);
 
   useEffect(() => {
-    if (imageRef.current) {
-      if (imageRef.current.complete) {
-        handleImageLoad();
+    const imgElement = imageRef.current;
+    if (imgElement?.complete) {
+      if (imgElement.naturalWidth && imgElement.naturalHeight) {
+        setNaturalRatio(imgElement.naturalWidth / imgElement.naturalHeight);
       }
+      setImageLoaded(true);
     }
-  }, [imageRef.current]);
+  }, [src]);
 
   const handleImageLoad = () => {
     if (!mountedRef.current) return;
@@ -95,11 +95,8 @@ export const ImageCard = memo(function ImageCard({
     if (isDownloading) return;
     
     setIsDownloading(true);
-    setDownloadProgress(0);
-    setDownloadComplete(false);
     
     try {
-      // Prioritize the original URL from database
       let downloadTarget = url || download_url_sd || downloadUrl || src;
       
       const validationResult = validateImageUrl(downloadTarget, id, title);
@@ -115,118 +112,19 @@ export const ImageCard = memo(function ImageCard({
       if (isJPGUrl) {
         downloadTarget = downloadTarget.replace('/JPG/', '/');
       }
-      
-      // Fetch avec suivi de progression en temps réel
-      const response = await fetch(downloadTarget, {
-        mode: 'cors',
-        credentials: 'omit',
-        headers: { 'Accept': 'image/jpeg,image/jpg,image/png,image/*' }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const contentLength = parseInt(response.headers.get('content-length') || '0');
-      let blob: Blob;
-      
-      // Ne créer le reader que si le body est lisible et non consommé
-      if (!response.bodyUsed && contentLength > 0 && response.body) {
-        const reader = response.body.getReader();
-        let receivedLength = 0;
-        const chunks: Uint8Array[] = [];
-        const startTime = Date.now();
-        
-        console.log(`[ImageCard] Début téléchargement HD: ${(contentLength / 1024 / 1024).toFixed(1)} MB`);
-        
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            
-            if (value) {
-              chunks.push(value);
-              receivedLength += value.length;
-              const progress = Math.round((receivedLength / contentLength) * 100);
-              
-              // Mise à jour de la progression en temps réel
-              if (!mountedRef.current) break;
-              setDownloadProgress(progress);
-              
-              // Log tous les 10%
-              if (progress % 10 === 0) {
-                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-                console.log(`[ImageCard] Progression: ${progress}% (${elapsed}s)`);
-              }
-            }
-          }
-          
-          console.log(`[ImageCard] Téléchargement terminé: 100%`);
-          
-          const isPngUrl = downloadTarget.toLowerCase().includes('.png');
-          blob = new Blob(chunks as BlobPart[], { type: isPngUrl ? 'image/png' : 'image/jpeg' });
-        } catch (readerError) {
-          console.error('[ImageCard] Erreur lecture stream:', readerError);
-          const isPngUrl = downloadTarget.toLowerCase().includes('.png');
-          
-          if (chunks.length > 0) {
-            // Reconstruire un blob avec les chunks déjà reçus
-            blob = new Blob(chunks as BlobPart[], { type: isPngUrl ? 'image/png' : 'image/jpeg' });
-          } else {
-            // Aucun chunk reçu: re-fetch sans utiliser le stream initial (verrouillé)
-            console.warn('[ImageCard] Aucun chunk reçu, re-fetch de l\'image');
-            const retryResponse = await fetch(downloadTarget, {
-              mode: 'cors',
-              credentials: 'omit',
-              headers: { 'Accept': 'image/jpeg,image/jpg,image/png,image/*' }
-            });
-            if (!retryResponse.ok) {
-              throw new Error(`HTTP ${retryResponse.status}`);
-            }
-            blob = await retryResponse.blob();
-          }
-        }
-      } else {
-        // Fallback : Body déjà consommé ou pas de content-length/reader
-        console.log('[ImageCard] Body déjà consommé ou pas de content-length, utilisation de blob()');
-        blob = await response.blob();
-      }
-      
-      // Déterminer l'extension du fichier
-      const isPngUrl = downloadTarget.toLowerCase().includes('.png');
-      const fileExtension = isPngUrl ? '.png' : '.jpg';
-      
-      // Télécharger le fichier
-      const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      
+
       const filename = title 
-        ? `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_HD${fileExtension}` 
-        : `image_${id}_HD${fileExtension}`;
-      
-      link.download = filename;
-      link.click();
-      window.URL.revokeObjectURL(blobUrl);
-      
-      // Animation de succès
-      setDownloadComplete(true);
-      const fileSize = blob.size > 0 ? (blob.size / 1024 / 1024).toFixed(1) : (contentLength / 1024 / 1024).toFixed(1);
-      toast.success(`Image HD téléchargée (${fileSize} MB)`);
-      
-      setTimeout(() => {
-        setDownloadComplete(false);
-        setIsDownloading(false);
-        setDownloadProgress(0);
-      }, 1500);
+        ? `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_HD.jpg`
+        : `image_${id}_HD.jpg`;
+
+      await downloadImage(downloadTarget, filename, 'jpg', false);
     } catch (error) {
       console.error(`Erreur lors du téléchargement:`, error);
       toast.error('Échec du téléchargement HD', { 
         description: 'Une erreur s\'est produite lors du téléchargement de l\'image.' 
       });
+    } finally {
       setIsDownloading(false);
-      setDownloadProgress(0);
-      setDownloadComplete(false);
     }
   };
 
@@ -276,8 +174,8 @@ export const ImageCard = memo(function ImageCard({
         {/* Overlay de progression de téléchargement */}
         {isDownloading && (
           <DownloadProgressOverlay 
-            progress={downloadProgress}
-            isComplete={downloadComplete}
+            progress={100}
+            isComplete={false}
           />
         )}
         

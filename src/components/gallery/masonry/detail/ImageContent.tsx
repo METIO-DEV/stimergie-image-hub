@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Download, Folder, User } from 'lucide-react';
-import { downloadImage } from '@/utils/image/imageDownloader';
 import { toast } from 'sonner';
+import { downloadImage } from '@/utils/image/download';
 import { generateDownloadImageHDUrl, generateDownloadImageSDUrl } from '@/utils/image/imageUrlGenerator';
 import { parseTagsString } from '@/utils/imageUtils';
 import { TagsEditor } from './TagsEditor';
@@ -10,11 +10,25 @@ import { ImageSharingManager } from '@/components/images/ImageSharingManager';
 import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { fetchImageAsBlob } from '@/utils/image/fetcher';
-import { fetchWithTimeout } from '@/utils/image/download/networkUtils';
 import { supabase } from '@/integrations/supabase/client';
+import type { Image as GalleryImage } from '@/utils/image/types';
+
+interface SharedClient {
+  clients?: {
+    nom?: string;
+  };
+}
+
+type ImageContentImage = Omit<Partial<GalleryImage>, 'id' | 'tags' | 'image_shared_clients'> & {
+  id?: string | number;
+  tags?: string[] | string | null;
+  folder_name?: string | null;
+  copyright?: string | null;
+  image_shared_clients?: SharedClient[];
+};
 
 interface ImageContentProps {
-  image: any;
+  image: ImageContentImage;
   imageDimensions: { width: number; height: number };
   isFullPage: boolean;
   onImageLoad?: (e: React.SyntheticEvent<HTMLImageElement>) => void;
@@ -27,7 +41,6 @@ export const ImageContent = ({
   onImageLoad 
 }: ImageContentProps) => {
   const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState<number>(0);
   const [imageError, setImageError] = useState(false);
   const [currentTags, setCurrentTags] = useState(image?.tags);
   const [folderName, setFolderName] = useState<string | null>(image?.projets?.nom_dossier ?? null);
@@ -94,7 +107,7 @@ export const ImageContent = ({
   };
 
   // Process tags to ensure they're always in array format
-  const processTags = (tags: any): string[] => {
+  const processTags = (tags: unknown): string[] => {
     if (!tags) return [];
     
     if (typeof tags === 'string') {
@@ -125,31 +138,21 @@ export const ImageContent = ({
 
   const handleDownload = async (isHD: boolean = false) => {
     let downloadUrl = '';
-    
+
     try {
       if (isHD) {
-        // Version HD - Construire l'URL HD depuis folder_name (sans /JPG/)
-        if (image?.folder_name && image?.title) {
-          downloadUrl = generateDownloadImageHDUrl(image.folder_name, image.title);
-        }
-        // Fallback HD: Transformer download_url en supprimant /JPG/ si présent
-        else if (image?.download_url) {
+        if (folderName && image?.title) {
+          downloadUrl = generateDownloadImageHDUrl(folderName, image.title);
+        } else if (image?.download_url) {
           downloadUrl = image.download_url.replace('/JPG/', '/');
-        }
-        // Dernier fallback: URL d'affichage
-        else {
+        } else {
           downloadUrl = image?.display_url || image?.url || image?.url_miniature || image?.src || '';
           downloadUrl = downloadUrl.replace('/JPG/', '/');
         }
+      } else if (folderName && image?.title) {
+        downloadUrl = generateDownloadImageSDUrl(folderName, image.title);
       } else {
-        // Version SD - Construire l'URL SD depuis folder_name ou utiliser display_url
-        if (image?.folder_name && image?.title) {
-          downloadUrl = generateDownloadImageSDUrl(image.folder_name, image.title);
-        }
-        // Fallback SD: display_url ou url_miniature
-        else {
-          downloadUrl = image?.display_url || image?.url_miniature || image?.url || image?.src || '';
-        }
+        downloadUrl = image?.display_url || image?.url_miniature || image?.url || image?.src || '';
       }
 
       if (!downloadUrl) {
@@ -159,236 +162,17 @@ export const ImageContent = ({
       console.log(`Téléchargement ${isHD ? 'HD' : 'SD'} depuis:`, downloadUrl);
       
       setIsDownloading(true);
-      setDownloadProgress(0);
-      
-      const toastId = toast.loading(
-        isHD ? 'Téléchargement HD en cours...' : 'Téléchargement SD en cours...',
-        { description: '0%' }
-      );
-      
-      try {
-        let blob: Blob | null = null;
+      const filename = `${(image?.title || 'image')
+        .replace(/[^a-z0-9]/gi, '_')
+        .toLowerCase()}_${isHD ? 'HD' : 'SD'}.jpg`;
 
-        if (isHD) {
-          // Pour HD, utiliser un fetch robuste (même logique que SD) avec en-têtes adaptés
-          const response = await fetchWithTimeout(downloadUrl, {
-            mode: 'cors',
-            credentials: 'omit',
-            cache: 'no-store',
-            headers: {
-              'Accept': 'image/jpeg,image/jpg,image/*',
-              'pragma': 'no-cache',
-              'cache-control': 'no-cache'
-            }
-          });
-          
-          if (!response.ok) {
-            throw new Error(`Erreur HTTP ${response.status}`);
-          }
-          
-          const contentLength = parseInt(response.headers.get('content-length') || '0');
-          const canStream = !!response.body && !response.bodyUsed && contentLength > 0;
-          
-          if (canStream) {
-            const reader = response.body!.getReader();
-            let receivedLength = 0;
-            const chunks: BlobPart[] = [];
-            let readerError: Error | null = null;
-            const startTime = Date.now();
-            
-            try {
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                if (value) {
-                  chunks.push(value);
-                  receivedLength += value.length;
-                }
-                const progress = Math.round((receivedLength / contentLength) * 100);
-                setDownloadProgress(progress);
-                const mbReceived = (receivedLength / (1024 * 1024)).toFixed(1);
-                const mbTotal = (contentLength / (1024 * 1024)).toFixed(1);
-                const elapsed = (Date.now() - startTime) / 1000;
-                const speed = receivedLength / Math.max(elapsed, 0.001);
-                const remaining = contentLength - receivedLength;
-                const eta = remaining / Math.max(speed, 1);
-                const etaText = eta > 60 ? `${Math.round(eta/60)}m` : `${Math.round(eta)}s`;
-                toast.loading(
-                  'Téléchargement HD en cours...',
-                  { id: toastId, description: `${progress}% (${mbReceived}/${mbTotal} MB) · ${etaText}` }
-                );
-              }
-            } catch (err) {
-              readerError = err as Error;
-              console.warn('[ImageContent] Lecture du flux HD interrompue, tentative de récupération', readerError);
-            }
-            
-            if (readerError) {
-              if (chunks.length > 0) {
-                blob = new Blob(chunks, { type: 'image/jpeg' });
-              } else {
-                // Aucun chunk reçu: relancer une requête puis utiliser blob()
-                const retryResponse = await fetchWithTimeout(downloadUrl, {
-                  mode: 'cors',
-                  credentials: 'omit',
-                  cache: 'no-store',
-                  headers: { 'Accept': 'image/jpeg,image/jpg,image/*' }
-                });
-                if (!retryResponse.ok) {
-                  throw new Error(`Erreur HTTP ${retryResponse.status}`);
-                }
-                blob = await retryResponse.blob();
-              }
-            } else {
-              blob = new Blob(chunks, { type: 'image/jpeg' });
-            }
-          } else {
-            // Fallback : body déjà consommé ou absence de content-length
-            blob = await response.blob();
-          }
-        } else {
-          // Pour SD, fetch avec suivi de progression
-          const response = await fetchWithTimeout(downloadUrl, {
-            mode: 'cors',
-            credentials: 'omit',
-            cache: 'no-store',
-            headers: {
-              'Accept': 'image/jpeg,image/jpg,image/*',
-              'pragma': 'no-cache',
-              'cache-control': 'no-cache'
-            }
-          });
-          
-          if (!response.ok) {
-            throw new Error(`Erreur HTTP ${response.status}`);
-          }
-          
-          // Suivi de la progression pour SD avec gestion robuste du flux
-          const contentLength = parseInt(response.headers.get('content-length') || '0');
-          const canStream = !!response.body && !response.bodyUsed && contentLength > 0;
-          
-          if (canStream) {
-            const reader = response.body!.getReader();
-            let receivedLength = 0;
-            const chunks: BlobPart[] = [];
-            let readerError: Error | null = null;
-            
-            try {
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                if (value) {
-                  chunks.push(value);
-                  receivedLength += value.length;
-                }
-                const progress = Math.round((receivedLength / contentLength) * 100);
-                setDownloadProgress(progress);
-                const mbReceived = (receivedLength / (1024 * 1024)).toFixed(1);
-                const mbTotal = (contentLength / (1024 * 1024)).toFixed(1);
-                toast.loading(
-                  isHD ? 'Téléchargement HD en cours...' : 'Téléchargement SD en cours...',
-                  { 
-                    id: toastId,
-                    description: `${progress}% (${mbReceived} MB / ${mbTotal} MB)`
-                  }
-                );
-              }
-            } catch (err) {
-              readerError = err as Error;
-              console.warn('[ImageContent] Lecture du flux interrompue, tentative de récupération', readerError);
-            }
-            
-            if (readerError) {
-              if (chunks.length > 0) {
-                blob = new Blob(chunks, { type: 'image/jpeg' });
-              } else {
-                // Aucun chunk reçu: relancer une requête puis utiliser blob()
-                const retryResponse = await fetchWithTimeout(downloadUrl, {
-                  mode: 'cors',
-                  credentials: 'omit',
-                  cache: 'no-store',
-                  headers: { 'Accept': 'image/jpeg,image/jpg,image/*' }
-                });
-                if (!retryResponse.ok) {
-                  throw new Error(`Erreur HTTP ${retryResponse.status}`);
-                }
-                blob = await retryResponse.blob();
-              }
-            } else {
-              blob = new Blob(chunks, { type: 'image/jpeg' });
-            }
-          } else {
-            // Fallback : body déjà consommé ou pas de content-length/stream
-            blob = await response.blob();
-          }
-        }
-        
-        if (!blob) {
-          throw new Error('Aucune donnée reçue');
-        }
-        
-        // Sauvegarder le fichier
-        const blobUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = `${image?.title || 'image'}_${isHD ? 'HD' : 'SD'}.jpg`;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        setTimeout(() => {
-          window.URL.revokeObjectURL(blobUrl);
-        }, 100);
-        
-        const sizeMB = (blob.size / (1024 * 1024)).toFixed(1);
-        toast.success(
-          `Téléchargement ${isHD ? 'HD' : 'SD'} terminé !`,
-          { 
-            id: toastId,
-            description: `${sizeMB} MB`
-          }
-        );
-      } catch (error) {
-        console.error('Erreur lors du téléchargement:', error);
-        toast.error(
-          `Échec du téléchargement ${isHD ? 'HD' : 'SD'}`,
-          { 
-            id: toastId,
-            description: error instanceof Error ? error.message : 'Erreur inconnue'
-          }
-        );
-      } finally {
-        setIsDownloading(false);
-        setDownloadProgress(0);
-      }
+      await downloadImage(downloadUrl, filename, 'jpg', isHD);
+      toast.success(`Téléchargement ${isHD ? 'HD' : 'SD'} démarré`);
     } catch (error) {
       console.error('Erreur lors du téléchargement:', error);
-      toast.error(`Impossible de télécharger le fichier: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
+      toast.error(`Impossible de télécharger l'image: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
     } finally {
       setIsDownloading(false);
-      setDownloadProgress(0);
-    }
-  };
-
-  const handleDirectDownload = (isHD: boolean = false) => {
-    if (image) {
-      const downloadUrl = isHD ? 
-        (image.download_url || image.url || image.display_url || image.url_miniature || image.src) :
-        (image.display_url || image.url_miniature || image.url || image.src);
-      
-      if (downloadUrl) {
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = `${image?.title || 'image'}_${isHD ? 'HD' : 'SD'}.jpg`;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        toast.success(`Téléchargement ${isHD ? 'HD' : 'SD'} démarré !`);
-      } else {
-        toast.error('Aucune URL de téléchargement disponible');
-      }
     }
   };
 
@@ -521,7 +305,7 @@ export const ImageContent = ({
             <div>
               <span className="block text-foreground font-medium">Également partagé avec</span>
               <p className="text-muted-foreground">
-                {image.image_shared_clients.map((shared: any) => shared.clients?.nom).filter(Boolean).join(', ')}
+                {image.image_shared_clients.map((shared) => shared.clients?.nom).filter(Boolean).join(', ')}
               </p>
             </div>
           )}

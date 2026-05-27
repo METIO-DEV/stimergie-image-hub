@@ -1,5 +1,5 @@
 import { toast } from 'sonner';
-import { transformToHDUrl, isJpgUrl } from './networkUtils';
+import { transformToHDUrl } from './networkUtils';
 
 export type ImageDownloadFormat = 'jpg' | 'png' | 'auto';
 
@@ -41,73 +41,28 @@ export async function downloadImage(
   console.log(`[downloadImage] Final URL contains '/JPG/': ${downloadUrl.includes('/JPG/')}`);
   console.log(`[downloadImage] Saving as filename: ${filename}`);
   
-  try {
-    // Determine file extension based on format parameter or fallback to URL
-    let fileExtension = '';
-    
-    if (format === 'jpg') {
-      fileExtension = '.jpg';
-    } else if (format === 'png') {
-      fileExtension = '.png';
-    } else {
-      // Auto-determine from URL or default to jpg (car ce sont majoritairement des JPG)
-      if (url.toLowerCase().includes('.jpg') || url.toLowerCase().includes('.jpeg') || url.includes('/JPG/')) {
-        fileExtension = '.jpg';
-      } else {
-        fileExtension = '.jpg'; // Par défaut on privilégie JPG
-      }
-    }
-    
-    // Ensure filename has the correct extension
-    const filenameWithExtension = filename.endsWith(fileExtension) 
-      ? filename 
-      : filename.replace(/\.[^.]+$/, '') + fileExtension;
-    
-    // Fetch the image - use exact URL without modification
-    const response = await fetch(downloadUrl, { 
-      mode: 'cors',
-      cache: 'no-cache',
-      headers: {
-        'pragma': 'no-cache',
-        'cache-control': 'no-cache'
-      } 
-    });
-    
-    if (!response || !response.ok) {
-      throw new Error(`Server returned ${response?.status || 'no response'}`);
-    }
-    
-    // Create a blob from the response
-    const blob = await response.blob();
-    if (!blob || blob.size === 0) {
-      throw new Error('Empty image data received');
-    }
-    
-    // Create a download link and click it to trigger the download
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = filenameWithExtension;
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    
-    // Clean up
-    setTimeout(() => {
-      URL.revokeObjectURL(link.href);
-      document.body.removeChild(link);
-    }, 100);
-    
-    console.log('[downloadImage] Download completed successfully');
-    return;
-  } catch (error) {
-    console.error(`Error downloading image ${filename}:`, error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`Failed to download image: ${errorMessage} ${filename}`);
-    
-    toast.error('Échec du téléchargement', { 
-      description: `Une erreur s'est produite: ${errorMessage}` 
-    });
-    
-    throw error;
+  let fileExtension = '';
+  if (format === 'jpg') {
+    fileExtension = '.jpg';
+  } else if (format === 'png') {
+    fileExtension = '.png';
+  } else {
+    fileExtension = downloadUrl.toLowerCase().includes('.png') ? '.png' : '.jpg';
   }
+
+  const filenameWithExtension = filename.endsWith(fileExtension)
+    ? filename
+    : filename.replace(/\.[^.]+$/, '') + fileExtension;
+
+  const link = document.createElement('a');
+  link.href = downloadUrl;
+  link.download = filenameWithExtension;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  toast.info('Téléchargement direct ouvert');
 }
