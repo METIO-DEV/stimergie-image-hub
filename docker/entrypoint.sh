@@ -37,6 +37,8 @@ if [ "${DB_CONNECTION:-}" = "pgsql" ]; then
     '
 fi
 
-php artisan migrate --force --no-interaction
+if [ "${RUN_MIGRATIONS:-false}" = "true" ]; then
+    php artisan migrate --force --no-interaction
+fi
 
 exec "$@"
