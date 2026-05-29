@@ -1,69 +1,54 @@
-# Welcome to your Lovable project
+# Stimergie Image Hub
 
-## Project info
+Migration en cours vers une application Laravel + React/Inertia.
 
-**URL**: https://lovable.dev/projects/323e4ef7-52b1-4b36-97a3-6b31a2ad837e
+## Application cible
 
-## How can I edit this code?
+Le nouveau code applicatif est dans `laravel/`.
 
-There are several ways of editing your application.
+- Backend : Laravel
+- Frontend : React + Inertia
+- Base de donnees : PostgreSQL
+- Queue : driver `database`
+- Stockage images : disque S3-compatible `scaleway`
 
-**Use Lovable**
+## Lancer en Docker
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/323e4ef7-52b1-4b36-97a3-6b31a2ad837e) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+Preparer l'environnement Laravel :
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+cp laravel/.env.example laravel/.env
 ```
 
-**Edit a file directly in GitHub**
+Renseigner les variables Scaleway dans `laravel/.env`, puis lancer :
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```sh
+docker compose up --build
+```
 
-**Use GitHub Codespaces**
+Services exposes :
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+- App Laravel : http://localhost:8000
+- Vite : http://localhost:5173
+- PostgreSQL : localhost:5432
 
-## What technologies are used for this project?
+Le compose lance aussi un worker :
 
-This project is built with .
+```sh
+php artisan queue:work --sleep=1 --tries=3 --timeout=120
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Import du dump legacy
 
-## How can I deploy this project?
+Depuis le dossier `laravel/` :
 
-Simply open [Lovable](https://lovable.dev/projects/323e4ef7-52b1-4b36-97a3-6b31a2ad837e) and click on Share -> Publish.
+```sh
+php artisan legacy:import-dump --fresh
+php artisan legacy:import-dump --with-assets --asset-concurrency=12 --skip-existing-assets
+```
 
-## I want to use a custom domain - is that possible?
+Le dump attendu est `dumps/prod-public-data.sql` a la racine du depot.
 
-We don't support custom domains (yet). If you want to deploy your project under your own domain then we recommend using Netlify. Visit our docs for more details: [Custom domains](https://docs.lovable.dev/tips-tricks/custom-domain/)
+## Ancien projet
+
+Le backend Supabase a ete retire du depot. Le vieux front React/Vite racine reste temporairement present comme reference fonctionnelle pendant la migration metier. Il doit etre supprime quand les modules Laravel/Inertia auront repris les parcours clients, projets, images, albums et telechargements.
