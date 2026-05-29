@@ -1,10 +1,8 @@
 # Stimergie Image Hub
 
-Migration en cours vers une application Laravel + React/Inertia.
+Application Laravel + React/Inertia pour la gestion metier Stimergie Image Hub.
 
-## Application cible
-
-Le nouveau code applicatif est dans `laravel/`.
+## Stack
 
 - Backend : Laravel
 - Frontend : React + Inertia
@@ -14,13 +12,13 @@ Le nouveau code applicatif est dans `laravel/`.
 
 ## Lancer en Docker
 
-Preparer l'environnement Laravel :
+Preparer l'environnement :
 
 ```sh
-cp laravel/.env.example laravel/.env
+cp .env.example .env
 ```
 
-Renseigner les variables Scaleway dans `laravel/.env`, puis lancer :
+Renseigner les variables Scaleway dans `.env`, puis lancer :
 
 ```sh
 docker compose up --build
@@ -40,7 +38,7 @@ php artisan queue:work --sleep=1 --tries=3 --timeout=120
 
 ## Import du dump legacy
 
-Depuis le dossier `laravel/` :
+Depuis la racine du depot :
 
 ```sh
 php artisan legacy:import-dump --fresh
@@ -51,4 +49,4 @@ Le dump attendu est `dumps/prod-public-data.sql` a la racine du depot.
 
 ## Ancien projet
 
-Le backend Supabase a ete retire du depot. Le vieux front React/Vite racine reste temporairement present comme reference fonctionnelle pendant la migration metier. Il doit etre supprime quand les modules Laravel/Inertia auront repris les parcours clients, projets, images, albums et telechargements.
+Le backend Supabase et l'ancien frontend React/Vite ont ete retires du depot. Les documents dans `docs/` restent la reference d'audit, de cadrage et de reprise fonctionnelle pour terminer la migration metier.
