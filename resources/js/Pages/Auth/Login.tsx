@@ -1,4 +1,3 @@
-import Checkbox from '@/Components/Checkbox';
 import InputError from '@/Components/InputError';
 import InputLabel from '@/Components/InputLabel';
 import PrimaryButton from '@/Components/PrimaryButton';
@@ -38,32 +37,28 @@ export default function Login({
                 </div>
             )}
 
-            <div className="mb-8">
-                <img
-                    src="/logo_stimergie_header.png"
-                    alt="Stimergie"
-                    className="hidden h-auto w-48 lg:block"
-                />
-                <h1 className="mt-7 text-2xl font-semibold text-[#223f49]">
+            <div className="mb-9 text-center">
+                <h1 className="text-[28px] font-bold leading-tight tracking-normal text-[#080506]">
                     Connexion
                 </h1>
-                <p className="mt-2 text-sm text-[#657078]">
-                    Accedez a votre espace de gestion des visuels.
-                </p>
             </div>
 
-            <form onSubmit={submit} className="space-y-5">
+            <form onSubmit={submit} className="space-y-6">
                 <div>
-                    <InputLabel htmlFor="email" value="Adresse email" />
+                    <InputLabel
+                        htmlFor="email"
+                        value="Email"
+                        className="font-semibold text-[#080506]"
+                    />
 
                     <TextInput
                         id="email"
                         type="email"
                         name="email"
                         value={data.email}
-                        className="mt-1 block h-11 w-full rounded-sm border-[#cfd5d6] bg-white text-[#1d2528] focus:border-[#244955] focus:ring-[#244955]"
+                        placeholder="exemple@email.com"
+                        className="mt-3 block h-[46px] w-full rounded-lg border-[#dfe4e5] bg-white px-4 text-base text-[#1d2528] shadow-none placeholder:text-[#657078] focus:border-[#264b57] focus:ring-[#264b57]"
                         autoComplete="username"
-                        isFocused={true}
                         onChange={(e) => setData('email', e.target.value)}
                     />
 
@@ -71,14 +66,19 @@ export default function Login({
                 </div>
 
                 <div>
-                    <InputLabel htmlFor="password" value="Mot de passe" />
+                    <InputLabel
+                        htmlFor="password"
+                        value="Mot de passe"
+                        className="font-semibold text-[#080506]"
+                    />
 
                     <TextInput
                         id="password"
                         type="password"
                         name="password"
                         value={data.password}
-                        className="mt-1 block h-11 w-full rounded-sm border-[#cfd5d6] bg-white text-[#1d2528] focus:border-[#244955] focus:ring-[#244955]"
+                        placeholder="********"
+                        className="mt-3 block h-[46px] w-full rounded-lg border-[#dfe4e5] bg-white px-4 text-base text-[#1d2528] shadow-none placeholder:text-[#657078] focus:border-[#264b57] focus:ring-[#264b57]"
                         autoComplete="current-password"
                         onChange={(e) => setData('password', e.target.value)}
                     />
@@ -86,41 +86,23 @@ export default function Login({
                     <InputError message={errors.password} className="mt-2" />
                 </div>
 
-                <div className="mt-4 block">
-                    <label className="flex items-center">
-                        <Checkbox
-                            name="remember"
-                            checked={data.remember}
-                            onChange={(e) =>
-                                setData(
-                                    'remember',
-                                    (e.target.checked || false) as false,
-                                )
-                            }
-                        />
-                        <span className="ms-2 text-sm text-gray-600">
-                            Se souvenir de moi
-                        </span>
-                    </label>
-                </div>
-
-                <div className="flex items-center justify-between gap-4 pt-1">
+                <div className="flex justify-end pt-1">
                     {canResetPassword && (
                         <Link
                             href={route('password.request')}
-                            className="text-sm text-[#657078] underline-offset-4 hover:text-[#223f49] hover:underline focus:outline-none focus:ring-2 focus:ring-[#244955] focus:ring-offset-2"
+                            className="text-base font-semibold text-[#657078] underline-offset-4 hover:text-[#264b57] hover:underline focus:outline-none focus:ring-2 focus:ring-[#264b57] focus:ring-offset-2"
                         >
                             Mot de passe oublie ?
                         </Link>
                     )}
-
-                    <PrimaryButton
-                        className="h-11 rounded-sm bg-[#244955] px-5 text-sm normal-case tracking-normal hover:bg-[#1f3d47] focus:bg-[#1f3d47] focus:ring-[#244955] active:bg-[#19323a]"
-                        disabled={processing}
-                    >
-                        Se connecter
-                    </PrimaryButton>
                 </div>
+
+                <PrimaryButton
+                    className="mt-7 flex h-[46px] w-full justify-center rounded-lg bg-[#264b57] px-5 text-base font-semibold normal-case tracking-normal hover:bg-[#203f49] focus:bg-[#203f49] focus:ring-[#264b57] active:bg-[#1b3540]"
+                    disabled={processing}
+                >
+                    Se connecter
+                </PrimaryButton>
             </form>
         </GuestLayout>
     );
