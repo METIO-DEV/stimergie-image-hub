@@ -30,7 +30,7 @@ export default function Login({
 
     return (
         <GuestLayout>
-            <Head title="Log in" />
+            <Head title="Connexion" />
 
             {status && (
                 <div className="mb-4 text-sm font-medium text-green-600">
@@ -38,16 +38,30 @@ export default function Login({
                 </div>
             )}
 
-            <form onSubmit={submit}>
+            <div className="mb-8">
+                <img
+                    src="/logo_stimergie_header.png"
+                    alt="Stimergie"
+                    className="hidden h-auto w-48 lg:block"
+                />
+                <h1 className="mt-7 text-2xl font-semibold text-[#223f49]">
+                    Connexion
+                </h1>
+                <p className="mt-2 text-sm text-[#657078]">
+                    Accedez a votre espace de gestion des visuels.
+                </p>
+            </div>
+
+            <form onSubmit={submit} className="space-y-5">
                 <div>
-                    <InputLabel htmlFor="email" value="Email" />
+                    <InputLabel htmlFor="email" value="Adresse email" />
 
                     <TextInput
                         id="email"
                         type="email"
                         name="email"
                         value={data.email}
-                        className="mt-1 block w-full"
+                        className="mt-1 block h-11 w-full rounded-sm border-[#cfd5d6] bg-white text-[#1d2528] focus:border-[#244955] focus:ring-[#244955]"
                         autoComplete="username"
                         isFocused={true}
                         onChange={(e) => setData('email', e.target.value)}
@@ -56,15 +70,15 @@ export default function Login({
                     <InputError message={errors.email} className="mt-2" />
                 </div>
 
-                <div className="mt-4">
-                    <InputLabel htmlFor="password" value="Password" />
+                <div>
+                    <InputLabel htmlFor="password" value="Mot de passe" />
 
                     <TextInput
                         id="password"
                         type="password"
                         name="password"
                         value={data.password}
-                        className="mt-1 block w-full"
+                        className="mt-1 block h-11 w-full rounded-sm border-[#cfd5d6] bg-white text-[#1d2528] focus:border-[#244955] focus:ring-[#244955]"
                         autoComplete="current-password"
                         onChange={(e) => setData('password', e.target.value)}
                     />
@@ -85,23 +99,26 @@ export default function Login({
                             }
                         />
                         <span className="ms-2 text-sm text-gray-600">
-                            Remember me
+                            Se souvenir de moi
                         </span>
                     </label>
                 </div>
 
-                <div className="mt-4 flex items-center justify-end">
+                <div className="flex items-center justify-between gap-4 pt-1">
                     {canResetPassword && (
                         <Link
                             href={route('password.request')}
-                            className="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                            className="text-sm text-[#657078] underline-offset-4 hover:text-[#223f49] hover:underline focus:outline-none focus:ring-2 focus:ring-[#244955] focus:ring-offset-2"
                         >
-                            Forgot your password?
+                            Mot de passe oublie ?
                         </Link>
                     )}
 
-                    <PrimaryButton className="ms-4" disabled={processing}>
-                        Log in
+                    <PrimaryButton
+                        className="h-11 rounded-sm bg-[#244955] px-5 text-sm normal-case tracking-normal hover:bg-[#1f3d47] focus:bg-[#1f3d47] focus:ring-[#244955] active:bg-[#19323a]"
+                        disabled={processing}
+                    >
+                        Se connecter
                     </PrimaryButton>
                 </div>
             </form>
