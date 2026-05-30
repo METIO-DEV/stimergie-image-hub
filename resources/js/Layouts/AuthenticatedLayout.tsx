@@ -1,3 +1,4 @@
+import { ContactModal } from "@/Components/Legacy/LegacyModals";
 import { Avatar, AvatarFallback } from "@/Components/ui/avatar";
 import { Button } from "@/Components/ui/button";
 import {
@@ -39,6 +40,7 @@ export default function Authenticated({
 }: PropsWithChildren<{ header?: ReactNode }>) {
     const user = usePage().props.auth.user;
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [contactOpen, setContactOpen] = useState(false);
 
     const isSuperAdmin = user.platform_role === "super_admin";
     const initials = useMemo(
@@ -143,7 +145,17 @@ export default function Authenticated({
                             {primaryNav.map((item) => {
                                 const Icon = item.icon;
 
-                                return (
+                                return item.label === "Contact" ? (
+                                    <button
+                                        key={item.label}
+                                        type="button"
+                                        onClick={() => setContactOpen(true)}
+                                        className="inline-flex items-center gap-3 text-base font-semibold text-foreground transition-colors hover:text-primary"
+                                    >
+                                        <Icon className="h-5 w-5" />
+                                        <span>{item.label}</span>
+                                    </button>
+                                ) : (
                                     <Link
                                         key={item.label}
                                         href={item.href}
@@ -156,9 +168,6 @@ export default function Authenticated({
                                                 "pointer-events-none",
                                         )}
                                     >
-                                        {item.label === "Contact" && (
-                                            <Icon className="h-5 w-5" />
-                                        )}
                                         <span>{item.label}</span>
                                     </Link>
                                 );
@@ -193,7 +202,20 @@ export default function Authenticated({
                                 ].map((item) => {
                                     const Icon = item.icon;
 
-                                    return (
+                                    return item.label === "Contact" ? (
+                                        <button
+                                            key={item.label}
+                                            type="button"
+                                            onClick={() => {
+                                                setMobileOpen(false);
+                                                setContactOpen(true);
+                                            }}
+                                            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-foreground transition-colors hover:bg-primary/5 hover:text-primary"
+                                        >
+                                            <Icon className="h-4 w-4" />
+                                            {item.label}
+                                        </button>
+                                    ) : (
                                         <Link
                                             key={item.label}
                                             href={item.href}
@@ -324,6 +346,7 @@ export default function Authenticated({
                     />
                 </div>
             </footer>
+            <ContactModal open={contactOpen} onOpenChange={setContactOpen} />
         </div>
     );
 }

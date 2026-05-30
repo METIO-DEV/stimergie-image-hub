@@ -20,21 +20,24 @@ class AppPageController extends Controller
     public function gallery(Request $request): Response
     {
         $clientIds = $this->accessibleClientIds($request);
+        $page = max(1, (int) $request->integer('page', 1));
+        $perPage = 100;
+        $totalImages = Image::query()
+            ->when($clientIds !== null, fn ($query) => $query->whereIn('client_id', $clientIds))
+            ->count();
 
         $images = Image::query()
             ->with(['client:id,name', 'project:id,name', 'tags:id,name'])
             ->when($clientIds !== null, fn ($query) => $query->whereIn('client_id', $clientIds))
             ->latest()
-            ->limit(48)
+            ->forPage($page, $perPage)
             ->get()
             ->map(fn (Image $image) => $this->imageSummary($image));
 
         return Inertia::render('Gallery/Index', [
             'images' => $images,
             'stats' => [
-                'images' => Image::query()
-                    ->when($clientIds !== null, fn ($query) => $query->whereIn('client_id', $clientIds))
-                    ->count(),
+                'images' => $totalImages,
                 'clients' => Client::query()
                     ->when($clientIds !== null, fn ($query) => $query->whereIn('id', $clientIds))
                     ->count(),
@@ -43,6 +46,11 @@ class AppPageController extends Controller
                     ->count(),
             ],
             'filters' => $this->filterOptions($clientIds),
+            'pagination' => [
+                'currentPage' => $page,
+                'perPage' => $perPage,
+                'total' => $totalImages,
+            ],
         ]);
     }
 

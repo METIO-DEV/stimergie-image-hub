@@ -18,9 +18,10 @@ import {
     ViewMode,
     ViewToggle,
 } from "@/Components/Legacy/LegacyDesign";
+import { ImageEditModal } from "@/Components/Legacy/LegacyModals";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, Link, usePage } from "@inertiajs/react";
-import { Plus } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 
 type FilterOption = {
@@ -52,6 +53,7 @@ export default function ImagesIndex({
     const [search, setSearch] = useState("");
     const [tag, setTag] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
+    const [editingImage, setEditingImage] = useState<LegacyImage | null>(null);
 
     const filteredImages = useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -97,7 +99,7 @@ export default function ImagesIndex({
                             onViewChange={setViewMode}
                         />
                         {canManageImages && (
-                            <Button>
+                            <Button onClick={() => setEditingImage(null)}>
                                 <Plus size={16} className="mr-2" />
                                 Ajouter une image
                             </Button>
@@ -155,7 +157,10 @@ export default function ImagesIndex({
                 {viewMode === "card" ? (
                     <MasonryGrid images={paginatedImages} />
                 ) : (
-                    <ImagesTable images={paginatedImages} />
+                    <ImagesTable
+                        images={paginatedImages}
+                        onEdit={setEditingImage}
+                    />
                 )}
 
                 <LegacyPagination
@@ -169,11 +174,26 @@ export default function ImagesIndex({
                     <Link href={route("dashboard")} className="hidden" />
                 )}
             </main>
+            <ImageEditModal
+                image={editingImage}
+                open={Boolean(editingImage)}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setEditingImage(null);
+                    }
+                }}
+            />
         </AuthenticatedLayout>
     );
 }
 
-function ImagesTable({ images }: { images: LegacyImage[] }) {
+function ImagesTable({
+    images,
+    onEdit,
+}: {
+    images: LegacyImage[];
+    onEdit: (image: LegacyImage) => void;
+}) {
     return (
         <div className="overflow-hidden rounded-md border">
             <Table>
@@ -186,13 +206,14 @@ function ImagesTable({ images }: { images: LegacyImage[] }) {
                         <TableHead>Orientation</TableHead>
                         <TableHead>Tags</TableHead>
                         <TableHead>Date d'ajout</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {images.length === 0 ? (
                         <TableRow>
                             <TableCell
-                                colSpan={7}
+                                colSpan={8}
                                 className="py-10 text-center"
                             >
                                 Aucune image disponible
@@ -261,6 +282,16 @@ function ImagesTable({ images }: { images: LegacyImage[] }) {
                                 </TableCell>
                                 <TableCell>
                                     {formatDate(image.createdAt)}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        title="Modifier"
+                                        onClick={() => onEdit(image)}
+                                    >
+                                        <Pencil size={16} />
+                                    </Button>
                                 </TableCell>
                             </TableRow>
                         ))

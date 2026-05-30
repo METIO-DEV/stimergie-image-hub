@@ -7,6 +7,7 @@ import {
     ViewToggle,
     roleDisplay,
 } from "@/Components/Legacy/LegacyDesign";
+import { UserEditModal } from "@/Components/Legacy/LegacyModals";
 import { Badge } from "@/Components/ui/badge";
 import {
     Table,
@@ -66,6 +67,7 @@ export default function UsersIndex({ users, clients, roles }: Props) {
     const [clientId, setClientId] = useState("");
     const [role, setRole] = useState("");
     const [viewMode, setViewMode] = useState<ViewMode>("card");
+    const [editingUser, setEditingUser] = useState<UserRow | null>(null);
 
     const filteredUsers = useMemo(
         () =>
@@ -137,18 +139,34 @@ export default function UsersIndex({ users, clients, roles }: Props) {
                                         .map((client) => client.clientName)
                                         .filter(Boolean) as string[]
                                 }
+                                onEdit={() => setEditingUser(user)}
                             />
                         ))}
                     </div>
                 ) : (
-                    <UsersTable users={filteredUsers} />
+                    <UsersTable users={filteredUsers} onEdit={setEditingUser} />
                 )}
             </main>
+            <UserEditModal
+                user={editingUser}
+                open={Boolean(editingUser)}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setEditingUser(null);
+                    }
+                }}
+            />
         </AuthenticatedLayout>
     );
 }
 
-function UsersTable({ users }: { users: UserRow[] }) {
+function UsersTable({
+    users,
+    onEdit,
+}: {
+    users: UserRow[];
+    onEdit: (user: UserRow) => void;
+}) {
     return (
         <div className="w-full overflow-hidden rounded-md border">
             <Table>
@@ -217,6 +235,7 @@ function UsersTable({ users }: { users: UserRow[] }) {
                                         variant="ghost"
                                         size="icon"
                                         title="Modifier"
+                                        onClick={() => onEdit(user)}
                                     >
                                         <Pencil size={16} />
                                     </Button>

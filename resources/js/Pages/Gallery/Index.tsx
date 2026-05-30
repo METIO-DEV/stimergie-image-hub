@@ -7,7 +7,7 @@ import {
     MasonryGrid,
 } from "@/Components/Legacy/LegacyDesign";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import { Head, usePage } from "@inertiajs/react";
+import { Head, router, usePage } from "@inertiajs/react";
 import { Infinity, SquareCheck } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -28,17 +28,27 @@ type Props = {
         clients: FilterOption[];
         projects: FilterOption[];
     };
+    pagination: {
+        currentPage: number;
+        perPage: number;
+        total: number;
+    };
 };
 
 const PAGE_SIZE = 100;
 
-export default function GalleryIndex({ images, stats, filters }: Props) {
+export default function GalleryIndex({
+    images,
+    stats,
+    filters,
+    pagination,
+}: Props) {
     const user = usePage().props.auth.user;
     const [search, setSearch] = useState("");
     const [orientation, setOrientation] = useState("");
     const [clientId, setClientId] = useState("");
     const [projectId, setProjectId] = useState("");
-    const [currentPage, setCurrentPage] = useState(1);
+    const [currentPage, setCurrentPage] = useState(pagination.currentPage);
     const [infiniteScroll, setInfiniteScroll] = useState(false);
     const [selectedImages, setSelectedImages] = useState<
         Array<string | number>
@@ -78,12 +88,28 @@ export default function GalleryIndex({ images, stats, filters }: Props) {
         });
     }, [clientId, images, orientation, projectId, search]);
 
-    const paginatedImages = infiniteScroll
-        ? filteredImages
-        : filteredImages.slice(
-              (currentPage - 1) * PAGE_SIZE,
-              currentPage * PAGE_SIZE,
-          );
+    const hasLocalFilters = Boolean(
+        search || orientation || clientId || projectId,
+    );
+    const paginatedImages =
+        infiniteScroll || !hasLocalFilters
+            ? filteredImages
+            : filteredImages.slice(
+                  (currentPage - 1) * PAGE_SIZE,
+                  currentPage * PAGE_SIZE,
+              );
+
+    const handlePageChange = (page: number) => {
+        setCurrentPage(page);
+
+        if (!hasLocalFilters) {
+            router.get(
+                route("gallery.index"),
+                { page },
+                { preserveScroll: true, preserveState: false },
+            );
+        }
+    };
 
     const toggleSelection = (id: string | number) => {
         setSelectedImages((current) =>
@@ -187,9 +213,13 @@ export default function GalleryIndex({ images, stats, filters }: Props) {
 
                 {!infiniteScroll && (
                     <LegacyPagination
-                        totalCount={filteredImages.length || stats.images}
+                        totalCount={
+                            hasLocalFilters
+                                ? filteredImages.length
+                                : stats.images
+                        }
                         currentPage={currentPage}
-                        onPageChange={setCurrentPage}
+                        onPageChange={handlePageChange}
                         pageSize={PAGE_SIZE}
                     />
                 )}

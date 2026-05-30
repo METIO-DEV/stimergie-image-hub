@@ -354,11 +354,13 @@ export function LegacyUserCard({
     email,
     role,
     clients,
+    onEdit,
 }: {
     name: string;
     email: string;
     role: string;
     clients: string[];
+    onEdit?: () => void;
 }) {
     return (
         <Card className="transition-shadow hover:shadow-md">
@@ -376,7 +378,12 @@ export function LegacyUserCard({
                         )}
                     </CardTitle>
                     <div className="flex gap-2">
-                        <Button variant="ghost" size="icon" title="Modifier">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Modifier"
+                            onClick={onEdit}
+                        >
                             <Pencil size={16} />
                         </Button>
                         <Button

@@ -7,6 +7,7 @@ import {
     ViewMode,
     ViewToggle,
 } from "@/Components/Legacy/LegacyDesign";
+import { ProjectEditModal } from "@/Components/Legacy/LegacyModals";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head } from "@inertiajs/react";
 import {
@@ -44,6 +45,7 @@ export default function ProjectsIndex({ projects, filters }: Props) {
     const [viewMode, setViewMode] = useState<ViewMode>("card");
     const [clientFilter, setClientFilter] = useState("");
     const [search, setSearch] = useState("");
+    const [editingProject, setEditingProject] = useState<Project | null>(null);
 
     const filteredProjects = useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -107,7 +109,11 @@ export default function ProjectsIndex({ projects, filters }: Props) {
                 {viewMode === "card" ? (
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                         {filteredProjects.map((project) => (
-                            <ProjectCard key={project.id} project={project} />
+                            <ProjectCard
+                                key={project.id}
+                                project={project}
+                                onEdit={setEditingProject}
+                            />
                         ))}
                     </div>
                 ) : (
@@ -115,7 +121,7 @@ export default function ProjectsIndex({ projects, filters }: Props) {
                         {filteredProjects.map((project) => (
                             <div
                                 key={project.id}
-                                className="grid gap-4 border-b p-5 last:border-b-0 md:grid-cols-[1fr_220px_120px]"
+                                className="grid gap-4 border-b p-5 last:border-b-0 md:grid-cols-[1fr_220px_120px_96px]"
                             >
                                 <div className="font-semibold">
                                     {project.name}
@@ -129,16 +135,51 @@ export default function ProjectsIndex({ projects, filters }: Props) {
                                 <div className="text-sm">
                                     {project.imagesCount} images
                                 </div>
+                                <div className="flex justify-end gap-2">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        title="Modifier"
+                                        onClick={() =>
+                                            setEditingProject(project)
+                                        }
+                                    >
+                                        <Pencil size={16} />
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        title="Supprimer"
+                                        className="text-destructive hover:text-destructive/90"
+                                    >
+                                        <Trash2 size={16} />
+                                    </Button>
+                                </div>
                             </div>
                         ))}
                     </div>
                 )}
             </main>
+            <ProjectEditModal
+                project={editingProject}
+                open={Boolean(editingProject)}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setEditingProject(null);
+                    }
+                }}
+            />
         </AuthenticatedLayout>
     );
 }
 
-function ProjectCard({ project }: { project: Project }) {
+function ProjectCard({
+    project,
+    onEdit,
+}: {
+    project: Project;
+    onEdit: (project: Project) => void;
+}) {
     return (
         <Card className="flex h-full flex-col transition-shadow hover:shadow-md">
             <CardHeader className="pb-2">
@@ -151,7 +192,12 @@ function ProjectCard({ project }: { project: Project }) {
                         <span className="break-words">{project.name}</span>
                     </CardTitle>
                     <div className="flex flex-shrink-0 gap-2">
-                        <Button variant="ghost" size="icon" title="Modifier">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Modifier"
+                            onClick={() => onEdit(project)}
+                        >
                             <Pencil size={16} />
                         </Button>
                         <Button
