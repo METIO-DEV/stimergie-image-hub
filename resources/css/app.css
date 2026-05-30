@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -44,5 +46,27 @@
         font-feature-settings:
             "rlig" 1,
             "calt" 1;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+        text-wrap: balance;
+    }
+}
+
+@layer utilities {
+    .content-container {
+        margin-inline: auto;
+        width: 100%;
+        max-width: 1440px;
+        padding-inline: 1rem;
+    }
+
+    @media (min-width: 768px) {
+        .content-container {
+            padding-inline: 2rem;
+        }
     }
 }

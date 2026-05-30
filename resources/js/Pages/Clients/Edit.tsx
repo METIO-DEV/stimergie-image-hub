@@ -1,7 +1,8 @@
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
-import ClientForm, { ClientFormData } from './Partials/ClientForm';
+import { Card, CardContent, CardHeader, CardTitle } from "@/Components/ui/card";
+import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
+import { Head, useForm } from "@inertiajs/react";
+import { FormEventHandler } from "react";
+import ClientForm, { ClientFormData } from "./Partials/ClientForm";
 
 type ClientEditable = ClientFormData & {
     id: number;
@@ -18,40 +19,53 @@ type Props = {
 };
 
 export default function ClientsEdit({ client, statuses }: Props) {
-    const { data, setData, patch, processing, errors } = useForm<ClientFormData>({
-        name: client.name,
-        slug: client.slug,
-        status: client.status,
-    });
+    const { data, setData, patch, processing, errors } =
+        useForm<ClientFormData>({
+            name: client.name,
+            slug: client.slug,
+            status: client.status,
+        });
 
     const submit: FormEventHandler = (event) => {
         event.preventDefault();
-        patch(route('clients.update', client.id));
+        patch(route("clients.update", client.id));
     };
 
     return (
         <AuthenticatedLayout
             header={
-                <h2 className="text-xl font-semibold leading-tight text-gray-800">
-                    Modifier {client.name}
-                </h2>
+                <div>
+                    <p className="text-sm font-medium text-muted-foreground">
+                        Clients
+                    </p>
+                    <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+                        Modifier {client.name}
+                    </h1>
+                </div>
             }
         >
             <Head title={`Modifier ${client.name}`} />
 
             <div className="py-8">
-                <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-                    <div className="bg-white p-6 shadow sm:rounded-lg">
-                        <ClientForm
-                            data={data}
-                            errors={errors}
-                            processing={processing}
-                            statuses={statuses}
-                            submitLabel="Enregistrer"
-                            onSubmit={submit}
-                            setData={setData}
-                        />
-                    </div>
+                <div className="container max-w-3xl">
+                    <Card className="border-border/70">
+                        <CardHeader>
+                            <CardTitle className="text-base">
+                                Parametres client
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <ClientForm
+                                data={data}
+                                errors={errors}
+                                processing={processing}
+                                statuses={statuses}
+                                submitLabel="Enregistrer"
+                                onSubmit={submit}
+                                setData={setData}
+                            />
+                        </CardContent>
+                    </Card>
                 </div>
             </div>
         </AuthenticatedLayout>

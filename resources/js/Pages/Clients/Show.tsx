@@ -1,11 +1,22 @@
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link } from '@inertiajs/react';
+import { Badge } from "@/Components/ui/badge";
+import { Button } from "@/Components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/Components/ui/card";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/Components/ui/table";
+import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
+import { Head, Link } from "@inertiajs/react";
 import {
     AddMemberForm,
     MemberRow,
     Membership,
     Option,
-} from './Partials/MemberForms';
+} from "./Partials/MemberForms";
 
 type ProjectSummary = {
     id: number;
@@ -46,16 +57,20 @@ export default function ClientsShow({
         <AuthenticatedLayout
             header={
                 <div className="flex items-center justify-between gap-4">
-                    <h2 className="text-xl font-semibold leading-tight text-gray-800">
-                        {client.name}
-                    </h2>
+                    <div>
+                        <p className="text-sm font-medium text-muted-foreground">
+                            Client
+                        </p>
+                        <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+                            {client.name}
+                        </h1>
+                    </div>
                     {canUpdateClient && (
-                        <Link
-                            href={route('clients.edit', client.id)}
-                            className="rounded-md bg-gray-800 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white transition hover:bg-gray-700"
-                        >
-                            Modifier
-                        </Link>
+                        <Button asChild>
+                            <Link href={route("clients.edit", client.id)}>
+                                Modifier
+                            </Link>
+                        </Button>
                     )}
                 </div>
             }
@@ -63,7 +78,7 @@ export default function ClientsShow({
             <Head title={client.name} />
 
             <div className="py-8">
-                <div className="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
+                <div className="container space-y-6">
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                         <Metric label="Statut" value={client.status} />
                         <Metric label="Membres" value={client.membersCount} />
@@ -71,106 +86,114 @@ export default function ClientsShow({
                         <Metric label="Images" value={client.imagesCount} />
                     </div>
 
-                    <section className="bg-white p-6 shadow sm:rounded-lg">
-                        <div className="flex items-center justify-between gap-4">
+                    <Card className="border-border/70">
+                        <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
                             <div>
-                                <h3 className="text-lg font-semibold text-gray-950">
+                                <CardTitle className="text-lg">
                                     Utilisateurs du client
-                                </h3>
-                                <p className="mt-1 text-sm text-gray-600">
-                                    Le rattachement client/utilisateur est centralise
-                                    ici via un role de membership.
+                                </CardTitle>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    Le rattachement client/utilisateur est
+                                    centralise ici via un role de membership.
                                 </p>
                             </div>
                             {canManageMembers && (
-                                <span className="rounded-md border border-gray-200 px-3 py-2 text-xs font-medium text-gray-500">
-                                    Gestion active
-                                </span>
+                                <Badge variant="outline">Gestion active</Badge>
                             )}
-                        </div>
+                        </CardHeader>
 
-                        {canManageMembers && (
-                            <AddMemberForm
-                                clientId={client.id}
-                                roleOptions={roleOptions}
-                                statusOptions={membershipStatuses}
-                            />
-                        )}
+                        <CardContent>
+                            {canManageMembers && (
+                                <AddMemberForm
+                                    clientId={client.id}
+                                    roleOptions={roleOptions}
+                                    statusOptions={membershipStatuses}
+                                />
+                            )}
 
-                        <div className="mt-5 overflow-hidden border border-gray-200 sm:rounded-lg">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-                                            Utilisateur
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-                                            Acces
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100 bg-white">
-                                    {client.memberships.map((membership) =>
-                                        canManageMembers ? (
-                                            <MemberRow
-                                                key={membership.id}
-                                                clientId={client.id}
-                                                membership={membership}
-                                                roleOptions={roleOptions}
-                                                statusOptions={membershipStatuses}
-                                            />
-                                        ) : (
-                                            <tr key={membership.id}>
-                                                <td className="px-6 py-4">
-                                                    <div className="font-medium text-gray-950">
-                                                        {membership.user.name}
-                                                    </div>
-                                                    <div className="text-sm text-gray-500">
-                                                        {membership.user.email}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-sm text-gray-700">
-                                                    {membership.role} ·{' '}
-                                                    {membership.status}
-                                                    {membership.isDefault
-                                                        ? ' · defaut'
-                                                        : ''}
-                                                </td>
-                                            </tr>
-                                        ),
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
-
-                    <section className="bg-white p-6 shadow sm:rounded-lg">
-                        <h3 className="text-lg font-semibold text-gray-950">
-                            Projets recents
-                        </h3>
-
-                        {client.projects.length > 0 ? (
-                            <div className="mt-5 grid gap-3 md:grid-cols-2">
-                                {client.projects.map((project) => (
-                                    <div
-                                        key={project.id}
-                                        className="rounded-md border border-gray-200 p-4"
-                                    >
-                                        <div className="font-medium text-gray-950">
-                                            {project.name}
-                                        </div>
-                                        <div className="mt-1 text-sm text-gray-500">
-                                            {project.slug} · {project.status}
-                                        </div>
-                                    </div>
-                                ))}
+                            <div className="mt-5 rounded-md border">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Utilisateur</TableHead>
+                                            <TableHead>Acces</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {client.memberships.map((membership) =>
+                                            canManageMembers ? (
+                                                <MemberRow
+                                                    key={membership.id}
+                                                    clientId={client.id}
+                                                    membership={membership}
+                                                    roleOptions={roleOptions}
+                                                    statusOptions={
+                                                        membershipStatuses
+                                                    }
+                                                />
+                                            ) : (
+                                                <TableRow key={membership.id}>
+                                                    <TableCell>
+                                                        <div className="font-medium text-foreground">
+                                                            {
+                                                                membership.user
+                                                                    .name
+                                                            }
+                                                        </div>
+                                                        <div className="text-sm text-muted-foreground">
+                                                            {
+                                                                membership.user
+                                                                    .email
+                                                            }
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-sm text-muted-foreground">
+                                                        {membership.role} ·{" "}
+                                                        {membership.status}
+                                                        {membership.isDefault
+                                                            ? " · defaut"
+                                                            : ""}
+                                                    </TableCell>
+                                                </TableRow>
+                                            ),
+                                        )}
+                                    </TableBody>
+                                </Table>
                             </div>
-                        ) : (
-                            <p className="mt-4 text-sm text-gray-500">
-                                Aucun projet rattache pour le moment.
-                            </p>
-                        )}
-                    </section>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border-border/70">
+                        <CardHeader>
+                            <CardTitle className="text-lg">
+                                Projets recents
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {client.projects.length > 0 ? (
+                                <div className="mt-5 grid gap-3 md:grid-cols-2">
+                                    {client.projects.map((project) => (
+                                        <div
+                                            key={project.id}
+                                            className="rounded-md border border-border/80 p-4"
+                                        >
+                                            <div className="font-medium text-foreground">
+                                                {project.name}
+                                            </div>
+                                            <div className="mt-1 text-sm text-muted-foreground">
+                                                {project.slug} ·{" "}
+                                                {project.status}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-sm text-muted-foreground">
+                                    Aucun projet rattache pour le moment.
+                                </p>
+                            )}
+                        </CardContent>
+                    </Card>
                 </div>
             </div>
         </AuthenticatedLayout>
@@ -179,11 +202,15 @@ export default function ClientsShow({
 
 function Metric({ label, value }: { label: string; value: string | number }) {
     return (
-        <div className="bg-white p-5 shadow sm:rounded-lg">
-            <div className="text-sm font-medium text-gray-500">{label}</div>
-            <div className="mt-2 text-2xl font-semibold text-gray-950">
-                {value}
-            </div>
-        </div>
+        <Card className="border-border/70">
+            <CardContent className="p-5">
+                <div className="text-sm font-medium text-muted-foreground">
+                    {label}
+                </div>
+                <div className="mt-2 text-2xl font-semibold text-foreground">
+                    {value}
+                </div>
+            </CardContent>
+        </Card>
     );
 }

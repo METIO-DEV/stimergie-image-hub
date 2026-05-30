@@ -1,10 +1,17 @@
-import InputError from '@/Components/InputError';
-import InputLabel from '@/Components/InputLabel';
-import PrimaryButton from '@/Components/PrimaryButton';
-import SecondaryButton from '@/Components/SecondaryButton';
-import TextInput from '@/Components/TextInput';
-import { router, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import InputError from "@/Components/InputError";
+import { Button } from "@/Components/ui/button";
+import { Input } from "@/Components/ui/input";
+import { Label } from "@/Components/ui/label";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/Components/ui/select";
+import { TableCell, TableRow } from "@/Components/ui/table";
+import { router, useForm } from "@inertiajs/react";
+import { FormEventHandler } from "react";
 
 export type Option = {
     value: string;
@@ -43,16 +50,16 @@ export function AddMemberForm({
 }) {
     const { data, setData, post, processing, errors, reset } =
         useForm<MemberFormData>({
-            name: '',
-            email: '',
-            role: 'member',
-            status: 'active',
+            name: "",
+            email: "",
+            role: "member",
+            status: "active",
             is_default: false,
         });
 
     const submit: FormEventHandler = (event) => {
         event.preventDefault();
-        post(route('clients.members.store', clientId), {
+        post(route("clients.members.store", clientId), {
             preserveScroll: true,
             onSuccess: () => reset(),
         });
@@ -61,80 +68,86 @@ export function AddMemberForm({
     return (
         <form onSubmit={submit} className="mt-6 grid gap-4 lg:grid-cols-6">
             <div className="lg:col-span-2">
-                <InputLabel htmlFor="member-name" value="Nom" />
-                <TextInput
+                <Label htmlFor="member-name">Nom</Label>
+                <Input
                     id="member-name"
-                    className="mt-1 block w-full"
+                    className="mt-2"
                     value={data.name}
-                    onChange={(event) => setData('name', event.target.value)}
+                    onChange={(event) => setData("name", event.target.value)}
                     required
                 />
                 <InputError message={errors.name} className="mt-2" />
             </div>
 
             <div className="lg:col-span-2">
-                <InputLabel htmlFor="member-email" value="Email" />
-                <TextInput
+                <Label htmlFor="member-email">Email</Label>
+                <Input
                     id="member-email"
                     type="email"
-                    className="mt-1 block w-full"
+                    className="mt-2"
                     value={data.email}
-                    onChange={(event) => setData('email', event.target.value)}
+                    onChange={(event) => setData("email", event.target.value)}
                     required
                 />
                 <InputError message={errors.email} className="mt-2" />
             </div>
 
             <div>
-                <InputLabel htmlFor="member-role" value="Role" />
-                <select
-                    id="member-role"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                <Label htmlFor="member-role">Role</Label>
+                <Select
                     value={data.role}
-                    onChange={(event) => setData('role', event.target.value)}
+                    onValueChange={(value) => setData("role", value)}
                 >
-                    {roleOptions.map((role) => (
-                        <option key={role.value} value={role.value}>
-                            {role.label}
-                        </option>
-                    ))}
-                </select>
+                    <SelectTrigger id="member-role" className="mt-2">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {roleOptions.map((role) => (
+                            <SelectItem key={role.value} value={role.value}>
+                                {role.label}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
                 <InputError message={errors.role} className="mt-2" />
             </div>
 
             <div>
-                <InputLabel htmlFor="member-status" value="Statut" />
-                <select
-                    id="member-status"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                <Label htmlFor="member-status">Statut</Label>
+                <Select
                     value={data.status}
-                    onChange={(event) => setData('status', event.target.value)}
+                    onValueChange={(value) => setData("status", value)}
                 >
-                    {statusOptions.map((status) => (
-                        <option key={status.value} value={status.value}>
-                            {status.label}
-                        </option>
-                    ))}
-                </select>
+                    <SelectTrigger id="member-status" className="mt-2">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {statusOptions.map((status) => (
+                            <SelectItem key={status.value} value={status.value}>
+                                {status.label}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
                 <InputError message={errors.status} className="mt-2" />
             </div>
 
             <div className="flex items-center gap-3 lg:col-span-6">
-                <label className="flex items-center gap-2 text-sm text-gray-700">
+                <label className="flex items-center gap-2 text-sm text-muted-foreground">
                     <input
                         type="checkbox"
-                        className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                        className="rounded border-input text-primary shadow-sm focus:ring-primary"
                         checked={data.is_default}
                         onChange={(event) =>
-                            setData('is_default', event.target.checked)
+                            setData("is_default", event.target.checked)
                         }
                     />
                     Client par defaut pour cet utilisateur
                 </label>
 
-                <PrimaryButton disabled={processing}>
+                <Button type="submit" disabled={processing}>
                     Ajouter le membre
-                </PrimaryButton>
+                </Button>
             </div>
         </form>
     );
@@ -159,94 +172,109 @@ export function MemberRow({
 
     const submit: FormEventHandler = (event) => {
         event.preventDefault();
-        patch(route('clients.members.update', [clientId, membership.id]), {
+        patch(route("clients.members.update", [clientId, membership.id]), {
             preserveScroll: true,
         });
     };
 
     const removeMember = () => {
-        if (!window.confirm('Retirer cet utilisateur du client ?')) {
+        if (!window.confirm("Retirer cet utilisateur du client ?")) {
             return;
         }
 
         router.delete(
-            route('clients.members.destroy', [clientId, membership.id]),
+            route("clients.members.destroy", [clientId, membership.id]),
             { preserveScroll: true },
         );
     };
 
     return (
-        <tr>
-            <td className="px-6 py-4 align-top">
-                <div className="font-medium text-gray-950">
+        <TableRow>
+            <TableCell className="align-top">
+                <div className="font-medium text-foreground">
                     {membership.user.name}
                 </div>
-                <div className="text-sm text-gray-500">
+                <div className="text-sm text-muted-foreground">
                     {membership.user.email}
                 </div>
-            </td>
-            <td className="px-6 py-4 align-top">
+            </TableCell>
+            <TableCell className="align-top">
                 <form onSubmit={submit} className="grid gap-3 md:grid-cols-4">
                     <div>
-                        <select
-                            className="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        <Select
                             value={data.role}
-                            onChange={(event) =>
-                                setData('role', event.target.value)
-                            }
+                            onValueChange={(value) => setData("role", value)}
                         >
-                            {roleOptions.map((role) => (
-                                <option key={role.value} value={role.value}>
-                                    {role.label}
-                                </option>
-                            ))}
-                        </select>
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {roleOptions.map((role) => (
+                                    <SelectItem
+                                        key={role.value}
+                                        value={role.value}
+                                    >
+                                        {role.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                         <InputError message={errors.role} className="mt-2" />
                     </div>
 
                     <div>
-                        <select
-                            className="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        <Select
                             value={data.status}
-                            onChange={(event) =>
-                                setData('status', event.target.value)
-                            }
+                            onValueChange={(value) => setData("status", value)}
                         >
-                            {statusOptions.map((status) => (
-                                <option key={status.value} value={status.value}>
-                                    {status.label}
-                                </option>
-                            ))}
-                        </select>
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {statusOptions.map((status) => (
+                                    <SelectItem
+                                        key={status.value}
+                                        value={status.value}
+                                    >
+                                        {status.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                         <InputError message={errors.status} className="mt-2" />
                     </div>
 
-                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <label className="flex items-center gap-2 text-sm text-muted-foreground">
                         <input
                             type="checkbox"
-                            className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                            className="rounded border-input text-primary shadow-sm focus:ring-primary"
                             checked={data.is_default}
                             onChange={(event) =>
-                                setData('is_default', event.target.checked)
+                                setData("is_default", event.target.checked)
                             }
                         />
                         Defaut
                     </label>
 
                     <div className="flex gap-2">
-                        <SecondaryButton type="submit" disabled={processing}>
+                        <Button
+                            type="submit"
+                            variant="secondary"
+                            disabled={processing}
+                        >
                             Sauver
-                        </SecondaryButton>
-                        <button
+                        </Button>
+                        <Button
                             type="button"
+                            variant="ghost"
                             onClick={removeMember}
-                            className="text-sm font-medium text-red-600 hover:text-red-800"
+                            className="text-destructive hover:text-destructive"
                         >
                             Retirer
-                        </button>
+                        </Button>
                     </div>
                 </form>
-            </td>
-        </tr>
+            </TableCell>
+        </TableRow>
     );
 }

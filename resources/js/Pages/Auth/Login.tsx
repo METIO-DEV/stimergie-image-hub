@@ -1,10 +1,10 @@
-import InputError from '@/Components/InputError';
-import InputLabel from '@/Components/InputLabel';
-import PrimaryButton from '@/Components/PrimaryButton';
-import TextInput from '@/Components/TextInput';
-import GuestLayout from '@/Layouts/GuestLayout';
-import { Head, Link, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import InputError from "@/Components/InputError";
+import { Button } from "@/Components/ui/button";
+import { Input } from "@/Components/ui/input";
+import { Label } from "@/Components/ui/label";
+import GuestLayout from "@/Layouts/GuestLayout";
+import { Head, Link, useForm } from "@inertiajs/react";
+import { FormEventHandler } from "react";
 
 export default function Login({
     status,
@@ -14,16 +14,16 @@ export default function Login({
     canResetPassword: boolean;
 }) {
     const { data, setData, post, processing, errors, reset } = useForm({
-        email: '',
-        password: '',
+        email: "",
+        password: "",
         remember: false as boolean,
     });
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
 
-        post(route('login'), {
-            onFinish: () => reset('password'),
+        post(route("login"), {
+            onFinish: () => reset("password"),
         });
     };
 
@@ -32,7 +32,7 @@ export default function Login({
             <Head title="Connexion" />
 
             {status && (
-                <div className="mb-4 text-sm font-medium text-green-600">
+                <div className="mb-5 rounded-md border border-primary/15 bg-primary/5 px-4 py-3 text-sm font-medium text-primary">
                     {status}
                 </div>
             )}
@@ -45,42 +45,44 @@ export default function Login({
 
             <form onSubmit={submit} className="space-y-6">
                 <div>
-                    <InputLabel
+                    <Label
                         htmlFor="email"
-                        value="Email"
                         className="font-semibold text-[#080506]"
-                    />
+                    >
+                        Email
+                    </Label>
 
-                    <TextInput
+                    <Input
                         id="email"
                         type="email"
                         name="email"
                         value={data.email}
                         placeholder="exemple@email.com"
-                        className="mt-3 block h-[46px] w-full rounded-lg border-[#dfe4e5] bg-white px-4 text-base text-[#1d2528] shadow-none placeholder:text-[#657078] focus:border-[#264b57] focus:ring-[#264b57]"
+                        className="mt-3 h-[46px] rounded-lg border-[#dfe4e5] bg-white px-4 text-base text-[#1d2528] shadow-none placeholder:text-[#657078] focus-visible:ring-[#264b57]"
                         autoComplete="username"
-                        onChange={(e) => setData('email', e.target.value)}
+                        onChange={(e) => setData("email", e.target.value)}
                     />
 
                     <InputError message={errors.email} className="mt-2" />
                 </div>
 
                 <div>
-                    <InputLabel
+                    <Label
                         htmlFor="password"
-                        value="Mot de passe"
                         className="font-semibold text-[#080506]"
-                    />
+                    >
+                        Mot de passe
+                    </Label>
 
-                    <TextInput
+                    <Input
                         id="password"
                         type="password"
                         name="password"
                         value={data.password}
                         placeholder="********"
-                        className="mt-3 block h-[46px] w-full rounded-lg border-[#dfe4e5] bg-white px-4 text-base text-[#1d2528] shadow-none placeholder:text-[#657078] focus:border-[#264b57] focus:ring-[#264b57]"
+                        className="mt-3 h-[46px] rounded-lg border-[#dfe4e5] bg-white px-4 text-base text-[#1d2528] shadow-none placeholder:text-[#657078] focus-visible:ring-[#264b57]"
                         autoComplete="current-password"
-                        onChange={(e) => setData('password', e.target.value)}
+                        onChange={(e) => setData("password", e.target.value)}
                     />
 
                     <InputError message={errors.password} className="mt-2" />
@@ -89,7 +91,7 @@ export default function Login({
                 <div className="flex justify-end pt-1">
                     {canResetPassword && (
                         <Link
-                            href={route('password.request')}
+                            href={route("password.request")}
                             className="text-base font-semibold text-[#657078] underline-offset-4 hover:text-[#264b57] hover:underline focus:outline-none focus:ring-2 focus:ring-[#264b57] focus:ring-offset-2"
                         >
                             Mot de passe oublie ?
@@ -97,12 +99,13 @@ export default function Login({
                     )}
                 </div>
 
-                <PrimaryButton
-                    className="mt-7 flex h-[46px] w-full justify-center rounded-lg bg-[#264b57] px-5 text-base font-semibold normal-case tracking-normal hover:bg-[#203f49] focus:bg-[#203f49] focus:ring-[#264b57] active:bg-[#1b3540]"
+                <Button
+                    type="submit"
+                    className="mt-7 h-[46px] w-full rounded-lg bg-[#264b57] px-5 text-base font-semibold hover:bg-[#203f49] focus-visible:ring-[#264b57] active:bg-[#1b3540]"
                     disabled={processing}
                 >
                     Se connecter
-                </PrimaryButton>
+                </Button>
             </form>
         </GuestLayout>
     );

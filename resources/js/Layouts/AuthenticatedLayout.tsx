@@ -1,5 +1,5 @@
-import { Avatar, AvatarFallback } from '@/Components/ui/avatar';
-import { Button } from '@/Components/ui/button';
+import { Avatar, AvatarFallback } from "@/Components/ui/avatar";
+import { Button } from "@/Components/ui/button";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -8,21 +8,22 @@ import {
     DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
-} from '@/Components/ui/dropdown-menu';
-import { Sheet, SheetContent, SheetTrigger } from '@/Components/ui/sheet';
-import { cn } from '@/lib/utils';
-import { Link, usePage } from '@inertiajs/react';
+} from "@/Components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetTrigger } from "@/Components/ui/sheet";
+import { cn } from "@/lib/utils";
+import { Link, usePage } from "@inertiajs/react";
 import {
     Download,
     FolderOpen,
     Image,
+    LayoutDashboard,
     LogOut,
     Menu,
     Shield,
     User,
     Users,
-} from 'lucide-react';
-import { PropsWithChildren, ReactNode, useMemo, useState } from 'react';
+} from "lucide-react";
+import { PropsWithChildren, ReactNode, useMemo, useState } from "react";
 
 type NavItem = {
     href: string;
@@ -30,6 +31,7 @@ type NavItem = {
     icon: typeof Image;
     active: boolean;
     show: boolean;
+    disabled?: boolean;
 };
 
 export default function Authenticated({
@@ -39,13 +41,13 @@ export default function Authenticated({
     const user = usePage().props.auth.user;
     const [mobileOpen, setMobileOpen] = useState(false);
 
-    const isSuperAdmin = user.platform_role === 'super_admin';
+    const isSuperAdmin = user.platform_role === "super_admin";
     const initials = useMemo(
         () =>
             user.name
-                .split(' ')
+                .split(" ")
                 .map((part) => part.charAt(0))
-                .join('')
+                .join("")
                 .slice(0, 2)
                 .toUpperCase() || user.email.charAt(0).toUpperCase(),
         [user.email, user.name],
@@ -53,55 +55,62 @@ export default function Authenticated({
 
     const items: NavItem[] = [
         {
-            href: route('dashboard'),
-            label: 'Tableau de bord',
-            icon: Image,
-            active: route().current('dashboard'),
+            href: route("dashboard"),
+            label: "Tableau de bord",
+            icon: LayoutDashboard,
+            active: route().current("dashboard"),
             show: true,
         },
         {
-            href: route('clients.index'),
-            label: 'Clients',
+            href: route("clients.index"),
+            label: "Clients",
             icon: Users,
-            active: route().current('clients.*'),
+            active: route().current("clients.*"),
             show: true,
         },
         {
-            href: '#',
-            label: 'Projets',
+            href: "#",
+            label: "Projets",
             icon: FolderOpen,
             active: false,
             show: true,
+            disabled: true,
         },
         {
-            href: '#',
+            href: "#",
             label: "Banque d'images",
             icon: Image,
             active: false,
             show: true,
+            disabled: true,
         },
         {
-            href: '#',
-            label: 'Telechargements',
+            href: "#",
+            label: "Telechargements",
             icon: Download,
             active: false,
             show: true,
+            disabled: true,
         },
         {
-            href: '#',
+            href: "#",
             label: "Droits d'acces",
             icon: Shield,
             active: false,
             show: isSuperAdmin,
+            disabled: true,
         },
     ];
 
     return (
         <div className="min-h-screen bg-background text-foreground">
-            <header className="sticky top-0 z-50 w-full border-b bg-[#F2F0F0]/95 backdrop-blur">
+            <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-[#F2F0F0]/95 backdrop-blur">
                 <div className="container flex h-14 items-center">
                     <div className="mr-4 hidden items-center md:flex">
-                        <Link href={route('dashboard')} className="mr-6">
+                        <Link
+                            href={route("dashboard")}
+                            className="mr-7 flex items-center"
+                        >
                             <img
                                 src="/logo_stimergie_header.png"
                                 alt="Stimergie"
@@ -109,21 +118,21 @@ export default function Authenticated({
                             />
                         </Link>
 
-                        <nav className="flex items-center gap-6">
+                        <nav className="flex items-center gap-5">
                             {items
                                 .filter((item) => item.show)
-                                .slice(1, 5)
+                                .slice(1)
                                 .map((item) => (
                                     <Link
                                         key={item.label}
                                         href={item.href}
                                         className={cn(
-                                            'text-sm font-medium transition-colors hover:text-primary',
+                                            "rounded-md px-1 py-2 text-sm font-medium transition-colors hover:text-primary",
                                             item.active
-                                                ? 'text-primary'
-                                                : 'text-foreground',
-                                            item.href === '#' &&
-                                                'pointer-events-none opacity-50',
+                                                ? "text-primary"
+                                                : "text-foreground/80",
+                                            item.disabled &&
+                                                "pointer-events-none text-muted-foreground/60",
                                         )}
                                     >
                                         {item.label}
@@ -143,7 +152,7 @@ export default function Authenticated({
                                 <span className="sr-only">Ouvrir le menu</span>
                             </Button>
                         </SheetTrigger>
-                        <SheetContent side="left" className="w-80">
+                        <SheetContent side="left" className="w-80 bg-[#f7f8f8]">
                             <div className="mb-6 border-b pb-4">
                                 <img
                                     src="/logo_stimergie_header.png"
@@ -165,12 +174,12 @@ export default function Authenticated({
                                                     setMobileOpen(false)
                                                 }
                                                 className={cn(
-                                                    'flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                                                    "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                                                     item.active
-                                                        ? 'bg-primary/10 text-primary'
-                                                        : 'hover:bg-primary/5 hover:text-primary',
-                                                    item.href === '#' &&
-                                                        'pointer-events-none opacity-50',
+                                                        ? "bg-primary/10 text-primary"
+                                                        : "text-foreground/80 hover:bg-primary/5 hover:text-primary",
+                                                    item.disabled &&
+                                                        "pointer-events-none text-muted-foreground/60",
                                                 )}
                                             >
                                                 <Icon className="h-4 w-4" />
@@ -184,7 +193,7 @@ export default function Authenticated({
 
                     <div className="flex flex-1 items-center justify-between md:justify-end">
                         <Link
-                            href={route('dashboard')}
+                            href={route("dashboard")}
                             className="flex items-center md:hidden"
                         >
                             <img
@@ -199,10 +208,10 @@ export default function Authenticated({
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="rounded-full"
+                                    className="rounded-full hover:bg-primary/5"
                                 >
                                     <Avatar className="h-8 w-8 border">
-                                        <AvatarFallback>
+                                        <AvatarFallback className="bg-primary text-primary-foreground">
                                             {initials}
                                         </AvatarFallback>
                                     </Avatar>
@@ -228,7 +237,7 @@ export default function Authenticated({
                                 <DropdownMenuGroup>
                                     <DropdownMenuItem asChild>
                                         <Link
-                                            href={route('profile.edit')}
+                                            href={route("profile.edit")}
                                             className="flex w-full items-center"
                                         >
                                             <User className="mr-2 h-4 w-4" />
@@ -239,7 +248,7 @@ export default function Authenticated({
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem asChild>
                                     <Link
-                                        href={route('logout')}
+                                        href={route("logout")}
                                         method="post"
                                         as="button"
                                         className="flex w-full items-center"
@@ -255,12 +264,12 @@ export default function Authenticated({
             </header>
 
             {header && (
-                <div className="border-b bg-card">
+                <div className="border-b bg-[#f7f8f8]">
                     <div className="container py-6">{header}</div>
                 </div>
             )}
 
-            <main>{children}</main>
+            <main className="bg-background">{children}</main>
         </div>
     );
 }
