@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AppPageController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ClientMemberController;
 use App\Http\Controllers\ProfileController;
@@ -22,6 +23,15 @@ Route::get('/dashboard', function () {
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
+    Route::get('/gallery', [AppPageController::class, 'gallery'])->name('gallery.index');
+    Route::get('/contact', [AppPageController::class, 'contact'])->name('contact.index');
+    Route::post('/contact', [AppPageController::class, 'sendContact'])->name('contact.send');
+    Route::get('/downloads', [AppPageController::class, 'downloads'])->name('downloads.index');
+    Route::get('/images', [AppPageController::class, 'images'])->name('images.index');
+    Route::get('/projects', [AppPageController::class, 'projects'])->name('projects.index');
+    Route::get('/users', [AppPageController::class, 'users'])->name('users.index');
+    Route::get('/access-periods', [AppPageController::class, 'accessPeriods'])->name('access-periods.index');
+
     Route::resource('clients', ClientController::class)->except(['destroy']);
     Route::post('/clients/{client}/members', [ClientMemberController::class, 'store'])->name('clients.members.store');
     Route::patch('/clients/{client}/members/{membership}', [ClientMemberController::class, 'update'])->name('clients.members.update');

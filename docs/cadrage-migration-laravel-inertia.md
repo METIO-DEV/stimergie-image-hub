@@ -2,6 +2,8 @@
 
 Date : 2026-05-29
 
+Derniere mise a jour : 2026-05-30
+
 ## Objectif
 
 Mettre en pause la stabilisation de l'application Supabase actuelle et preparer une migration ou reecriture vers une application plus maitrisee :
@@ -15,6 +17,10 @@ Mettre en pause la stabilisation de l'application Supabase actuelle et preparer 
 Le but n'est pas de refaire a l'identique les choix techniques existants. Le but est de reconstruire un socle plus coherent pour l'ensemble du metier deja porte par l'application : gestion de clients, projets, droits d'acces, banque d'images, partages, telechargements, ressources editoriales et administration.
 
 La banque d'images est le coeur visible du produit, mais elle n'est pas le seul perimetre. La migration doit reprendre les fonctionnalites metier existantes, tout en corrigeant les fondations techniques : permissions cote serveur, stockage fichier robuste, pipeline image explicite, sauvegardes, observabilite et exploitation simples.
+
+Point de cadrage important ajoute le 2026-05-30 : l'interface et les fonctionnalites de reference sont celles de l'ancien frontend React/Supabase disponible sur `main`. La migration Laravel/Inertia ne doit pas recreer les pages ou les fonctionnalites depuis zero si elles existent deja dans l'ancien projet. Elle doit recuperer les pages, composants, comportements, design et workflows existants, puis les rebrancher proprement au backend Laravel/Inertia.
+
+Ce portage doit etre vertical : une page reprise sans backend equivalent, sans donnees reelles, sans mutations et sans permissions Laravel n'est pas consideree comme migree.
 
 ## Situation actuelle
 
@@ -55,6 +61,16 @@ cadrage-migration-laravel-inertia
 ```
 
 L'application actuelle doit rester exploitable uniquement pour les besoins indispensables pendant la phase de cadrage. Les nouvelles corrections doivent etre limitees aux urgences de production, a la securite ou a la preservation des donnees.
+
+Etat de la branche Laravel/Inertia au 2026-05-30 :
+
+- la branche active de migration est `migration-complete-laravel-inertia` ;
+- l'application cible est Laravel + Inertia.js + React ;
+- l'URL applicative locale est `http://127.0.0.1:8000` ;
+- Vite ne doit servir que les assets/HMR du front Inertia, pas une seconde application standalone ;
+- le frontend actif doit rester dans `resources/js` ;
+- l'ancien frontend Vite standalone (`src/`, `index.html`, port `8080`) ne doit pas etre reactive comme deuxieme front ;
+- l'identite visuelle initiale Stimergie doit etre reprise depuis `main`, notamment navigation, layout, dashboard, profil, galerie et pages metier.
 
 ## Architecture cible
 
@@ -227,6 +243,89 @@ React reste le langage d'interface, mais via Inertia.js :
 - formulaires Inertia avec validation Laravel ;
 - shared props pour `auth.user`, roles, permissions et flash messages ;
 - composants React reutilisables pour galerie, filtres, modales et upload.
+
+### Reprise du frontend historique
+
+Le frontend historique sur `main` est la reference produit et design. Il est base sur React, Radix et shadcn, avec une identite visuelle deja validee. La migration doit donc suivre une logique de portage, pas de recreation.
+
+Regles de reprise :
+
+- recuperer les pages existantes depuis `main` quand elles existent ;
+- conserver autant que possible les composants, libelles, layouts, interactions et workflows deja presents ;
+- adapter les appels Supabase vers des props Inertia, routes Laravel, controllers, Form Requests, Policies et endpoints JSON Laravel quand necessaire ;
+- ne pas remplacer une page existante par une page Laravel/Breeze generique ;
+- supprimer progressivement les restes de formulaires ou layouts Breeze/Laravel quand ils apparaissent dans l'interface ;
+- garder `resources/js` comme unique emplacement du front actif ;
+- ne pas restaurer `src/` comme application separee.
+
+Pages a reprendre et rebrancher en priorite depuis l'ancien frontend :
+
+- tableau de bord administrateur et tableaux de bord selon role ;
+- navigation principale et menu utilisateur ;
+- page profil, avec le design de l'ancien front et non des formulaires type Laravel ;
+- banque d'images / galerie ;
+- contact ;
+- galerie utilisateur ;
+- vos telechargements ;
+- gestion des images ;
+- gestion des clients ;
+- projets ;
+- utilisateurs ;
+- droits d'acces / periodes d'acces ;
+- blog / ressources si conserve ;
+- pages publiques utiles : a propos, conditions, confidentialite, licences ;
+- footer et structure de navigation publique si toujours presents dans le parcours cible.
+
+Chaque page reprise doit faire l'objet d'un rebranchement explicite :
+
+- route Laravel nommee ;
+- controller ou closure temporaire Inertia clairement identifiee ;
+- props Inertia minimales pour charger la page ;
+- remplacement des hooks Supabase par des hooks/services Laravel ou props serveur ;
+- preservation du design existant ;
+- tests ou verification navigateur quand la page devient active.
+
+Le portage peut etre fait par lots. Les liens du menu ne doivent etre actives que lorsque la page cible existe cote Laravel/Inertia et ne depend plus directement du client Supabase.
+
+### Reprise backend et fonctionnelle
+
+Chaque page ou fonctionnalite reprise depuis `main` doit etre rebranchee completement cote Laravel. Il ne suffit pas de porter le JSX ou le design.
+
+Pour chaque fonctionnalite, le lot de migration attendu comprend :
+
+- route Laravel nommee ;
+- controller ou action Inertia dediee ;
+- props Inertia ou endpoints JSON necessaires ;
+- modeles Eloquent et relations correspondantes ;
+- Form Requests pour les mutations ;
+- Policies/Gates pour toutes les operations sensibles ;
+- services metier quand la logique depasse un controller simple ;
+- Jobs/queues quand le traitement est long ou asynchrone ;
+- remplacement des appels Supabase, RPC et Edge Functions par Laravel, Eloquent, services ou jobs ;
+- etats de chargement, erreurs et messages flash ;
+- tests feature pour les workflows critiques ;
+- verification navigateur quand le parcours devient actif.
+
+Definition de termine pour une page migree :
+
+- elle reprend l'interface et les interactions de l'ancien front ;
+- elle lit les donnees depuis Laravel/PostgreSQL ou depuis une source explicitement acceptee pendant la transition ;
+- elle ecrit via Laravel et non via Supabase depuis le navigateur ;
+- elle applique les permissions cote serveur ;
+- elle gere les erreurs de validation et d'autorisation ;
+- elle ne depend plus du client Supabase frontend ;
+- elle est accessible depuis la navigation uniquement si le parcours est fonctionnel.
+
+Les anciennes fonctionnalites Supabase doivent etre cartographiees une par une :
+
+- hooks React et services Supabase -> controllers, services Laravel, props Inertia ou endpoints JSON ;
+- RPC Supabase -> queries Eloquent, scopes, services ou actions dediees ;
+- Edge Functions -> Jobs Laravel, commandes Artisan, services backend ou endpoints controles ;
+- RLS Supabase -> Policies Laravel et scopes d'acces ;
+- Supabase Realtime/cache frontend -> strategie Laravel explicite : props serveur, polling, events ou cache serveur si necessaire ;
+- Supabase Storage/O2Switch -> object storage cible et URLs signees serveur.
+
+La migration doit donc reprendre le produit complet : UI, donnees, mutations, droits, traitements asynchrones et exploitation. Toute simplification fonctionnelle doit etre une decision explicite, pas un effet secondaire du portage.
 
 Des endpoints JSON restent possibles pour les besoins techniques :
 
@@ -460,6 +559,56 @@ Fonctionnalites a ne pas perdre pendant la migration :
 - telechargements HD et ZIP ;
 - contenus publies vs brouillons ;
 - audit et relance des traitements en erreur.
+
+## Backlog de portage UI depuis `main`
+
+Ce backlog complete le MVP technique. Il sert a eviter de livrer une application Laravel/Inertia fonctionnelle mais visuellement ou ergonomiquement differente du produit initial.
+
+### Lot UI 1 - Navigation et structure
+
+- aligner la navigation connectee sur l'ancien front ;
+- reprendre le menu utilisateur complet : Galerie, Projets, Vos telechargements, Profil, Gestion des images, Gestion des clients, Droits d'acces, Gestion des utilisateurs, Deconnexion ;
+- garder la navigation haute courte : logo, Banque d'images, Contact ;
+- supprimer les sous-headers ou divs heritees de Laravel/Breeze qui ne sont pas dans la cible ;
+- reprendre le footer de l'ancien front quand le layout connecte l'affiche ;
+- verifier les breakpoints mobile/tablette.
+
+### Lot UI 2 - Profil
+
+- remplacer la page profil actuelle par l'interface de l'ancien front ;
+- conserver les formulaires Laravel/Inertia uniquement comme mecanique de soumission, pas comme design ;
+- reprendre les champs, sections, espacements, textes et boutons de l'ancien front ;
+- brancher les mutations sur `ProfileController` et `PasswordController` existants ou les adapter proprement.
+
+### Lot UI 3 - Pages metier a activer
+
+- Banque d'images / Galerie ;
+- Contact ;
+- Vos telechargements ;
+- Gestion des images ;
+- Gestion des clients ;
+- Projets ;
+- Utilisateurs ;
+- Droits d'acces ;
+- Blog/Ressources si conserve.
+
+Pour chaque page, la consigne est de partir du code de `main`, puis de remplacer les dependances Supabase par le backend Laravel. Les fonctionnalites deja implementees dans l'ancien front ne doivent pas etre reinterpretees ou simplifiees sans decision explicite.
+
+Chaque page de ce lot doit etre livree avec son backend minimal fonctionnel :
+
+- lecture des donnees depuis Laravel ;
+- mutations branchees sur Laravel ;
+- permissions serveur ;
+- erreurs et validations Laravel ;
+- tests ou verification de parcours.
+
+Une page visuellement portee mais sans backend n'est qu'un brouillon et ne doit pas etre consideree comme activee.
+
+### Lot UI 4 - Nettoyage des restes Laravel/Breeze
+
+- rechercher regulierement les composants `PrimaryButton`, `SecondaryButton`, `DangerButton`, `TextInput`, `InputLabel`, `GuestLayout` generiques quand ils produisent un rendu Breeze ;
+- remplacer par les composants shadcn/Radix du design Stimergie ou par les composants recuperes de l'ancien front ;
+- verifier que les pages auth, profil, clients et dashboard ne contiennent plus de blocs visuels "Laravel starter kit".
 
 ## Migration des donnees
 

@@ -54,27 +54,37 @@ export default function Authenticated({
 
     const primaryNav: MenuItem[] = [
         {
-            href: "#",
+            href: route("gallery.index"),
             label: "Banque d'images",
             icon: Image,
-            disabled: true,
+            active: route().current("gallery.index"),
         },
         {
-            href: "#",
+            href: route("contact.index"),
             label: "Contact",
             icon: Mail,
-            disabled: true,
+            active: route().current("contact.index"),
         },
     ];
 
     const userMenu: MenuItem[] = [
-        { href: "#", label: "Galerie", icon: Image, disabled: true },
-        { href: "#", label: "Projets", icon: FolderOpen, disabled: true },
         {
-            href: "#",
+            href: route("gallery.index"),
+            label: "Galerie",
+            icon: Image,
+            active: route().current("gallery.index"),
+        },
+        {
+            href: route("projects.index"),
+            label: "Projets",
+            icon: FolderOpen,
+            active: route().current("projects.index"),
+        },
+        {
+            href: route("downloads.index"),
             label: "Vos téléchargements",
             icon: Download,
-            disabled: true,
+            active: route().current("downloads.index"),
         },
         {
             href: route("profile.edit"),
@@ -85,7 +95,12 @@ export default function Authenticated({
     ];
 
     const adminMenu: MenuItem[] = [
-        { href: "#", label: "Gestion des images", icon: Image, disabled: true },
+        {
+            href: route("images.index"),
+            label: "Gestion des images",
+            icon: Image,
+            active: route().current("images.index"),
+        },
         {
             href: route("clients.index"),
             label: "Gestion des clients",
@@ -93,16 +108,16 @@ export default function Authenticated({
             active: route().current("clients.*"),
         },
         {
-            href: "#",
+            href: route("access-periods.index"),
             label: "Droits d'accès",
             icon: Shield,
-            disabled: true,
+            active: route().current("access-periods.index"),
         },
         {
-            href: "#",
+            href: route("users.index"),
             label: "Gestion des utilisateurs",
             icon: Users,
-            disabled: true,
+            active: route().current("users.index"),
         },
     ];
 

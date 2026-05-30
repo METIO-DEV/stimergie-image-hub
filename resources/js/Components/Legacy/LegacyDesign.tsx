@@ -1,0 +1,573 @@
+import { Badge } from "@/Components/ui/badge";
+import { Button } from "@/Components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/Components/ui/card";
+import { cn } from "@/lib/utils";
+import {
+    Building2,
+    Check,
+    ChevronFirst,
+    ChevronLast,
+    ChevronLeft,
+    ChevronRight,
+    Download,
+    Grid2X2,
+    List,
+    Mail,
+    Pencil,
+    Search,
+    Shield,
+    Trash2,
+    UserRound,
+} from "lucide-react";
+import { ReactNode, useMemo, useState } from "react";
+
+export type ViewMode = "card" | "list";
+
+export type LegacyImage = {
+    id: number | string;
+    title: string;
+    description?: string | null;
+    orientation?: string | null;
+    status?: string;
+    clientId?: number | string | null;
+    clientName?: string | null;
+    projectId?: number | string | null;
+    projectName?: string | null;
+    thumbUrl?: string | null;
+    imageUrl?: string | null;
+    downloadUrl?: string | null;
+    width?: number | null;
+    height?: number | null;
+    tags?: string[];
+    createdAt?: string;
+};
+
+type Option = {
+    id: number | string;
+    name: string;
+    clientId?: number | string | null;
+};
+
+export function ViewToggle({
+    currentView,
+    onViewChange,
+}: {
+    currentView: ViewMode;
+    onViewChange: (view: ViewMode) => void;
+}) {
+    return (
+        <div className="flex space-x-1 rounded-md border p-1">
+            <Button
+                variant={currentView === "card" ? "default" : "ghost"}
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => onViewChange("card")}
+                title="Vue en cartes"
+            >
+                <Grid2X2 size={16} />
+            </Button>
+            <Button
+                variant={currentView === "list" ? "default" : "ghost"}
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => onViewChange("list")}
+                title="Vue en liste"
+            >
+                <List size={16} />
+            </Button>
+        </div>
+    );
+}
+
+export function LegacySelect({
+    label,
+    value,
+    onChange,
+    options,
+    allLabel,
+    className,
+}: {
+    label?: string;
+    value: string;
+    onChange: (value: string) => void;
+    options: Option[];
+    allLabel: string;
+    className?: string;
+}) {
+    return (
+        <div className={className}>
+            {label && (
+                <label className="mb-2 block text-sm font-medium">
+                    {label}
+                </label>
+            )}
+            <select
+                className="h-11 w-full rounded-md border border-input bg-card px-3 text-base outline-none focus:ring-2 focus:ring-primary/30"
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+            >
+                <option value="">{allLabel}</option>
+                {options.map((option) => (
+                    <option key={option.id} value={String(option.id)}>
+                        {option.name}
+                    </option>
+                ))}
+            </select>
+        </div>
+    );
+}
+
+export function LegacySearch({
+    value,
+    onChange,
+    placeholder = "Recherchez des images...",
+    className,
+}: {
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+    className?: string;
+}) {
+    return (
+        <div className={cn("relative w-full", className)}>
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                placeholder={placeholder}
+                className="h-11 w-full rounded-full border border-border bg-muted px-11 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+            />
+            <Button
+                type="button"
+                size="icon"
+                className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2 rounded-full"
+            >
+                <Search className="h-4 w-4" />
+            </Button>
+        </div>
+    );
+}
+
+export function MasonryGrid({
+    images,
+    selectedIds,
+    onToggle,
+    loadingSlots = false,
+}: {
+    images: LegacyImage[];
+    selectedIds?: Array<string | number>;
+    onToggle?: (id: string | number) => void;
+    loadingSlots?: boolean;
+}) {
+    const [hoveredId, setHoveredId] = useState<string | number | null>(null);
+    const columns = useMemo(() => distributeImages(images, 5), [images]);
+
+    if (loadingSlots) {
+        return (
+            <div className="grid grid-cols-2 gap-0.5 px-0.5 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                {Array.from({ length: 10 }).map((_, index) => (
+                    <div
+                        key={index}
+                        className={cn(
+                            "relative bg-muted/60",
+                            index % 3 === 0
+                                ? "aspect-[3/4]"
+                                : index % 3 === 1
+                                  ? "aspect-[4/3]"
+                                  : "aspect-square",
+                        )}
+                    >
+                        <span className="absolute left-3 top-3 h-8 w-8 rounded-full border-2 border-white/80 bg-white/60" />
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
+    return (
+        <div className="grid grid-cols-2 gap-0.5 px-0.5 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            {columns.map((column, columnIndex) => (
+                <div key={columnIndex} className="flex flex-col gap-0.5">
+                    {column.map((image) => {
+                        const imageId = image.id;
+                        const isSelected = selectedIds?.includes(imageId);
+                        const src = image.thumbUrl || image.imageUrl;
+
+                        return (
+                            <div
+                                key={imageId}
+                                className={cn(
+                                    "group relative overflow-hidden bg-card",
+                                    isSelected &&
+                                        "ring-2 ring-primary ring-offset-1",
+                                )}
+                                onMouseEnter={() => setHoveredId(imageId)}
+                                onMouseLeave={() => setHoveredId(null)}
+                            >
+                                <button
+                                    type="button"
+                                    className={cn(
+                                        "absolute left-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white/80 transition",
+                                        isSelected
+                                            ? "scale-110 bg-primary text-white"
+                                            : "bg-white/60 group-hover:bg-white/90",
+                                    )}
+                                    onClick={() => onToggle?.(imageId)}
+                                    aria-label="Selectionner l'image"
+                                >
+                                    {isSelected && (
+                                        <Check className="h-4 w-4" />
+                                    )}
+                                </button>
+
+                                {src ? (
+                                    <img
+                                        src={src}
+                                        alt={image.title}
+                                        className={cn(
+                                            "w-full object-cover",
+                                            imageClassName(image),
+                                        )}
+                                        loading="lazy"
+                                    />
+                                ) : (
+                                    <div
+                                        className={cn(
+                                            "w-full bg-muted",
+                                            imageClassName(image),
+                                        )}
+                                    />
+                                )}
+
+                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4 opacity-0 transition-opacity group-hover:opacity-100">
+                                    <h3 className="truncate font-semibold text-white">
+                                        {image.title}
+                                    </h3>
+                                </div>
+
+                                {image.downloadUrl && (
+                                    <a
+                                        href={image.downloadUrl}
+                                        className={cn(
+                                            "absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-foreground shadow-md transition",
+                                            hoveredId === imageId
+                                                ? "translate-y-0 opacity-100"
+                                                : "-translate-y-2 opacity-0",
+                                        )}
+                                        title="Télécharger"
+                                    >
+                                        <Download className="h-4 w-4" />
+                                    </a>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            ))}
+        </div>
+    );
+}
+
+export function LegacyPagination({
+    totalCount,
+    currentPage,
+    onPageChange,
+    pageSize = 100,
+}: {
+    totalCount: number;
+    currentPage: number;
+    onPageChange: (page: number) => void;
+    pageSize?: number;
+}) {
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    const start = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    const end = Math.min(currentPage * pageSize, totalCount);
+
+    if (totalPages <= 1 && totalCount <= pageSize) {
+        return null;
+    }
+
+    const pages = visiblePages(currentPage, totalPages);
+
+    return (
+        <div className="flex flex-col items-center gap-6 px-4 py-8">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">
+                    {start} - {end}
+                </span>
+                <span>sur</span>
+                <span className="font-medium text-foreground">
+                    {totalCount}
+                </span>
+                <span>images</span>
+                <span className="ml-2 text-xs">
+                    (Page {currentPage}/{totalPages})
+                </span>
+            </div>
+
+            <div className="flex items-center gap-1">
+                <PageButton
+                    disabled={currentPage === 1}
+                    onClick={() => onPageChange(1)}
+                >
+                    <ChevronFirst className="h-4 w-4" />
+                </PageButton>
+                {currentPage > 1 && (
+                    <PageButton onClick={() => onPageChange(currentPage - 1)}>
+                        <ChevronLeft className="h-4 w-4" />
+                    </PageButton>
+                )}
+                {pages.map((page, index) =>
+                    page === "ellipsis" ? (
+                        <span key={`${page}-${index}`} className="px-3">
+                            ...
+                        </span>
+                    ) : (
+                        <Button
+                            key={page}
+                            variant={page === currentPage ? "default" : "ghost"}
+                            className="h-10 w-10"
+                            onClick={() => onPageChange(page)}
+                        >
+                            {page}
+                        </Button>
+                    ),
+                )}
+                {currentPage < totalPages && (
+                    <PageButton onClick={() => onPageChange(currentPage + 1)}>
+                        <ChevronRight className="h-4 w-4" />
+                    </PageButton>
+                )}
+                <PageButton
+                    disabled={currentPage === totalPages}
+                    onClick={() => onPageChange(totalPages)}
+                >
+                    <ChevronLast className="h-4 w-4" />
+                </PageButton>
+            </div>
+        </div>
+    );
+}
+
+export function LegacyUserCard({
+    name,
+    email,
+    role,
+    clients,
+}: {
+    name: string;
+    email: string;
+    role: string;
+    clients: string[];
+}) {
+    return (
+        <Card className="transition-shadow hover:shadow-md">
+            <CardHeader className="pb-2">
+                <div className="flex items-start justify-between">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                        <UserRound
+                            size={18}
+                            className="text-muted-foreground"
+                        />
+                        {name || (
+                            <span className="italic text-muted-foreground">
+                                Nom non defini
+                            </span>
+                        )}
+                    </CardTitle>
+                    <div className="flex gap-2">
+                        <Button variant="ghost" size="icon" title="Modifier">
+                            <Pencil size={16} />
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Supprimer"
+                            className="text-destructive hover:text-destructive/90"
+                        >
+                            <Trash2 size={16} />
+                        </Button>
+                    </div>
+                </div>
+            </CardHeader>
+            <CardContent>
+                <div className="space-y-3 text-sm">
+                    <p className="flex items-center gap-2">
+                        <Mail size={16} className="text-muted-foreground" />
+                        {email}
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <Shield size={16} className="text-muted-foreground" />
+                        <Badge
+                            variant="outline"
+                            className={roleDisplay(role).color}
+                        >
+                            {roleDisplay(role).label}
+                        </Badge>
+                    </div>
+                    {clients.length > 0 && (
+                        <div className="flex items-start gap-2">
+                            <Building2
+                                size={16}
+                                className="mt-1 text-muted-foreground"
+                            />
+                            <div className="flex flex-wrap gap-1">
+                                {clients.map((client) => (
+                                    <Badge
+                                        key={client}
+                                        variant="secondary"
+                                        className="text-xs font-semibold uppercase"
+                                    >
+                                        {client}
+                                    </Badge>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+export function SectionHeader({
+    icon,
+    title,
+    action,
+}: {
+    icon?: ReactNode;
+    title: string;
+    action?: ReactNode;
+}) {
+    return (
+        <div className="border-b border-border bg-muted/30">
+            <div className="mx-auto max-w-7xl px-6 py-16">
+                <div className="flex items-center justify-between gap-6">
+                    <div className="flex items-center gap-3">
+                        {icon}
+                        <h1 className="text-3xl font-bold">{title}</h1>
+                    </div>
+                    {action}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+export function roleDisplay(role: string | null | undefined) {
+    switch (role) {
+        case "admin":
+            return {
+                label: "Administrateur",
+                color: "bg-destructive/10 text-destructive border-destructive/20",
+            };
+        case "admin_client":
+            return {
+                label: "Admin Client",
+                color: "bg-primary/10 text-primary border-primary/20",
+            };
+        default:
+            return {
+                label: "Utilisateur",
+                color: "bg-muted text-muted-foreground border-border",
+            };
+    }
+}
+
+function PageButton({
+    children,
+    disabled,
+    onClick,
+}: {
+    children: ReactNode;
+    disabled?: boolean;
+    onClick: () => void;
+}) {
+    return (
+        <Button
+            variant="outline"
+            size="icon"
+            disabled={disabled}
+            className="h-10 w-10"
+            onClick={onClick}
+        >
+            {children}
+        </Button>
+    );
+}
+
+function distributeImages(images: LegacyImage[], count: number) {
+    const columns = Array.from({ length: count }, () => [] as LegacyImage[]);
+    const heights = Array.from({ length: count }, () => 0);
+
+    images.forEach((image) => {
+        const index = heights.indexOf(Math.min(...heights));
+        columns[index].push(image);
+        heights[index] += imageHeightFactor(image);
+    });
+
+    return columns;
+}
+
+function imageHeightFactor(image: LegacyImage) {
+    if (image.width && image.height) {
+        return image.height / image.width;
+    }
+
+    if (image.orientation === "portrait") {
+        return 1.33;
+    }
+
+    if (image.orientation === "square" || image.orientation === "carré") {
+        return 1;
+    }
+
+    return 0.75;
+}
+
+function imageClassName(image: LegacyImage) {
+    if (image.width && image.height) {
+        return "";
+    }
+
+    if (image.orientation === "portrait") {
+        return "aspect-[3/4]";
+    }
+
+    if (image.orientation === "square" || image.orientation === "carré") {
+        return "aspect-square";
+    }
+
+    return "aspect-[4/3]";
+}
+
+function visiblePages(currentPage: number, totalPages: number) {
+    if (totalPages <= 7) {
+        return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    if (currentPage <= 3) {
+        return [1, 2, 3, 4, "ellipsis", totalPages] as const;
+    }
+
+    if (currentPage >= totalPages - 2) {
+        return [
+            1,
+            "ellipsis",
+            totalPages - 3,
+            totalPages - 2,
+            totalPages - 1,
+            totalPages,
+        ] as const;
+    }
+
+    return [
+        1,
+        "ellipsis",
+        currentPage - 1,
+        currentPage,
+        currentPage + 1,
+        "ellipsis",
+        totalPages,
+    ] as const;
+}

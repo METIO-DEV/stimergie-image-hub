@@ -37,6 +37,7 @@ class ClientController extends Controller
                 'name' => $client->name,
                 'slug' => $client->slug,
                 'status' => $client->status,
+                'logo' => $client->legacy_logo_url,
                 'projectsCount' => $client->projects_count,
                 'imagesCount' => $client->images_count,
                 'membersCount' => $client->memberships_count,
