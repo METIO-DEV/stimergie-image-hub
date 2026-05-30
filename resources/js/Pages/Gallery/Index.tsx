@@ -1,6 +1,7 @@
 import { Button } from "@/Components/ui/button";
 import {
     LegacyImage,
+    ImageInfoSheet,
     LegacyPagination,
     LegacySearch,
     LegacySelect,
@@ -53,6 +54,7 @@ export default function GalleryIndex({
     const [selectedImages, setSelectedImages] = useState<
         Array<string | number>
     >([]);
+    const [detailImage, setDetailImage] = useState<LegacyImage | null>(null);
 
     const projects = useMemo(
         () =>
@@ -254,12 +256,17 @@ export default function GalleryIndex({
                             images={paginatedImages}
                             selectedIds={selectedImages}
                             onToggle={toggleSelection}
+                            onImageClick={setDetailImage}
                         />
                     ) : (
                         <MasonryGrid images={[]} loadingSlots />
                     )}
                 </div>
             </main>
+            <ImageInfoSheet
+                image={detailImage}
+                onClose={() => setDetailImage(null)}
+            />
         </AuthenticatedLayout>
     );
 }

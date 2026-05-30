@@ -237,9 +237,15 @@ export function ImageEditModal({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-h-[90vh] max-w-xl overflow-hidden">
                 <DialogHeader>
-                    <DialogTitle>Modifier l'image</DialogTitle>
+                    <DialogTitle>
+                        {image
+                            ? "Modifier l'image"
+                            : "Ajouter une nouvelle image"}
+                    </DialogTitle>
                     <DialogDescription>
-                        Remplacez le visuel et ajustez ses informations.
+                        {image
+                            ? "Remplacez le visuel et ajustez ses informations."
+                            : "Téléchargez une image et ajoutez les informations nécessaires."}
                     </DialogDescription>
                 </DialogHeader>
 

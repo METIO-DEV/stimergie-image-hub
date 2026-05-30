@@ -72,6 +72,44 @@ Etat de la branche Laravel/Inertia au 2026-05-30 :
 - l'ancien frontend Vite standalone (`src/`, `index.html`, port `8080`) ne doit pas etre reactive comme deuxieme front ;
 - l'identite visuelle initiale Stimergie doit etre reprise depuis `main`, notamment navigation, layout, dashboard, profil, galerie et pages metier.
 
+Etat de reprise interface au 2026-05-30 apres les commits `01d4611` et `c9fce46` :
+
+- navigation connectee reprise sur le modele `main` : logo, Banque d'images, Contact en navigation haute, menu utilisateur complet ;
+- dashboard, profil, clients, projets, utilisateurs, gestion des images, droits d'acces, telechargements, contact et galerie ont ete rebranches en pages Inertia ;
+- les pages utilisent des composants React dans `resources/js` et ne reactivent pas l'ancien front `src/` ;
+- la galerie reprend le header beige, les filtres, la selection, le masonry et la pagination ;
+- le loader progressif des images de `main` a ete porte dans le masonry Inertia : placeholder pulse, lazy loading via IntersectionObserver, spinner de chargement et fallback image indisponible ;
+- dans la Banque d'images, le clic sur une image ouvre un panneau lateral de detail image, reprenant l'intention de la vue detail de `main` ;
+- dans la gestion des images, le clic sur une image declenche l'action de modification ;
+- dans la gestion des images, le nom du client peut ouvrir un panneau lateral d'informations client ;
+- le contact est disponible sous forme de modale depuis la navigation, comme dans l'ancien front ;
+- les modales visuelles de creation/modification projet, image et utilisateur sont presentes cote interface ;
+- les boutons `Ajouter un projet` et `Ajouter une image` ouvrent leurs modales dediees.
+
+Ecarts connus au 2026-05-30 :
+
+- les modales projet, image et utilisateur reprennent l'interface et les champs attendus, mais leurs mutations Laravel completes restent a brancher ;
+- la modale image permet visuellement de changer l'image et les informations, mais l'upload/remplacement fichier, la regeneration des variantes et la persistance des tags restent a implementer cote Laravel ;
+- le panneau lateral de detail image affiche les informations disponibles depuis les props Laravel ; l'edition inline des tags, les partages et les telechargements avances de la vue detail historique restent a raccorder ;
+- le panneau client lateral affiche les informations disponibles depuis les props Laravel dans les vues d'administration ; les actions avancees de fiche client restent a raccorder ;
+- la pagination galerie est pilotee par Laravel pour le volume global, puis les filtres locaux s'appliquent sur les images chargees de la page courante. Une pagination serveur combinee aux filtres client/projet/tag/orientation devra remplacer cette transition ;
+- les telechargements SD/HD et ZIP gardent l'interface historique mais le workflow asynchrone complet doit encore etre finalise cote jobs Laravel ;
+- les pages publiques et blog/ressources restent a porter si le perimetre est confirme.
+
+Amelioration produit identifiee : association rapide d'images a un projet
+
+L'ancien fonctionnement oblige a saisir ou modifier le projet depuis les informations de chaque image. Ce flux est trop lent pour les operations courantes. La cible Laravel/Inertia doit ajouter un parcours plus efficace :
+
+- selectionner plusieurs images depuis la galerie ou la gestion des images ;
+- ouvrir une action groupee `Lier a un projet` ;
+- proposer uniquement les projets accessibles selon les droits Laravel de l'utilisateur ;
+- permettre de filtrer rapidement par client puis projet ;
+- afficher un recapitulatif avant validation : nombre d'images, projet cible, client cible, impacts sur les droits ;
+- executer la mutation cote Laravel avec policy dediee, transaction, audit log et event de rafraichissement ;
+- conserver la modification individuelle dans la modale image pour les corrections ponctuelles.
+
+Cette amelioration est consideree meilleure que l'ancien flux et doit etre documentee comme une evolution volontaire, pas comme un ecart accidentel avec `main`.
+
 ## Architecture cible
 
 ### Backend

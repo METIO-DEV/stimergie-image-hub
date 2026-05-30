@@ -46,6 +46,7 @@ export default function ProjectsIndex({ projects, filters }: Props) {
     const [clientFilter, setClientFilter] = useState("");
     const [search, setSearch] = useState("");
     const [editingProject, setEditingProject] = useState<Project | null>(null);
+    const [projectModalOpen, setProjectModalOpen] = useState(false);
 
     const filteredProjects = useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -83,7 +84,12 @@ export default function ProjectsIndex({ projects, filters }: Props) {
                             currentView={viewMode}
                             onViewChange={setViewMode}
                         />
-                        <Button>
+                        <Button
+                            onClick={() => {
+                                setEditingProject(null);
+                                setProjectModalOpen(true);
+                            }}
+                        >
                             <Plus size={16} className="mr-2" />
                             Ajouter un projet
                         </Button>
@@ -112,7 +118,10 @@ export default function ProjectsIndex({ projects, filters }: Props) {
                             <ProjectCard
                                 key={project.id}
                                 project={project}
-                                onEdit={setEditingProject}
+                                onEdit={(project) => {
+                                    setEditingProject(project);
+                                    setProjectModalOpen(true);
+                                }}
                             />
                         ))}
                     </div>
@@ -140,9 +149,10 @@ export default function ProjectsIndex({ projects, filters }: Props) {
                                         variant="ghost"
                                         size="icon"
                                         title="Modifier"
-                                        onClick={() =>
-                                            setEditingProject(project)
-                                        }
+                                        onClick={() => {
+                                            setEditingProject(project);
+                                            setProjectModalOpen(true);
+                                        }}
                                     >
                                         <Pencil size={16} />
                                     </Button>
@@ -162,8 +172,9 @@ export default function ProjectsIndex({ projects, filters }: Props) {
             </main>
             <ProjectEditModal
                 project={editingProject}
-                open={Boolean(editingProject)}
+                open={projectModalOpen}
                 onOpenChange={(open) => {
+                    setProjectModalOpen(open);
                     if (!open) {
                         setEditingProject(null);
                     }

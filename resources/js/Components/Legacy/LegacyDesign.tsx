@@ -1,6 +1,13 @@
 import { Badge } from "@/Components/ui/badge";
 import { Button } from "@/Components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/Components/ui/card";
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+} from "@/Components/ui/sheet";
 import { cn } from "@/lib/utils";
 import {
     Building2,
@@ -10,7 +17,9 @@ import {
     ChevronLeft,
     ChevronRight,
     Download,
+    Folder,
     Grid2X2,
+    ImageIcon,
     List,
     Mail,
     Pencil,
@@ -18,8 +27,9 @@ import {
     Shield,
     Trash2,
     UserRound,
+    Users,
 } from "lucide-react";
-import { ReactNode, useMemo, useState } from "react";
+import { ReactNode, memo, useEffect, useMemo, useRef, useState } from "react";
 
 export type ViewMode = "card" | "list";
 
@@ -31,6 +41,7 @@ export type LegacyImage = {
     status?: string;
     clientId?: number | string | null;
     clientName?: string | null;
+    client?: LegacyClientInfo | null;
     projectId?: number | string | null;
     projectName?: string | null;
     thumbUrl?: string | null;
@@ -40,6 +51,17 @@ export type LegacyImage = {
     height?: number | null;
     tags?: string[];
     createdAt?: string;
+};
+
+export type LegacyClientInfo = {
+    id?: number | string | null;
+    name: string;
+    slug?: string | null;
+    logo?: string | null;
+    status?: string | null;
+    projectsCount?: number | null;
+    imagesCount?: number | null;
+    membersCount?: number | null;
 };
 
 type Option = {
@@ -152,11 +174,13 @@ export function MasonryGrid({
     images,
     selectedIds,
     onToggle,
+    onImageClick,
     loadingSlots = false,
 }: {
     images: LegacyImage[];
     selectedIds?: Array<string | number>;
     onToggle?: (id: string | number) => void;
+    onImageClick?: (image: LegacyImage) => void;
     loadingSlots?: boolean;
 }) {
     const [hoveredId, setHoveredId] = useState<string | number | null>(null);
@@ -198,9 +222,11 @@ export function MasonryGrid({
                                 key={imageId}
                                 className={cn(
                                     "group relative overflow-hidden bg-card",
+                                    onImageClick && "cursor-pointer",
                                     isSelected &&
                                         "ring-2 ring-primary ring-offset-1",
                                 )}
+                                onClick={() => onImageClick?.(image)}
                                 onMouseEnter={() => setHoveredId(imageId)}
                                 onMouseLeave={() => setHoveredId(null)}
                             >
@@ -221,14 +247,18 @@ export function MasonryGrid({
                                 </button>
 
                                 {src ? (
-                                    <img
+                                    <LazyImage
                                         src={src}
                                         alt={image.title}
+                                        aspectRatio={
+                                            image.width && image.height
+                                                ? image.width / image.height
+                                                : undefined
+                                        }
                                         className={cn(
                                             "w-full object-cover",
                                             imageClassName(image),
                                         )}
-                                        loading="lazy"
                                     />
                                 ) : (
                                     <div
@@ -243,6 +273,13 @@ export function MasonryGrid({
                                     <h3 className="truncate font-semibold text-white">
                                         {image.title}
                                     </h3>
+                                    {(image.client || image.clientName) && (
+                                        <div className="mt-1 inline-flex items-center gap-1.5 text-xs text-white/85">
+                                            <Building2 className="h-3 w-3" />
+                                            {image.clientName ||
+                                                image.client?.name}
+                                        </div>
+                                    )}
                                 </div>
 
                                 {image.downloadUrl && (
@@ -254,6 +291,9 @@ export function MasonryGrid({
                                                 ? "translate-y-0 opacity-100"
                                                 : "-translate-y-2 opacity-0",
                                         )}
+                                        onClick={(event) =>
+                                            event.stopPropagation()
+                                        }
                                         title="Télécharger"
                                     >
                                         <Download className="h-4 w-4" />
@@ -266,6 +306,351 @@ export function MasonryGrid({
             ))}
         </div>
     );
+}
+
+export function ImageInfoSheet({
+    image,
+    onClose,
+}: {
+    image: LegacyImage | null;
+    onClose: () => void;
+}) {
+    const imageSrc = image?.imageUrl || image?.thumbUrl || null;
+
+    return (
+        <Sheet
+            open={Boolean(image)}
+            onOpenChange={(open) => !open && onClose()}
+        >
+            <SheetContent
+                side="right"
+                className="h-screen w-full max-w-none overflow-y-auto p-0 sm:w-[85%] md:w-[75%] lg:w-[60%] xl:w-[50%]"
+            >
+                <div className="p-6">
+                    <SheetHeader className="text-left">
+                        <SheetTitle>{image?.title || "Image"}</SheetTitle>
+                        <SheetDescription>
+                            Informations et métadonnées du visuel.
+                        </SheetDescription>
+                    </SheetHeader>
+
+                    {image && (
+                        <div className="mx-auto mt-8 max-w-6xl space-y-6">
+                            {imageSrc ? (
+                                <div className="overflow-hidden rounded-md bg-muted">
+                                    <img
+                                        src={imageSrc}
+                                        alt={image.title}
+                                        className="max-h-[70vh] w-full object-contain"
+                                    />
+                                </div>
+                            ) : (
+                                <div className="flex h-72 items-center justify-center rounded-md bg-muted">
+                                    <ImageIcon className="h-12 w-12 text-muted-foreground" />
+                                </div>
+                            )}
+
+                            <div className="flex flex-wrap gap-2">
+                                {image.downloadUrl && (
+                                    <Button asChild>
+                                        <a href={image.downloadUrl}>
+                                            <Download className="mr-2 h-4 w-4" />
+                                            Télécharger
+                                        </a>
+                                    </Button>
+                                )}
+                                {image.clientName && (
+                                    <Badge
+                                        variant="secondary"
+                                        className="gap-1.5 px-3 py-1.5"
+                                    >
+                                        <Building2 className="h-3.5 w-3.5" />
+                                        {image.clientName}
+                                    </Badge>
+                                )}
+                                {image.projectName && (
+                                    <Badge
+                                        variant="outline"
+                                        className="gap-1.5 px-3 py-1.5"
+                                    >
+                                        <Folder className="h-3.5 w-3.5" />
+                                        {image.projectName}
+                                    </Badge>
+                                )}
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
+                                <InfoBlock label="Titre" value={image.title} />
+                                <InfoBlock
+                                    label="Orientation"
+                                    value={image.orientation || "-"}
+                                />
+                                <InfoBlock
+                                    label="Dimensions"
+                                    value={
+                                        image.width && image.height
+                                            ? `${image.width} × ${image.height}`
+                                            : "-"
+                                    }
+                                />
+                                <InfoBlock
+                                    label="Date d'ajout"
+                                    value={formatLegacyDate(image.createdAt)}
+                                />
+                            </div>
+
+                            {image.description && (
+                                <InfoBlock
+                                    label="Description"
+                                    value={image.description}
+                                />
+                            )}
+
+                            {image.tags && image.tags.length > 0 && (
+                                <div>
+                                    <div className="font-medium text-foreground">
+                                        Tags
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                        {image.tags.map((tag) => (
+                                            <Badge
+                                                key={tag}
+                                                variant="secondary"
+                                            >
+                                                #{tag}
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </SheetContent>
+        </Sheet>
+    );
+}
+
+export const LazyImage = memo(function LazyImage({
+    src,
+    alt,
+    className,
+    aspectRatio,
+    onLoad,
+    onError,
+}: {
+    src: string;
+    alt: string;
+    className?: string;
+    aspectRatio?: number;
+    onLoad?: () => void;
+    onError?: () => void;
+}) {
+    const [isLoaded, setIsLoaded] = useState(false);
+    const [isInView, setIsInView] = useState(false);
+    const [hasError, setHasError] = useState(false);
+    const imgRef = useRef<HTMLDivElement>(null);
+    const observerRef = useRef<IntersectionObserver | null>(null);
+
+    useEffect(() => {
+        if (!imgRef.current) {
+            return;
+        }
+
+        observerRef.current = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) {
+                        setIsInView(true);
+                        observerRef.current?.disconnect();
+                    }
+                });
+            },
+            {
+                rootMargin: "50px",
+                threshold: 0.01,
+            },
+        );
+
+        observerRef.current.observe(imgRef.current);
+
+        return () => observerRef.current?.disconnect();
+    }, []);
+
+    return (
+        <div
+            ref={imgRef}
+            className={cn("relative overflow-hidden bg-muted", className)}
+            style={aspectRatio ? { aspectRatio } : undefined}
+        >
+            {!isLoaded && !hasError && (
+                <div className="absolute inset-0 scale-110 animate-pulse bg-gradient-to-br from-muted to-muted/50 blur-md" />
+            )}
+
+            {isInView && (
+                <img
+                    src={hasError ? "/image-not-available.png" : src}
+                    alt={alt}
+                    className={cn(
+                        "absolute inset-0 h-full w-full object-cover transition-opacity duration-500",
+                        isLoaded ? "opacity-100" : "opacity-0",
+                    )}
+                    loading="lazy"
+                    onLoad={() => {
+                        setIsLoaded(true);
+                        onLoad?.();
+                    }}
+                    onError={() => {
+                        setHasError(true);
+                        onError?.();
+                    }}
+                />
+            )}
+
+            {!isLoaded && !hasError && isInView && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                </div>
+            )}
+        </div>
+    );
+});
+
+export function ClientInfoSheet({
+    client,
+    onClose,
+}: {
+    client: LegacyClientInfo | null;
+    onClose: () => void;
+}) {
+    return (
+        <Sheet
+            open={Boolean(client)}
+            onOpenChange={(open) => !open && onClose()}
+        >
+            <SheetContent
+                side="right"
+                className="h-screen w-full max-w-none overflow-y-auto p-0 sm:w-[420px]"
+            >
+                <div className="p-6">
+                    <SheetHeader className="text-left">
+                        <SheetTitle>Informations client</SheetTitle>
+                        <SheetDescription>
+                            Données associées au client de cette image.
+                        </SheetDescription>
+                    </SheetHeader>
+
+                    {client && (
+                        <div className="mt-8 space-y-6">
+                            <div className="flex items-center gap-4">
+                                <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg border bg-card">
+                                    {client.logo ? (
+                                        <img
+                                            src={client.logo}
+                                            alt={client.name}
+                                            className="h-full w-full object-contain"
+                                        />
+                                    ) : (
+                                        <Building2 className="h-8 w-8 text-muted-foreground" />
+                                    )}
+                                </div>
+                                <div>
+                                    <h2 className="text-2xl font-bold">
+                                        {client.name}
+                                    </h2>
+                                    {client.slug && (
+                                        <p className="text-sm text-muted-foreground">
+                                            {client.slug}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-3">
+                                <ClientMetric
+                                    icon={<Folder className="h-4 w-4" />}
+                                    label="Projets"
+                                    value={client.projectsCount}
+                                />
+                                <ClientMetric
+                                    icon={<ImageIcon className="h-4 w-4" />}
+                                    label="Images"
+                                    value={client.imagesCount}
+                                />
+                                <ClientMetric
+                                    icon={<Users className="h-4 w-4" />}
+                                    label="Membres"
+                                    value={client.membersCount}
+                                />
+                            </div>
+
+                            <div className="rounded-lg border bg-card p-4">
+                                <div className="text-sm font-medium text-muted-foreground">
+                                    Statut
+                                </div>
+                                <div className="mt-2 text-base font-semibold capitalize">
+                                    {client.status || "Non renseigné"}
+                                </div>
+                            </div>
+
+                            <div className="rounded-lg border bg-card p-4">
+                                <div className="text-sm font-medium text-muted-foreground">
+                                    Note migration
+                                </div>
+                                <p className="mt-2 text-sm leading-6">
+                                    Ce panneau remplace la navigation directe
+                                    vers un filtre client. Les actions métier
+                                    restent à brancher sur la fiche client
+                                    Laravel complète.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </SheetContent>
+        </Sheet>
+    );
+}
+
+function ClientMetric({
+    icon,
+    label,
+    value,
+}: {
+    icon: ReactNode;
+    label: string;
+    value?: number | null;
+}) {
+    return (
+        <div className="rounded-lg border bg-card p-3">
+            <div className="text-muted-foreground">{icon}</div>
+            <div className="mt-2 text-xl font-bold">{value ?? "-"}</div>
+            <div className="text-xs text-muted-foreground">{label}</div>
+        </div>
+    );
+}
+
+function InfoBlock({ label, value }: { label: string; value: ReactNode }) {
+    return (
+        <div className="rounded-lg border bg-card p-4">
+            <div className="text-sm font-medium text-muted-foreground">
+                {label}
+            </div>
+            <div className="mt-2 text-base text-foreground">{value}</div>
+        </div>
+    );
+}
+
+function formatLegacyDate(value?: string) {
+    if (!value) {
+        return "-";
+    }
+
+    return new Intl.DateTimeFormat("fr-FR", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+    }).format(new Date(value));
 }
 
 export function LegacyPagination({

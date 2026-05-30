@@ -27,7 +27,13 @@ class AppPageController extends Controller
             ->count();
 
         $images = Image::query()
-            ->with(['client:id,name', 'project:id,name', 'tags:id,name'])
+            ->with([
+                'client' => fn ($query) => $query
+                    ->select('id', 'name', 'slug', 'legacy_logo_url', 'status')
+                    ->withCount(['projects', 'images', 'memberships']),
+                'project:id,name',
+                'tags:id,name',
+            ])
             ->when($clientIds !== null, fn ($query) => $query->whereIn('client_id', $clientIds))
             ->latest()
             ->forPage($page, $perPage)
@@ -113,7 +119,13 @@ class AppPageController extends Controller
         $clientIds = $this->accessibleClientIds($request);
 
         $images = Image::query()
-            ->with(['client:id,name', 'project:id,name', 'tags:id,name'])
+            ->with([
+                'client' => fn ($query) => $query
+                    ->select('id', 'name', 'slug', 'legacy_logo_url', 'status')
+                    ->withCount(['projects', 'images', 'memberships']),
+                'project:id,name',
+                'tags:id,name',
+            ])
             ->when($clientIds !== null, fn ($query) => $query->whereIn('client_id', $clientIds))
             ->latest()
             ->limit(100)
@@ -293,6 +305,16 @@ class AppPageController extends Controller
             'status' => $image->status,
             'clientName' => $image->client->name,
             'clientId' => $image->client_id,
+            'client' => [
+                'id' => $image->client->id,
+                'name' => $image->client->name,
+                'slug' => $image->client->slug,
+                'logo' => $image->client->legacy_logo_url,
+                'status' => $image->client->status,
+                'projectsCount' => $image->client->projects_count,
+                'imagesCount' => $image->client->images_count,
+                'membersCount' => $image->client->memberships_count,
+            ],
             'projectName' => $image->project->name,
             'projectId' => $image->project_id,
             'thumbUrl' => $image->legacy_thumbnail_url ?: $image->legacy_url,

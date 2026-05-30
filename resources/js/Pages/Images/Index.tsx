@@ -13,6 +13,7 @@ import {
     LegacyImage,
     LegacyPagination,
     LegacySelect,
+    ClientInfoSheet,
     MasonryGrid,
     SectionHeader,
     ViewMode,
@@ -54,6 +55,9 @@ export default function ImagesIndex({
     const [tag, setTag] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
     const [editingImage, setEditingImage] = useState<LegacyImage | null>(null);
+    const [imageModalOpen, setImageModalOpen] = useState(false);
+    const [selectedClientImage, setSelectedClientImage] =
+        useState<LegacyImage | null>(null);
 
     const filteredImages = useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -99,7 +103,12 @@ export default function ImagesIndex({
                             onViewChange={setViewMode}
                         />
                         {canManageImages && (
-                            <Button onClick={() => setEditingImage(null)}>
+                            <Button
+                                onClick={() => {
+                                    setEditingImage(null);
+                                    setImageModalOpen(true);
+                                }}
+                            >
                                 <Plus size={16} className="mr-2" />
                                 Ajouter une image
                             </Button>
@@ -155,11 +164,21 @@ export default function ImagesIndex({
                 </div>
 
                 {viewMode === "card" ? (
-                    <MasonryGrid images={paginatedImages} />
+                    <MasonryGrid
+                        images={paginatedImages}
+                        onImageClick={(image) => {
+                            setEditingImage(image);
+                            setImageModalOpen(true);
+                        }}
+                    />
                 ) : (
                     <ImagesTable
                         images={paginatedImages}
-                        onEdit={setEditingImage}
+                        onEdit={(image) => {
+                            setEditingImage(image);
+                            setImageModalOpen(true);
+                        }}
+                        onClientOpen={setSelectedClientImage}
                     />
                 )}
 
@@ -176,12 +195,25 @@ export default function ImagesIndex({
             </main>
             <ImageEditModal
                 image={editingImage}
-                open={Boolean(editingImage)}
+                open={imageModalOpen}
                 onOpenChange={(open) => {
+                    setImageModalOpen(open);
                     if (!open) {
                         setEditingImage(null);
                     }
                 }}
+            />
+            <ClientInfoSheet
+                client={
+                    selectedClientImage?.client ||
+                    (selectedClientImage?.clientName
+                        ? {
+                              id: selectedClientImage.clientId,
+                              name: selectedClientImage.clientName,
+                          }
+                        : null)
+                }
+                onClose={() => setSelectedClientImage(null)}
             />
         </AuthenticatedLayout>
     );
@@ -190,9 +222,11 @@ export default function ImagesIndex({
 function ImagesTable({
     images,
     onEdit,
+    onClientOpen,
 }: {
     images: LegacyImage[];
     onEdit: (image: LegacyImage) => void;
+    onClientOpen: (image: LegacyImage) => void;
 }) {
     return (
         <div className="overflow-hidden rounded-md border">
@@ -223,7 +257,11 @@ function ImagesTable({
                         images.map((image) => (
                             <TableRow key={image.id}>
                                 <TableCell>
-                                    <div className="relative h-16 w-16 overflow-hidden rounded">
+                                    <button
+                                        type="button"
+                                        className="relative h-16 w-16 overflow-hidden rounded transition-opacity hover:opacity-80"
+                                        onClick={() => onEdit(image)}
+                                    >
                                         {image.thumbUrl || image.imageUrl ? (
                                             <img
                                                 src={
@@ -238,13 +276,23 @@ function ImagesTable({
                                         ) : (
                                             <div className="h-full w-full bg-muted" />
                                         )}
-                                    </div>
+                                    </button>
                                 </TableCell>
                                 <TableCell className="font-medium">
                                     {image.title}
                                 </TableCell>
                                 <TableCell>
-                                    {image.clientName || "N/A"}
+                                    {image.clientName ? (
+                                        <button
+                                            type="button"
+                                            className="font-medium text-primary hover:underline"
+                                            onClick={() => onClientOpen(image)}
+                                        >
+                                            {image.clientName}
+                                        </button>
+                                    ) : (
+                                        "N/A"
+                                    )}
                                 </TableCell>
                                 <TableCell>
                                     {image.width && image.height
