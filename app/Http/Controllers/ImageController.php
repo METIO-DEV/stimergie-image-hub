@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreImageRequest;
+use App\Http\Requests\BulkAssignImagesProjectRequest;
 use App\Http\Requests\UpdateImageRequest;
 use App\Models\Image;
 use App\Models\Project;
@@ -15,6 +16,22 @@ use Illuminate\Support\Str;
 
 class ImageController extends Controller
 {
+    public function bulkProject(BulkAssignImagesProjectRequest $request): RedirectResponse
+    {
+        $data = $request->validated();
+        $project = Project::findOrFail($data['project_id']);
+
+        Image::query()
+            ->whereIn('id', $data['image_ids'])
+            ->update([
+                'client_id' => $project->client_id,
+                'project_id' => $project->id,
+                'updated_at' => now(),
+            ]);
+
+        return back()->with('success', 'Images liees au projet.');
+    }
+
     public function store(StoreImageRequest $request): RedirectResponse
     {
         $data = $request->validated();

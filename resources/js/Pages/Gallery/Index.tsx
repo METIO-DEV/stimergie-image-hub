@@ -1,5 +1,12 @@
 import { Button } from "@/Components/ui/button";
 import {
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/Components/ui/dialog";
+import {
     LegacyImage,
     ImageInfoSheet,
     LegacyPagination,
@@ -9,13 +16,14 @@ import {
 } from "@/Components/Legacy/LegacyDesign";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, router, usePage } from "@inertiajs/react";
-import { Infinity, SquareCheck } from "lucide-react";
+import { FolderInput, Infinity, SquareCheck } from "lucide-react";
 import { useMemo, useState } from "react";
 
 type FilterOption = {
     id: number;
     name: string;
     clientId?: number;
+    clientName?: string;
 };
 
 type Props = {
@@ -55,6 +63,8 @@ export default function GalleryIndex({
         Array<string | number>
     >([]);
     const [detailImage, setDetailImage] = useState<LegacyImage | null>(null);
+    const [bulkProjectOpen, setBulkProjectOpen] = useState(false);
+    const [bulkProjectId, setBulkProjectId] = useState("");
 
     const projects = useMemo(
         () =>
@@ -118,6 +128,24 @@ export default function GalleryIndex({
             current.includes(id)
                 ? current.filter((selectedId) => selectedId !== id)
                 : [...current, id],
+        );
+    };
+
+    const assignSelectionToProject = () => {
+        router.patch(
+            route("images.bulk-project"),
+            {
+                project_id: bulkProjectId,
+                image_ids: selectedImages.map((id) => Number(id)),
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setSelectedImages([]);
+                    setBulkProjectId("");
+                    setBulkProjectOpen(false);
+                },
+            },
         );
     };
 
@@ -242,13 +270,25 @@ export default function GalleryIndex({
                             Tout sélectionner
                         </Button>
                         {selectedImages.length > 0 && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setSelectedImages([])}
-                            >
-                                Effacer la sélection ({selectedImages.length})
-                            </Button>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-2"
+                                    onClick={() => setBulkProjectOpen(true)}
+                                >
+                                    <FolderInput className="h-4 w-4" />
+                                    Lier à un projet
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setSelectedImages([])}
+                                >
+                                    Effacer la sélection (
+                                    {selectedImages.length})
+                                </Button>
+                            </div>
                         )}
                     </div>
                     {paginatedImages.length > 0 ? (
@@ -267,6 +307,50 @@ export default function GalleryIndex({
                 image={detailImage}
                 onClose={() => setDetailImage(null)}
             />
+            <Dialog open={bulkProjectOpen} onOpenChange={setBulkProjectOpen}>
+                <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Lier la sélection à un projet</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <p className="text-sm text-muted-foreground">
+                            {selectedImages.length} image
+                            {selectedImages.length > 1 ? "s" : ""} sélectionnée
+                            {selectedImages.length > 1 ? "s" : ""}
+                        </p>
+                        <select
+                            value={bulkProjectId}
+                            onChange={(event) =>
+                                setBulkProjectId(event.target.value)
+                            }
+                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                            <option value="">Selectionner un projet</option>
+                            {filters.projects.map((project) => (
+                                <option key={project.id} value={project.id}>
+                                    {project.clientName
+                                        ? `${project.clientName} - ${project.name}`
+                                        : project.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setBulkProjectOpen(false)}
+                        >
+                            Annuler
+                        </Button>
+                        <Button
+                            disabled={!bulkProjectId}
+                            onClick={assignSelectionToProject}
+                        >
+                            Lier au projet
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </AuthenticatedLayout>
     );
 }

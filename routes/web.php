@@ -32,6 +32,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/downloads', [AppPageController::class, 'downloads'])->name('downloads.index');
     Route::get('/images', [AppPageController::class, 'images'])->name('images.index');
     Route::post('/images', [ImageController::class, 'store'])->name('images.store');
+    Route::patch('/images/bulk-project', [ImageController::class, 'bulkProject'])->name('images.bulk-project');
     Route::post('/images/{image}', [ImageController::class, 'update'])->name('images.update');
     Route::get('/projects', [AppPageController::class, 'projects'])->name('projects.index');
     Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');

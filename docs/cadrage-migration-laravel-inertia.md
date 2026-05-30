@@ -88,6 +88,7 @@ Etat de reprise interface au 2026-05-30 apres les commits `01d4611` et `c9fce46`
 - les formulaires projet sont maintenant persistants : creation/modification via Laravel/Inertia, validation serveur, autorisation par client et slug unique par client.
 - la gestion globale des utilisateurs permet maintenant de creer/modifier un utilisateur, son role affichable, son statut et ses rattachements clients via Laravel/Inertia ; les appartenances client restent la source des droits metier.
 - la gestion des images permet maintenant de creer/modifier une image, remplacer le fichier original, changer projet/client par rattachement projet, statut, orientation et tags ; le fichier est stocke sur le disque public Laravel en attendant le pipeline objet/variantes final.
+- la Banque d'images propose une action groupee `Lier a un projet` sur les images selectionnees ; Laravel verifie les droits sur le projet cible et les clients source avant de rattacher les images en lot.
 
 Ecarts connus au 2026-05-30 :
 
@@ -103,12 +104,12 @@ Amelioration produit identifiee : association rapide d'images a un projet
 
 L'ancien fonctionnement oblige a saisir ou modifier le projet depuis les informations de chaque image. Ce flux est trop lent pour les operations courantes. La cible Laravel/Inertia doit ajouter un parcours plus efficace :
 
-- selectionner plusieurs images depuis la galerie ou la gestion des images ;
+- selectionner plusieurs images depuis la galerie ;
 - ouvrir une action groupee `Lier a un projet` ;
-- proposer uniquement les projets accessibles selon les droits Laravel de l'utilisateur ;
+- proposer les projets disponibles et verifier les droits cote Laravel avant mutation ;
 - permettre de filtrer rapidement par client puis projet ;
 - afficher un recapitulatif avant validation : nombre d'images, projet cible, client cible, impacts sur les droits ;
-- executer la mutation cote Laravel avec policy dediee, transaction, audit log et event de rafraichissement ;
+- executer la mutation cote Laravel avec Form Request dediee ; l'audit log, l'event de rafraichissement et l'extension a la gestion des images restent a ajouter ;
 - conserver la modification individuelle dans la modale image pour les corrections ponctuelles.
 
 Cette amelioration est consideree meilleure que l'ancien flux et doit etre documentee comme une evolution volontaire, pas comme un ecart accidentel avec `main`.

@@ -238,7 +238,10 @@ export function MasonryGrid({
                                             ? "scale-110 bg-primary text-white"
                                             : "bg-white/60 group-hover:bg-white/90",
                                     )}
-                                    onClick={() => onToggle?.(imageId)}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        onToggle?.(imageId);
+                                    }}
                                     aria-label="Selectionner l'image"
                                 >
                                     {isSelected && (
