@@ -27,6 +27,7 @@ type Project = {
     slug: string;
     status: string;
     type: string | null;
+    clientId: number;
     clientName: string;
     clientLogo: string | null;
     sourceFolder: string | null;
@@ -173,6 +174,7 @@ export default function ProjectsIndex({ projects, filters }: Props) {
             <ProjectEditModal
                 project={editingProject}
                 open={projectModalOpen}
+                clients={filters.clients}
                 onOpenChange={(open) => {
                     setProjectModalOpen(open);
                     if (!open) {

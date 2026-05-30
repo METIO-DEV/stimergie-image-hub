@@ -155,6 +155,7 @@ class AppPageController extends Controller
                 'slug' => $project->slug,
                 'status' => $project->status,
                 'type' => $project->type,
+                'clientId' => $project->client_id,
                 'clientName' => $project->client->name,
                 'clientLogo' => $project->client->legacy_logo_url,
                 'sourceFolder' => $project->source_folder,

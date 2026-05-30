@@ -20,8 +20,10 @@ type ProjectForEdit = {
     id: number;
     name: string;
     type: string | null;
+    clientId: number;
     clientName: string;
     sourceFolder: string | null;
+    status: string;
 };
 
 type UserForEdit = {
@@ -168,12 +170,67 @@ export function ContactModal({
 export function ProjectEditModal({
     project,
     open,
+    clients,
     onOpenChange,
 }: {
     project: ProjectForEdit | null;
     open: boolean;
+    clients: Array<{ id: number; name: string }>;
     onOpenChange: (open: boolean) => void;
 }) {
+    const {
+        data,
+        setData,
+        post,
+        patch,
+        processing,
+        errors,
+        reset,
+        recentlySuccessful,
+    } = useForm({
+        name: "",
+        client_id: "",
+        type: "",
+        source_folder: "",
+        status: "active",
+    });
+
+    useEffect(() => {
+        if (!open) {
+            return;
+        }
+
+        setData({
+            name: project?.name || "",
+            client_id: project?.clientId ? String(project.clientId) : "",
+            type: project?.type || "",
+            source_folder: project?.sourceFolder || "",
+            status: project?.status || "active",
+        });
+    }, [open, project, setData]);
+
+    useEffect(() => {
+        if (recentlySuccessful) {
+            onOpenChange(false);
+            reset();
+        }
+    }, [onOpenChange, recentlySuccessful, reset]);
+
+    const submit = (event: FormEvent) => {
+        event.preventDefault();
+
+        if (project) {
+            patch(route("projects.update", project.id), {
+                preserveScroll: true,
+            });
+            return;
+        }
+
+        post(route("projects.store"), {
+            preserveScroll: true,
+        });
+    };
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-3xl">
@@ -182,23 +239,80 @@ export function ProjectEditModal({
                         {project ? "Modifier le projet" : "Ajouter un projet"}
                     </DialogTitle>
                 </DialogHeader>
+                <form onSubmit={submit} className="space-y-6">
                 <div className="mx-auto w-full max-w-2xl rounded-lg border bg-card p-6">
                     <div className="space-y-4">
                         <div className="space-y-2">
-                            <Label>Nom du projet</Label>
-                            <Input defaultValue={project?.name || ""} />
+                            <Label htmlFor="project-name">Nom du projet</Label>
+                            <Input
+                                id="project-name"
+                                value={data.name}
+                                onChange={(event) =>
+                                    setData("name", event.target.value)
+                                }
+                            />
+                            <InputError message={errors.name} />
                         </div>
                         <div className="space-y-2">
-                            <Label>Client</Label>
-                            <Input defaultValue={project?.clientName || ""} />
+                            <Label htmlFor="project-client">Client</Label>
+                            <select
+                                id="project-client"
+                                value={data.client_id}
+                                onChange={(event) =>
+                                    setData("client_id", event.target.value)
+                                }
+                                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                            >
+                                <option value="">Selectionner un client</option>
+                                {clients.map((client) => (
+                                    <option key={client.id} value={client.id}>
+                                        {client.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <InputError message={errors.client_id} />
                         </div>
                         <div className="space-y-2">
-                            <Label>Type de projet</Label>
-                            <Input defaultValue={project?.type || ""} />
+                            <Label htmlFor="project-type">
+                                Type de projet
+                            </Label>
+                            <Input
+                                id="project-type"
+                                value={data.type}
+                                onChange={(event) =>
+                                    setData("type", event.target.value)
+                                }
+                            />
+                            <InputError message={errors.type} />
                         </div>
                         <div className="space-y-2">
-                            <Label>Nom du dossier</Label>
-                            <Input defaultValue={project?.sourceFolder || ""} />
+                            <Label htmlFor="project-folder">
+                                Nom du dossier
+                            </Label>
+                            <Input
+                                id="project-folder"
+                                value={data.source_folder}
+                                onChange={(event) =>
+                                    setData("source_folder", event.target.value)
+                                }
+                            />
+                            <InputError message={errors.source_folder} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="project-status">Statut</Label>
+                            <select
+                                id="project-status"
+                                value={data.status}
+                                onChange={(event) =>
+                                    setData("status", event.target.value)
+                                }
+                                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                            >
+                                <option value="active">Actif</option>
+                                <option value="paused">En pause</option>
+                                <option value="archived">Archive</option>
+                            </select>
+                            <InputError message={errors.status} />
                         </div>
                     </div>
                 </div>
@@ -209,10 +323,15 @@ export function ProjectEditModal({
                     >
                         Annuler
                     </Button>
-                    <Button onClick={() => onOpenChange(false)}>
-                        Mettre à jour
+                    <Button type="submit" disabled={processing}>
+                        {processing
+                            ? "Enregistrement..."
+                            : project
+                              ? "Mettre à jour"
+                              : "Créer le projet"}
                     </Button>
                 </DialogFooter>
+                </form>
             </DialogContent>
         </Dialog>
     );

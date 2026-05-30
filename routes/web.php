@@ -4,6 +4,7 @@ use App\Http\Controllers\AppPageController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ClientMemberController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ProjectController;
 use App\Models\Client;
 use App\Models\Image;
 use App\Models\Project;
@@ -29,6 +30,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/downloads', [AppPageController::class, 'downloads'])->name('downloads.index');
     Route::get('/images', [AppPageController::class, 'images'])->name('images.index');
     Route::get('/projects', [AppPageController::class, 'projects'])->name('projects.index');
+    Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
+    Route::patch('/projects/{project}', [ProjectController::class, 'update'])->name('projects.update');
     Route::get('/users', [AppPageController::class, 'users'])->name('users.index');
     Route::get('/access-periods', [AppPageController::class, 'accessPeriods'])->name('access-periods.index');
 
