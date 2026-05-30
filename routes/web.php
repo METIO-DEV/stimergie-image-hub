@@ -3,13 +3,22 @@
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ClientMemberController;
 use App\Http\Controllers\ProfileController;
+use App\Models\Client;
+use App\Models\Image;
+use App\Models\Project;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::redirect('/', '/login');
 
 Route::get('/dashboard', function () {
-    return Inertia::render('Dashboard');
+    return Inertia::render('Dashboard', [
+        'stats' => [
+            'clients' => Client::count(),
+            'projects' => Project::count(),
+            'images' => Image::count(),
+        ],
+    ]);
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
