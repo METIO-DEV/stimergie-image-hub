@@ -5,6 +5,7 @@ use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ClientMemberController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\UserController;
 use App\Models\Client;
 use App\Models\Image;
 use App\Models\Project;
@@ -33,6 +34,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
     Route::patch('/projects/{project}', [ProjectController::class, 'update'])->name('projects.update');
     Route::get('/users', [AppPageController::class, 'users'])->name('users.index');
+    Route::post('/users', [UserController::class, 'store'])->name('users.store');
+    Route::patch('/users/{user}', [UserController::class, 'update'])->name('users.update');
     Route::get('/access-periods', [AppPageController::class, 'accessPeriods'])->name('access-periods.index');
 
     Route::resource('clients', ClientController::class)->except(['destroy']);

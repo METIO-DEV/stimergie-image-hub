@@ -31,6 +31,8 @@ type UserForEdit = {
     name: string;
     email: string;
     role: string;
+    status: string;
+    clientIds: number[];
     clients: Array<{ clientName: string | null }>;
 };
 
@@ -442,12 +444,82 @@ export function ImageEditModal({
 export function UserEditModal({
     user,
     open,
+    clients,
+    roles,
     onOpenChange,
 }: {
     user: UserForEdit | null;
     open: boolean;
+    clients: Array<{ id: number; name: string }>;
+    roles: Array<{ value: string; label: string }>;
     onOpenChange: (open: boolean) => void;
 }) {
+    const {
+        data,
+        setData,
+        post,
+        patch,
+        processing,
+        errors,
+        reset,
+        recentlySuccessful,
+    } = useForm({
+        first_name: "",
+        last_name: "",
+        email: "",
+        role: "user",
+        status: "active",
+        password: "",
+        client_ids: [] as number[],
+    });
+
+    useEffect(() => {
+        if (!open) {
+            return;
+        }
+
+        setData({
+            first_name: firstName(user?.name),
+            last_name: lastName(user?.name),
+            email: user?.email || "",
+            role: user?.role || "user",
+            status: user?.status || "active",
+            password: "",
+            client_ids: user?.clientIds || [],
+        });
+    }, [open, setData, user]);
+
+    useEffect(() => {
+        if (recentlySuccessful) {
+            onOpenChange(false);
+            reset();
+        }
+    }, [onOpenChange, recentlySuccessful, reset]);
+
+    const toggleClient = (clientId: number) => {
+        setData(
+            "client_ids",
+            data.client_ids.includes(clientId)
+                ? data.client_ids.filter((id) => id !== clientId)
+                : [...data.client_ids, clientId],
+        );
+    };
+
+    const submit = (event: FormEvent) => {
+        event.preventDefault();
+
+        if (user) {
+            patch(route("users.update", user.id), {
+                preserveScroll: true,
+            });
+            return;
+        }
+
+        post(route("users.store"), {
+            preserveScroll: true,
+        });
+    };
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-2xl">
@@ -459,47 +531,117 @@ export function UserEditModal({
                     </DialogTitle>
                 </DialogHeader>
 
+                <form onSubmit={submit} className="space-y-6">
                 <div className="rounded-lg bg-white p-6 shadow-md">
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div className="space-y-2">
-                            <Label>Email</Label>
-                            <Input defaultValue={user?.email || ""} />
+                            <Label htmlFor="user-email">Email</Label>
+                            <Input
+                                id="user-email"
+                                type="email"
+                                value={data.email}
+                                onChange={(event) =>
+                                    setData("email", event.target.value)
+                                }
+                            />
+                            <InputError message={errors.email} />
                         </div>
                         <div className="space-y-2">
-                            <Label>Rôle</Label>
+                            <Label htmlFor="user-role">Rôle</Label>
                             <select
-                                defaultValue={user?.role || "user"}
+                                id="user-role"
+                                value={data.role}
+                                onChange={(event) =>
+                                    setData("role", event.target.value)
+                                }
                                 className="h-10 w-full rounded-md border border-input bg-background px-3 py-2"
                             >
-                                <option value="user">Utilisateur</option>
-                                <option value="admin_client">
-                                    Admin Client
-                                </option>
-                                <option value="admin">Administrateur</option>
+                                {roles.map((role) => (
+                                    <option
+                                        key={role.value}
+                                        value={role.value}
+                                    >
+                                        {role.label}
+                                    </option>
+                                ))}
                             </select>
+                            <InputError message={errors.role} />
                         </div>
                         <div className="space-y-2">
-                            <Label>Prénom</Label>
-                            <Input defaultValue={firstName(user?.name)} />
+                            <Label htmlFor="user-first-name">Prénom</Label>
+                            <Input
+                                id="user-first-name"
+                                value={data.first_name}
+                                onChange={(event) =>
+                                    setData("first_name", event.target.value)
+                                }
+                            />
+                            <InputError message={errors.first_name} />
                         </div>
                         <div className="space-y-2">
-                            <Label>Nom</Label>
-                            <Input defaultValue={lastName(user?.name)} />
+                            <Label htmlFor="user-last-name">Nom</Label>
+                            <Input
+                                id="user-last-name"
+                                value={data.last_name}
+                                onChange={(event) =>
+                                    setData("last_name", event.target.value)
+                                }
+                            />
+                            <InputError message={errors.last_name} />
                         </div>
                         <div className="space-y-2 md:col-span-2">
                             <Label>Clients</Label>
-                            <Input
-                                defaultValue={
-                                    user?.clients
-                                        .map((client) => client.clientName)
-                                        .filter(Boolean)
-                                        .join(", ") || ""
-                                }
-                            />
+                            <div className="grid max-h-40 gap-2 overflow-y-auto rounded-md border p-3 md:grid-cols-2">
+                                {clients.map((client) => (
+                                    <label
+                                        key={client.id}
+                                        className="flex items-center gap-2 text-sm"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={data.client_ids.includes(
+                                                client.id,
+                                            )}
+                                            onChange={() =>
+                                                toggleClient(client.id)
+                                            }
+                                            className="h-4 w-4 rounded border-input"
+                                        />
+                                        <span>{client.name}</span>
+                                    </label>
+                                ))}
+                            </div>
+                            <InputError message={errors.client_ids} />
                         </div>
                         <div className="space-y-2 md:col-span-2">
-                            <Label>Mot de passe</Label>
-                            <Input type="password" placeholder="Optionnel" />
+                            <Label htmlFor="user-status">Statut</Label>
+                            <select
+                                id="user-status"
+                                value={data.status}
+                                onChange={(event) =>
+                                    setData("status", event.target.value)
+                                }
+                                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2"
+                            >
+                                <option value="active">Actif</option>
+                                <option value="paused">En pause</option>
+                            </select>
+                            <InputError message={errors.status} />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                            <Label htmlFor="user-password">
+                                Mot de passe
+                            </Label>
+                            <Input
+                                id="user-password"
+                                type="password"
+                                value={data.password}
+                                onChange={(event) =>
+                                    setData("password", event.target.value)
+                                }
+                                placeholder="Optionnel"
+                            />
+                            <InputError message={errors.password} />
                         </div>
                     </div>
                 </div>
@@ -511,10 +653,15 @@ export function UserEditModal({
                     >
                         Annuler
                     </Button>
-                    <Button onClick={() => onOpenChange(false)}>
-                        Mettre à jour
+                    <Button type="submit" disabled={processing}>
+                        {processing
+                            ? "Enregistrement..."
+                            : user
+                              ? "Mettre à jour"
+                              : "Créer l'utilisateur"}
                     </Button>
                 </DialogFooter>
+                </form>
             </DialogContent>
         </Dialog>
     );

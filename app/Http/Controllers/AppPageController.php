@@ -189,7 +189,7 @@ class AppPageController extends Controller
                 'email' => $user->email,
                 'status' => $user->status,
                 'platformRole' => $user->platform_role,
-                'role' => $this->legacyRole($user->platform_role),
+                'role' => $this->legacyRole($user),
                 'clients' => $user->clientMemberships->map(fn ($membership) => [
                     'clientId' => $membership->client?->id,
                     'clientName' => $membership->client?->name,
@@ -288,9 +288,16 @@ class AppPageController extends Controller
         ];
     }
 
-    private function legacyRole(?string $platformRole): string
+    private function legacyRole(User $user): string
     {
-        return $platformRole === 'super_admin' ? 'admin' : 'user';
+        if ($user->platform_role === 'super_admin') {
+            return 'admin';
+        }
+
+        return $user->clientMemberships
+            ->contains(fn ($membership) => in_array($membership->role, ['owner', 'manager'], true))
+            ? 'admin_client'
+            : 'user';
     }
 
     /**

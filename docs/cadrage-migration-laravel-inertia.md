@@ -86,10 +86,11 @@ Etat de reprise interface au 2026-05-30 apres les commits `01d4611` et `c9fce46`
 - les modales visuelles de creation/modification projet, image et utilisateur sont presentes cote interface ;
 - les boutons `Ajouter un projet` et `Ajouter une image` ouvrent leurs modales dediees.
 - les formulaires projet sont maintenant persistants : creation/modification via Laravel/Inertia, validation serveur, autorisation par client et slug unique par client.
+- la gestion globale des utilisateurs permet maintenant de creer/modifier un utilisateur, son role affichable, son statut et ses rattachements clients via Laravel/Inertia ; les appartenances client restent la source des droits metier.
 
 Ecarts connus au 2026-05-30 :
 
-- les modales image et utilisateur reprennent l'interface et les champs attendus, mais leurs mutations Laravel completes restent a brancher ;
+- la modale image reprend l'interface et les champs attendus, mais sa mutation Laravel complete reste a brancher ;
 - la modale image permet visuellement de changer l'image et les informations, mais l'upload/remplacement fichier, la regeneration des variantes et la persistance des tags restent a implementer cote Laravel ;
 - le panneau lateral de detail image affiche les informations disponibles depuis les props Laravel ; l'edition inline des tags, les partages et les telechargements avances de la vue detail historique restent a raccorder ;
 - le panneau client lateral affiche les informations disponibles depuis les props Laravel dans les vues d'administration ; les actions avancees de fiche client restent a raccorder ;

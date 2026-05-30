@@ -68,6 +68,7 @@ export default function UsersIndex({ users, clients, roles }: Props) {
     const [role, setRole] = useState("");
     const [viewMode, setViewMode] = useState<ViewMode>("card");
     const [editingUser, setEditingUser] = useState<UserRow | null>(null);
+    const [userModalOpen, setUserModalOpen] = useState(false);
 
     const filteredUsers = useMemo(
         () =>
@@ -90,7 +91,13 @@ export default function UsersIndex({ users, clients, roles }: Props) {
                 icon={<Users className="h-8 w-8 text-primary" />}
                 title="Utilisateurs"
                 action={
-                    <Button className="gap-2">
+                    <Button
+                        className="gap-2"
+                        onClick={() => {
+                            setEditingUser(null);
+                            setUserModalOpen(true);
+                        }}
+                    >
                         <PlusCircle size={18} />
                         Ajouter un utilisateur
                     </Button>
@@ -139,18 +146,30 @@ export default function UsersIndex({ users, clients, roles }: Props) {
                                         .map((client) => client.clientName)
                                         .filter(Boolean) as string[]
                                 }
-                                onEdit={() => setEditingUser(user)}
+                                onEdit={() => {
+                                    setEditingUser(user);
+                                    setUserModalOpen(true);
+                                }}
                             />
                         ))}
                     </div>
                 ) : (
-                    <UsersTable users={filteredUsers} onEdit={setEditingUser} />
+                    <UsersTable
+                        users={filteredUsers}
+                        onEdit={(user) => {
+                            setEditingUser(user);
+                            setUserModalOpen(true);
+                        }}
+                    />
                 )}
             </main>
             <UserEditModal
                 user={editingUser}
-                open={Boolean(editingUser)}
+                open={userModalOpen}
+                clients={clients}
+                roles={roles}
                 onOpenChange={(open) => {
+                    setUserModalOpen(open);
                     if (!open) {
                         setEditingUser(null);
                     }
