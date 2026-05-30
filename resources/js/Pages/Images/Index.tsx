@@ -196,6 +196,7 @@ export default function ImagesIndex({
             <ImageEditModal
                 image={editingImage}
                 open={imageModalOpen}
+                projects={filters.projects}
                 onOpenChange={(open) => {
                     setImageModalOpen(open);
                     if (!open) {

@@ -342,17 +342,78 @@ export function ProjectEditModal({
 export function ImageEditModal({
     image,
     open,
+    projects,
     onOpenChange,
 }: {
     image: LegacyImage | null;
     open: boolean;
+    projects: Array<{ id: number; name: string; clientName?: string }>;
     onOpenChange: (open: boolean) => void;
 }) {
     const [preview, setPreview] = useState<string | null>(null);
+    const {
+        data,
+        setData,
+        post,
+        processing,
+        errors,
+        reset,
+        recentlySuccessful,
+    } = useForm({
+        project_id: "",
+        title: "",
+        description: "",
+        orientation: "",
+        status: "ready",
+        tags: "",
+        file: null as File | null,
+    });
 
     useEffect(() => {
         setPreview(image?.thumbUrl || image?.imageUrl || null);
-    }, [image]);
+        if (!open) {
+            return;
+        }
+
+        setData({
+            project_id: image?.projectId ? String(image.projectId) : "",
+            title: image?.title || "",
+            description: image?.description || "",
+            orientation: image?.orientation || "",
+            status: image?.status || "ready",
+            tags: image?.tags?.join(", ") || "",
+            file: null,
+        });
+    }, [image, open, setData]);
+
+    useEffect(() => {
+        if (recentlySuccessful) {
+            onOpenChange(false);
+            reset();
+            setPreview(null);
+        }
+    }, [onOpenChange, recentlySuccessful, reset]);
+
+    const selectedProject = projects.find(
+        (project) => String(project.id) === data.project_id,
+    );
+
+    const handleFileChange = (file: File | null) => {
+        setData("file", file);
+
+        if (file) {
+            setPreview(URL.createObjectURL(file));
+        }
+    };
+
+    const submit = (event: FormEvent) => {
+        event.preventDefault();
+
+        post(image ? route("images.update", image.id) : route("images.store"), {
+            forceFormData: true,
+            preserveScroll: true,
+        });
+    };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -361,15 +422,16 @@ export function ImageEditModal({
                     <DialogTitle>
                         {image
                             ? "Modifier l'image"
-                            : "Ajouter une nouvelle image"}
+                        : "Ajouter une nouvelle image"}
                     </DialogTitle>
                     <DialogDescription>
                         {image
                             ? "Remplacez le visuel et ajustez ses informations."
-                            : "Téléchargez une image et ajoutez les informations nécessaires."}
+                        : "Téléchargez une image et ajoutez les informations nécessaires."}
                     </DialogDescription>
                 </DialogHeader>
 
+                <form onSubmit={submit}>
                 <div className="max-h-[calc(90vh-180px)] space-y-5 overflow-y-auto pr-2">
                     <div>
                         {preview ? (
@@ -384,45 +446,139 @@ export function ImageEditModal({
                                 <span className="mt-2 text-sm text-muted-foreground">
                                     Cliquez ou glissez-déposez une image
                                 </span>
-                                <input type="file" className="hidden" />
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(event) =>
+                                        handleFileChange(
+                                            event.target.files?.[0] ?? null,
+                                        )
+                                    }
+                                />
                             </label>
                         )}
-                        <Button variant="outline" className="mt-3 gap-2">
+                        <label className="mt-3 inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground">
                             <Upload className="h-4 w-4" />
                             Changer l'image
-                        </Button>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(event) =>
+                                    handleFileChange(
+                                        event.target.files?.[0] ?? null,
+                                    )
+                                }
+                            />
+                        </label>
+                        <InputError message={errors.file} />
                     </div>
 
                     <div className="space-y-2">
-                        <Label>Titre</Label>
-                        <Input defaultValue={image?.title || ""} />
+                        <Label htmlFor="image-title">Titre</Label>
+                        <Input
+                            id="image-title"
+                            value={data.title}
+                            onChange={(event) =>
+                                setData("title", event.target.value)
+                            }
+                        />
+                        <InputError message={errors.title} />
                     </div>
                     <div className="space-y-2">
-                        <Label>Description</Label>
-                        <Textarea defaultValue={image?.description || ""} />
+                        <Label htmlFor="image-description">Description</Label>
+                        <Textarea
+                            id="image-description"
+                            value={data.description}
+                            onChange={(event) =>
+                                setData("description", event.target.value)
+                            }
+                        />
+                        <InputError message={errors.description} />
                     </div>
                     <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
                             <Label>Client</Label>
-                            <Input defaultValue={image?.clientName || ""} />
+                            <Input
+                                value={
+                                    selectedProject?.clientName ||
+                                    image?.clientName ||
+                                    ""
+                                }
+                                disabled
+                            />
                         </div>
                         <div className="space-y-2">
-                            <Label>Projet</Label>
-                            <Input defaultValue={image?.projectName || ""} />
+                            <Label htmlFor="image-project">Projet</Label>
+                            <select
+                                id="image-project"
+                                value={data.project_id}
+                                onChange={(event) =>
+                                    setData("project_id", event.target.value)
+                                }
+                                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                            >
+                                <option value="">Selectionner un projet</option>
+                                {projects.map((project) => (
+                                    <option key={project.id} value={project.id}>
+                                        {project.clientName
+                                            ? `${project.clientName} - ${project.name}`
+                                            : project.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <InputError message={errors.project_id} />
                         </div>
                     </div>
                     <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
-                            <Label>Orientation</Label>
-                            <Input defaultValue={image?.orientation || ""} />
+                            <Label htmlFor="image-orientation">
+                                Orientation
+                            </Label>
+                            <select
+                                id="image-orientation"
+                                value={data.orientation}
+                                onChange={(event) =>
+                                    setData("orientation", event.target.value)
+                                }
+                                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                            >
+                                <option value="">Automatique</option>
+                                <option value="landscape">Paysage</option>
+                                <option value="portrait">Portrait</option>
+                                <option value="square">Carré</option>
+                            </select>
+                            <InputError message={errors.orientation} />
                         </div>
                         <div className="space-y-2">
-                            <Label>Tags</Label>
+                            <Label htmlFor="image-tags">Tags</Label>
                             <Input
-                                defaultValue={image?.tags?.join(", ") || ""}
+                                id="image-tags"
+                                value={data.tags}
+                                onChange={(event) =>
+                                    setData("tags", event.target.value)
+                                }
                             />
+                            <InputError message={errors.tags} />
                         </div>
                     </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="image-status">Statut</Label>
+                        <select
+                            id="image-status"
+                            value={data.status}
+                            onChange={(event) =>
+                                setData("status", event.target.value)
+                            }
+                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                            <option value="ready">Disponible</option>
+                            <option value="pending_upload">En attente</option>
+                            <option value="archived">Archive</option>
+                        </select>
+                        <InputError message={errors.status} />
+                        </div>
                 </div>
 
                 <DialogFooter className="border-t pt-4">
@@ -432,10 +588,11 @@ export function ImageEditModal({
                     >
                         Annuler
                     </Button>
-                    <Button onClick={() => onOpenChange(false)}>
-                        Enregistrer
+                    <Button type="submit" disabled={processing}>
+                        {processing ? "Enregistrement..." : "Enregistrer"}
                     </Button>
                 </DialogFooter>
+                </form>
             </DialogContent>
         </Dialog>
     );

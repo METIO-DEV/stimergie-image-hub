@@ -3,6 +3,7 @@
 use App\Http\Controllers\AppPageController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ClientMemberController;
+use App\Http\Controllers\ImageController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\UserController;
@@ -30,6 +31,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/contact', [AppPageController::class, 'sendContact'])->name('contact.send');
     Route::get('/downloads', [AppPageController::class, 'downloads'])->name('downloads.index');
     Route::get('/images', [AppPageController::class, 'images'])->name('images.index');
+    Route::post('/images', [ImageController::class, 'store'])->name('images.store');
+    Route::post('/images/{image}', [ImageController::class, 'update'])->name('images.update');
     Route::get('/projects', [AppPageController::class, 'projects'])->name('projects.index');
     Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
     Route::patch('/projects/{project}', [ProjectController::class, 'update'])->name('projects.update');
