@@ -9,6 +9,7 @@ use App\Models\Image;
 use App\Models\Project;
 use App\Models\ProjectAccessPeriod;
 use App\Models\User;
+use App\Support\ImageUrlResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -17,6 +18,8 @@ use Inertia\Response;
 
 class AppPageController extends Controller
 {
+    public function __construct(private readonly ImageUrlResolver $imageUrls) {}
+
     public function gallery(Request $request): Response
     {
         $clientIds = $this->accessibleClientIds($request);
@@ -325,9 +328,9 @@ class AppPageController extends Controller
             ],
             'projectName' => $image->project->name,
             'projectId' => $image->project_id,
-            'thumbUrl' => $image->legacy_thumbnail_url ?: $image->legacy_url,
-            'imageUrl' => $image->legacy_url ?: $image->legacy_thumbnail_url,
-            'downloadUrl' => $image->legacy_url ?: $image->legacy_thumbnail_url,
+            'thumbUrl' => $this->imageUrls->thumbnailUrl($image),
+            'imageUrl' => $this->imageUrls->displayUrl($image),
+            'downloadUrl' => $this->imageUrls->downloadUrl($image),
             'width' => $image->width,
             'height' => $image->height,
             'tags' => $image->tags->pluck('name')->values(),

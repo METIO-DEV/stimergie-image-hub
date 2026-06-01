@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Models\Client;
 use App\Models\Image;
 use App\Models\Project;
-use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -18,7 +17,7 @@ class ImageManagementTest extends TestCase
 
     public function test_super_admin_can_create_and_update_an_image_with_tags(): void
     {
-        Storage::fake('public');
+        Storage::fake('scaleway');
 
         $admin = User::factory()->create([
             'platform_role' => 'super_admin',
@@ -48,7 +47,8 @@ class ImageManagementTest extends TestCase
 
         $image = Image::query()->where('title', 'Matcha Latte')->firstOrFail();
 
-        Storage::disk('public')->assertExists($image->object_key_original);
+        Storage::disk('scaleway')->assertExists($image->object_key_original);
+        $this->assertSame('scaleway', $image->storage_provider);
         $this->assertSame('landscape', $image->orientation);
         $this->assertDatabaseHas('tags', ['slug' => 'matcha']);
         $this->assertDatabaseHas('tags', ['slug' => 'boisson']);
@@ -68,6 +68,8 @@ class ImageManagementTest extends TestCase
         $this->assertSame('Matcha Latte HD', $image->title);
         $this->assertSame('portrait', $image->orientation);
         $this->assertSame('archived', $image->status);
+        $this->assertSame('scaleway', $image->storage_provider);
+        Storage::disk('scaleway')->assertExists($image->object_key_original);
         $this->assertSame(['archive', 'matcha'], $image->tags()->orderBy('slug')->pluck('slug')->all());
     }
 }

@@ -15,6 +15,8 @@ return [
 
     'default' => env('FILESYSTEM_DISK', 'local'),
 
+    'image_disk' => env('IMAGE_STORAGE_DISK', 'scaleway'),
+
     /*
     |--------------------------------------------------------------------------
     | Filesystem Disks
@@ -66,6 +68,7 @@ return [
             'secret' => env('SCALEWAY_SECRET_KEY', env('AWS_SECRET_ACCESS_KEY')),
             'region' => env('SCALEWAY_OBJECT_STORAGE_REGION', env('AWS_DEFAULT_REGION', 'fr-par')),
             'bucket' => env('SCALEWAY_OBJECT_STORAGE_BUCKET', env('AWS_BUCKET', 'stimergie')),
+            'url' => env('SCALEWAY_OBJECT_STORAGE_URL', env('AWS_URL')),
             'endpoint' => env('SCALEWAY_OBJECT_STORAGE_ENDPOINT', env('AWS_ENDPOINT', 'https://s3.fr-par.scw.cloud')),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
             'throw' => true,

@@ -479,6 +479,7 @@ class ImportLegacyDump extends Command
             $asset['key'] = $asset['key_base'].'.'.Str::lower($extension);
 
             if ($this->option('skip-existing-assets') && $disk->exists($asset['key'])) {
+                $disk->setVisibility($asset['key'], 'public');
                 $asset['model']::query()->whereKey($asset['id'])->update([$asset['column'] => $asset['key']]);
 
                 continue;
@@ -510,8 +511,9 @@ class ImportLegacyDump extends Command
                 $response->throw();
 
                 $disk->put($key, $response->body(), [
-                    'visibility' => 'private',
+                    'visibility' => 'public',
                     'ContentType' => $response->header('Content-Type') ?: null,
+                    'CacheControl' => 'public, max-age=31536000, immutable',
                 ]);
 
                 $asset['model']::query()->whereKey($asset['id'])->update([$asset['column'] => $key]);

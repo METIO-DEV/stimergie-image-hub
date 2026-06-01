@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\StoreImageRequest;
 use App\Http\Requests\BulkAssignImagesProjectRequest;
+use App\Http\Requests\StoreImageRequest;
 use App\Http\Requests\UpdateImageRequest;
 use App\Models\Image;
 use App\Models\Project;
@@ -13,6 +13,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 class ImageController extends Controller
 {
@@ -52,7 +53,7 @@ class ImageController extends Controller
                 'mime_type' => $fileData['mime_type'],
                 'size_bytes' => $fileData['size_bytes'],
                 'checksum' => $fileData['checksum'],
-                'storage_provider' => 'public',
+                'storage_provider' => $fileData['disk'],
                 'object_key_original' => $fileData['path'],
                 'object_key_web' => $fileData['path'],
                 'object_key_thumb' => $fileData['path'],
@@ -94,7 +95,7 @@ class ImageController extends Controller
                     'mime_type' => $fileData['mime_type'],
                     'size_bytes' => $fileData['size_bytes'],
                     'checksum' => $fileData['checksum'],
-                    'storage_provider' => 'public',
+                    'storage_provider' => $fileData['disk'],
                     'object_key_original' => $fileData['path'],
                     'object_key_web' => $fileData['path'],
                     'object_key_thumb' => $fileData['path'],
@@ -114,18 +115,27 @@ class ImageController extends Controller
     }
 
     /**
-     * @return array{path: string, url: string, width: int|null, height: int|null, orientation: string|null, mime_type: string|null, size_bytes: int|null, checksum: string}
+     * @return array{path: string, disk: string, url: string, width: int|null, height: int|null, orientation: string|null, mime_type: string|null, size_bytes: int|null, checksum: string}
      */
     private function storeFile(UploadedFile $file): array
     {
-        $path = $file->store('images/originals', 'public');
+        $disk = (string) config('filesystems.image_disk', 'scaleway');
+        $path = Storage::disk($disk)->putFile('images/originals', $file, [
+            'visibility' => 'public',
+            'CacheControl' => 'public, max-age=31536000, immutable',
+        ]);
+
+        if (! is_string($path)) {
+            throw new RuntimeException('Image upload failed.');
+        }
         $size = @getimagesize($file->getRealPath());
         $width = $size ? $size[0] : null;
         $height = $size ? $size[1] : null;
 
         return [
             'path' => $path,
-            'url' => Storage::disk('public')->url($path),
+            'disk' => $disk,
+            'url' => Storage::disk($disk)->url($path),
             'width' => $width,
             'height' => $height,
             'orientation' => $this->orientation($width, $height),
