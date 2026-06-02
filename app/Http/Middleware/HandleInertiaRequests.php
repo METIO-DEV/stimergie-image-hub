@@ -29,10 +29,24 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        $user = $request->user();
+        $canManageClientContent = $user
+            ? $user->isSuperAdmin() || $user->hasAnyClientRole(['owner', 'manager'])
+            : false;
+
         return [
             ...parent::share($request),
             'auth' => [
-                'user' => $request->user(),
+                'user' => $user,
+                'abilities' => [
+                    'isSuperAdmin' => $user?->isSuperAdmin() ?? false,
+                    'canManageClientContent' => $canManageClientContent,
+                    'canViewClientManagement' => $canManageClientContent,
+                    'canManageUsers' => $user?->isSuperAdmin() ?? false,
+                    'canViewUsers' => $user?->isSuperAdmin() ?? false,
+                    'canViewAccessPeriods' => $user?->isSuperAdmin() ?? false,
+                    'canManageAccessPeriods' => false,
+                ],
             ],
         ];
     }

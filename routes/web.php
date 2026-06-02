@@ -11,12 +11,15 @@ use App\Http\Controllers\UserController;
 use App\Models\Client;
 use App\Models\Image;
 use App\Models\Project;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-Route::redirect('/', '/login');
+Route::redirect('/', '/gallery');
 
-Route::get('/dashboard', function () {
+Route::get('/dashboard', function (Request $request) {
+    abort_unless($request->user()->isSuperAdmin(), 403);
+
     return Inertia::render('Dashboard', [
         'stats' => [
             'clients' => Client::count(),

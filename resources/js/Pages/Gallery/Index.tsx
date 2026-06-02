@@ -37,6 +37,8 @@ type Props = {
         clients: FilterOption[];
         projects: FilterOption[];
     };
+    bulkProjects: FilterOption[];
+    canBulkAssignImages: boolean;
     pagination: {
         currentPage: number;
         perPage: number;
@@ -50,6 +52,8 @@ export default function GalleryIndex({
     images,
     stats,
     filters,
+    bulkProjects,
+    canBulkAssignImages,
     pagination,
 }: Props) {
     const user = usePage().props.auth.user;
@@ -103,6 +107,13 @@ export default function GalleryIndex({
     const hasLocalFilters = Boolean(
         search || orientation || clientId || projectId,
     );
+    const selectedImageItems = images.filter((image) =>
+        selectedImages.includes(image.id),
+    );
+    const selectionCanBeAssigned =
+        canBulkAssignImages &&
+        selectedImageItems.length === selectedImages.length &&
+        selectedImageItems.every((image) => image.canManage);
     const paginatedImages =
         infiniteScroll || !hasLocalFilters
             ? filteredImages
@@ -177,7 +188,7 @@ export default function GalleryIndex({
                                 Banque d'images
                             </h1>
                             <p className="mx-auto max-w-3xl text-[#150B0D]">
-                                Bonjour {user.name},
+                                Bonjour {user?.name},
                                 <br />
                                 <br />
                                 Cette galerie vous propose l'ensemble des photos
@@ -305,15 +316,17 @@ export default function GalleryIndex({
                                     <Download className="h-4 w-4" />
                                     HD impression
                                 </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="gap-2"
-                                    onClick={() => setBulkProjectOpen(true)}
-                                >
-                                    <FolderInput className="h-4 w-4" />
-                                    Lier à un projet
-                                </Button>
+                                {selectionCanBeAssigned && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="gap-2"
+                                        onClick={() => setBulkProjectOpen(true)}
+                                    >
+                                        <FolderInput className="h-4 w-4" />
+                                        Lier à un projet
+                                    </Button>
+                                )}
                                 <Button
                                     variant="ghost"
                                     size="sm"
@@ -360,7 +373,7 @@ export default function GalleryIndex({
                             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                         >
                             <option value="">Selectionner un projet</option>
-                            {filters.projects.map((project) => (
+                            {bulkProjects.map((project) => (
                                 <option key={project.id} value={project.id}>
                                     {project.clientName
                                         ? `${project.clientName} - ${project.name}`

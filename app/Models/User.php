@@ -62,4 +62,12 @@ class User extends Authenticatable
             ->whereIn('role', $roles)
             ->exists();
     }
+
+    public function hasAnyClientRole(array $roles): bool
+    {
+        return $this->clientMemberships()
+            ->where('status', 'active')
+            ->whereIn('role', $roles)
+            ->exists();
+    }
 }

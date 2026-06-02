@@ -16,6 +16,7 @@ import {
     Download,
     FolderOpen,
     Image,
+    LayoutDashboard,
     LogOut,
     Mail,
     Menu,
@@ -38,21 +39,32 @@ export default function Authenticated({
     header,
     children,
 }: PropsWithChildren<{ header?: ReactNode }>) {
-    const user = usePage().props.auth.user;
+    const { abilities, user } = usePage().props.auth;
     const [mobileOpen, setMobileOpen] = useState(false);
     const [contactOpen, setContactOpen] = useState(false);
 
-    const isSuperAdmin = user.platform_role === "super_admin";
+    const isSuperAdmin = abilities.isSuperAdmin;
     const initials = useMemo(
-        () =>
+        () => {
+            if (!user) {
+                return "";
+            }
+
+            return (
             user.name
                 .split(" ")
                 .map((part) => part.charAt(0))
                 .join("")
                 .slice(0, 2)
-                .toUpperCase() || user.email.charAt(0).toUpperCase(),
-        [user.email, user.name],
+                    .toUpperCase() || user.email.charAt(0).toUpperCase()
+            );
+        },
+        [user],
     );
+
+    if (!user) {
+        return null;
+    }
 
     const primaryNav: MenuItem[] = [
         {
@@ -98,6 +110,12 @@ export default function Authenticated({
 
     const adminMenu: MenuItem[] = [
         {
+            href: route("dashboard"),
+            label: "Dashboard",
+            icon: LayoutDashboard,
+            active: route().current("dashboard"),
+        },
+        {
             href: route("images.index"),
             label: "Gestion des images",
             icon: Image,
@@ -123,7 +141,27 @@ export default function Authenticated({
         },
     ];
 
-    const visibleAdminMenu = isSuperAdmin ? adminMenu : adminMenu.slice(0, 1);
+    const visibleAdminMenu = isSuperAdmin
+        ? adminMenu
+        : adminMenu.filter((item) => {
+              if (item.label === "Gestion des images") {
+                  return abilities.canManageClientContent;
+              }
+
+              if (item.label === "Gestion des clients") {
+                  return abilities.canViewClientManagement;
+              }
+
+              if (item.label === "Droits d'accès") {
+                  return abilities.canViewAccessPeriods;
+              }
+
+              if (item.label === "Gestion des utilisateurs") {
+                  return abilities.canViewUsers;
+              }
+
+              return false;
+          });
 
     return (
         <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -131,7 +169,7 @@ export default function Authenticated({
                 <div className="container flex h-16 items-center">
                     <div className="mr-8 hidden items-center md:flex">
                         <Link
-                            href={route("dashboard")}
+                            href={route("gallery.index")}
                             className="mr-8 flex items-center"
                         >
                             <img
@@ -240,7 +278,7 @@ export default function Authenticated({
 
                     <div className="flex flex-1 items-center justify-between md:justify-end">
                         <Link
-                            href={route("dashboard")}
+                            href={route("gallery.index")}
                             className="flex items-center md:hidden"
                         >
                             <img

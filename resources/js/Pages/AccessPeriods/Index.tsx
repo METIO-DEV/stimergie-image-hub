@@ -18,8 +18,10 @@ type AccessPeriod = {
 
 export default function AccessPeriodsIndex({
     periods,
+    canManageAccessPeriods,
 }: {
     periods: AccessPeriod[];
+    canManageAccessPeriods: boolean;
 }) {
     const [search, setSearch] = useState("");
     const [status, setStatus] = useState("");
@@ -58,10 +60,12 @@ export default function AccessPeriodsIndex({
                                     les clients
                                 </p>
                             </div>
-                            <Button className="flex items-center gap-2">
-                                <Plus className="h-4 w-4" />
-                                Nouvelle période
-                            </Button>
+                            {canManageAccessPeriods && (
+                                <Button className="flex items-center gap-2">
+                                    <Plus className="h-4 w-4" />
+                                    Nouvelle période
+                                </Button>
+                            )}
                         </div>
 
                         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">

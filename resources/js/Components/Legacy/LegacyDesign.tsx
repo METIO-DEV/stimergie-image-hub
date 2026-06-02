@@ -53,6 +53,7 @@ export type LegacyImage = {
     height?: number | null;
     tags?: string[];
     createdAt?: string;
+    canManage?: boolean;
 };
 
 export type LegacyClientInfo = {

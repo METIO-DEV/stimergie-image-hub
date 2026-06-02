@@ -7,10 +7,21 @@ export interface User {
     status: string;
 }
 
+export interface Abilities {
+    isSuperAdmin: boolean;
+    canManageClientContent: boolean;
+    canViewClientManagement: boolean;
+    canManageUsers: boolean;
+    canViewUsers: boolean;
+    canViewAccessPeriods: boolean;
+    canManageAccessPeriods: boolean;
+}
+
 export type PageProps<
     T extends Record<string, unknown> = Record<string, unknown>,
 > = T & {
     auth: {
         user: User;
+        abilities: Abilities;
     };
 };

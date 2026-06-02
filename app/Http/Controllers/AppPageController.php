@@ -13,7 +13,6 @@ use App\Support\ImageUrlResolver;
 use App\Support\ProjectAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -26,7 +25,9 @@ class AppPageController extends Controller
 
     public function gallery(Request $request): Response
     {
-        $clientIds = $this->projectAccess->accessibleClientIds($request->user());
+        $user = $request->user();
+        $clientIds = $this->projectAccess->accessibleClientIds($user);
+        $manageableClientIds = $this->manageableClientIds($user);
         $page = max(1, (int) $request->integer('page', 1));
         $perPage = 100;
         $totalImages = Image::query()
@@ -47,7 +48,7 @@ class AppPageController extends Controller
             ->latest()
             ->forPage($page, $perPage)
             ->get()
-            ->map(fn (Image $image) => $this->imageSummary($image));
+            ->map(fn (Image $image) => $this->imageSummary($image, $user, $manageableClientIds));
 
         return Inertia::render('Gallery/Index', [
             'images' => $images,
@@ -61,6 +62,8 @@ class AppPageController extends Controller
                     ->count(),
             ],
             'filters' => $this->filterOptions($request->user(), $clientIds),
+            'bulkProjects' => $this->manageableProjectOptions($user, $manageableClientIds),
+            'canBulkAssignImages' => $this->canManageClientContent($user),
             'pagination' => [
                 'currentPage' => $page,
                 'perPage' => $perPage,
@@ -126,7 +129,11 @@ class AppPageController extends Controller
 
     public function images(Request $request): Response
     {
-        $clientIds = $this->projectAccess->accessibleClientIds($request->user());
+        $user = $request->user();
+
+        abort_unless($this->canManageClientContent($user), 403);
+
+        $manageableClientIds = $this->manageableClientIds($user);
 
         $images = Image::query()
             ->with([
@@ -137,22 +144,27 @@ class AppPageController extends Controller
                 'tags:id,name',
             ])
             ->tap(fn ($query) => $this->applyPhotoBucketFilter($query))
-            ->tap(fn ($query) => $this->projectAccess->applyImageVisibility($query, $request->user()))
+            ->tap(fn ($query) => $this->applyManageableClientScope($query, $manageableClientIds))
             ->latest()
             ->limit(100)
             ->get()
-            ->map(fn (Image $image) => $this->imageSummary($image));
+            ->map(fn (Image $image) => $this->imageSummary($image, $user, $manageableClientIds));
 
         return Inertia::render('Images/Index', [
             'images' => $images,
-            'canManageImages' => $request->user()->isSuperAdmin(),
-            'filters' => $this->filterOptions($request->user(), $clientIds),
+            'canManageImages' => true,
+            'filters' => [
+                'clients' => $this->manageableClientOptions($manageableClientIds),
+                'projects' => $this->manageableProjectOptions($user, $manageableClientIds),
+            ],
         ]);
     }
 
     public function projects(Request $request): Response
     {
-        $clientIds = $this->projectAccess->accessibleClientIds($request->user());
+        $user = $request->user();
+        $clientIds = $this->projectAccess->accessibleClientIds($user);
+        $manageableClientIds = $this->manageableClientIds($user);
 
         $projects = Project::query()
             ->with('client:id,name')
@@ -172,17 +184,20 @@ class AppPageController extends Controller
                 'sourceFolder' => $project->source_folder,
                 'imagesCount' => $project->images_count,
                 'createdAt' => $project->created_at->toIso8601String(),
+                'canUpdate' => $this->canManageClientId($project->client_id, $manageableClientIds),
             ]);
 
         return Inertia::render('Projects/Index', [
             'projects' => $projects,
             'filters' => $this->filterOptions($request->user(), $clientIds),
+            'manageableClients' => $this->manageableClientOptions($manageableClientIds),
+            'canCreateProject' => $this->canManageClientContent($user),
         ]);
     }
 
     public function users(Request $request): Response
     {
-        Gate::authorize('viewAny', Client::class);
+        abort_unless($request->user()->isSuperAdmin(), 403);
 
         $clientIds = $this->projectAccess->accessibleClientIds($request->user());
 
@@ -251,6 +266,7 @@ class AppPageController extends Controller
 
         return Inertia::render('AccessPeriods/Index', [
             'periods' => $periods,
+            'canManageAccessPeriods' => false,
         ]);
     }
 
@@ -260,14 +276,7 @@ class AppPageController extends Controller
     private function filterOptions(User $user, ?array $clientIds): array
     {
         return [
-            'clients' => Client::query()
-                ->when($clientIds !== null, fn ($query) => $query->whereIn('id', $clientIds))
-                ->orderBy('name')
-                ->get(['id', 'name'])
-                ->map(fn (Client $client) => [
-                    'id' => $client->id,
-                    'name' => $client->name,
-                ]),
+            'clients' => $this->clientOptions($clientIds),
             'projects' => Project::query()
                 ->with('client:id,name')
                 ->tap(fn ($query) => $this->projectAccess->applyProjectVisibility($query, $user))
@@ -280,6 +289,38 @@ class AppPageController extends Controller
                     'clientName' => $project->client?->name,
                 ]),
         ];
+    }
+
+    private function clientOptions(?array $clientIds): mixed
+    {
+        return Client::query()
+            ->when($clientIds !== null, fn ($query) => $query->whereIn('id', $clientIds))
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (Client $client) => [
+                'id' => $client->id,
+                'name' => $client->name,
+            ]);
+    }
+
+    private function manageableClientOptions(?array $manageableClientIds): mixed
+    {
+        return $this->clientOptions($manageableClientIds);
+    }
+
+    private function manageableProjectOptions(User $user, ?array $manageableClientIds): mixed
+    {
+        return Project::query()
+            ->with('client:id,name')
+            ->when(! $user->isSuperAdmin(), fn ($query) => $query->whereIn('client_id', $manageableClientIds ?? []))
+            ->orderBy('name')
+            ->get(['id', 'client_id', 'name'])
+            ->map(fn (Project $project) => [
+                'id' => $project->id,
+                'clientId' => $project->client_id,
+                'name' => $project->name,
+                'clientName' => $project->client?->name,
+            ]);
     }
 
     private function legacyRole(User $user): string
@@ -297,7 +338,7 @@ class AppPageController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function imageSummary(Image $image): array
+    private function imageSummary(Image $image, User $user, ?array $manageableClientIds): array
     {
         return [
             'id' => $image->id,
@@ -328,6 +369,7 @@ class AppPageController extends Controller
             'height' => $image->height,
             'tags' => $image->tags->pluck('name')->values(),
             'createdAt' => $image->created_at->toIso8601String(),
+            'canManage' => $this->canManageClientId($image->client_id, $manageableClientIds),
         ];
     }
 
@@ -336,5 +378,40 @@ class AppPageController extends Controller
         $query
             ->where('storage_provider', 'scaleway')
             ->where('object_key_original', 'like', 'photos/%');
+    }
+
+    private function canManageClientContent(User $user): bool
+    {
+        return $user->isSuperAdmin() || $user->hasAnyClientRole(['owner', 'manager']);
+    }
+
+    /**
+     * @return array<int>|null
+     */
+    private function manageableClientIds(User $user): ?array
+    {
+        if ($user->isSuperAdmin()) {
+            return null;
+        }
+
+        return $user->clientMemberships()
+            ->where('status', 'active')
+            ->whereIn('role', ['owner', 'manager'])
+            ->pluck('client_id')
+            ->all();
+    }
+
+    private function canManageClientId(int $clientId, ?array $manageableClientIds): bool
+    {
+        return $manageableClientIds === null || in_array($clientId, $manageableClientIds, true);
+    }
+
+    private function applyManageableClientScope($query, ?array $manageableClientIds): void
+    {
+        if ($manageableClientIds === null) {
+            return;
+        }
+
+        $query->whereIn('client_id', $manageableClientIds);
     }
 }

@@ -17,7 +17,6 @@ import {
     HardDrive,
     Pencil,
     Plus,
-    Trash2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -33,6 +32,7 @@ type Project = {
     sourceFolder: string | null;
     imagesCount: number;
     createdAt: string;
+    canUpdate: boolean;
 };
 
 type Props = {
@@ -40,9 +40,16 @@ type Props = {
     filters: {
         clients: Array<{ id: number; name: string }>;
     };
+    manageableClients: Array<{ id: number; name: string }>;
+    canCreateProject: boolean;
 };
 
-export default function ProjectsIndex({ projects, filters }: Props) {
+export default function ProjectsIndex({
+    projects,
+    filters,
+    manageableClients,
+    canCreateProject,
+}: Props) {
     const [viewMode, setViewMode] = useState<ViewMode>("card");
     const [clientFilter, setClientFilter] = useState("");
     const [search, setSearch] = useState("");
@@ -85,15 +92,17 @@ export default function ProjectsIndex({ projects, filters }: Props) {
                             currentView={viewMode}
                             onViewChange={setViewMode}
                         />
-                        <Button
-                            onClick={() => {
-                                setEditingProject(null);
-                                setProjectModalOpen(true);
-                            }}
-                        >
-                            <Plus size={16} className="mr-2" />
-                            Ajouter un projet
-                        </Button>
+                        {canCreateProject && (
+                            <Button
+                                onClick={() => {
+                                    setEditingProject(null);
+                                    setProjectModalOpen(true);
+                                }}
+                            >
+                                <Plus size={16} className="mr-2" />
+                                Ajouter un projet
+                            </Button>
+                        )}
                     </div>
                 }
             />
@@ -119,10 +128,14 @@ export default function ProjectsIndex({ projects, filters }: Props) {
                             <ProjectCard
                                 key={project.id}
                                 project={project}
-                                onEdit={(project) => {
-                                    setEditingProject(project);
-                                    setProjectModalOpen(true);
-                                }}
+                                onEdit={
+                                    project.canUpdate
+                                        ? (project) => {
+                                              setEditingProject(project);
+                                              setProjectModalOpen(true);
+                                          }
+                                        : undefined
+                                }
                             />
                         ))}
                     </div>
@@ -146,25 +159,19 @@ export default function ProjectsIndex({ projects, filters }: Props) {
                                     {project.imagesCount} images
                                 </div>
                                 <div className="flex justify-end gap-2">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        title="Modifier"
-                                        onClick={() => {
-                                            setEditingProject(project);
-                                            setProjectModalOpen(true);
-                                        }}
-                                    >
-                                        <Pencil size={16} />
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        title="Supprimer"
-                                        className="text-destructive hover:text-destructive/90"
-                                    >
-                                        <Trash2 size={16} />
-                                    </Button>
+                                    {project.canUpdate && (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            title="Modifier"
+                                            onClick={() => {
+                                                setEditingProject(project);
+                                                setProjectModalOpen(true);
+                                            }}
+                                        >
+                                            <Pencil size={16} />
+                                        </Button>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -174,7 +181,7 @@ export default function ProjectsIndex({ projects, filters }: Props) {
             <ProjectEditModal
                 project={editingProject}
                 open={projectModalOpen}
-                clients={filters.clients}
+                clients={manageableClients}
                 onOpenChange={(open) => {
                     setProjectModalOpen(open);
                     if (!open) {
@@ -191,7 +198,7 @@ function ProjectCard({
     onEdit,
 }: {
     project: Project;
-    onEdit: (project: Project) => void;
+    onEdit?: (project: Project) => void;
 }) {
     return (
         <Card className="flex h-full flex-col transition-shadow hover:shadow-md">
@@ -205,22 +212,16 @@ function ProjectCard({
                         <span className="break-words">{project.name}</span>
                     </CardTitle>
                     <div className="flex flex-shrink-0 gap-2">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Modifier"
-                            onClick={() => onEdit(project)}
-                        >
-                            <Pencil size={16} />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Supprimer"
-                            className="text-destructive hover:text-destructive/90"
-                        >
-                            <Trash2 size={16} />
-                        </Button>
+                        {onEdit && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Modifier"
+                                onClick={() => onEdit(project)}
+                            >
+                                <Pencil size={16} />
+                            </Button>
+                        )}
                     </div>
                 </div>
             </CardHeader>

@@ -23,7 +23,6 @@ import {
     Pencil,
     Phone,
     PlusCircle,
-    Trash2,
     UserRound,
     Users,
 } from "lucide-react";
@@ -38,6 +37,8 @@ type ClientSummary = {
     projectsCount: number;
     imagesCount: number;
     membersCount: number;
+    canUpdate: boolean;
+    canManageMembers: boolean;
 };
 
 type Props = {
@@ -133,18 +134,10 @@ function ClientCard({ client }: { client: ClientSummary }) {
                         <Button variant="ghost" size="icon" asChild>
                             <Link
                                 href={route("clients.show", client.id)}
-                                title="Modifier"
+                                title={client.canUpdate ? "Modifier" : "Voir"}
                             >
                                 <Pencil size={16} />
                             </Link>
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Supprimer"
-                            className="text-destructive hover:text-destructive/90"
-                        >
-                            <Trash2 size={16} />
                         </Button>
                     </div>
                 </div>
@@ -237,6 +230,11 @@ function ClientsTable({ clients }: { clients: ClientSummary[] }) {
                                 <Button variant="ghost" size="icon" asChild>
                                     <Link
                                         href={route("clients.show", client.id)}
+                                        title={
+                                            client.canUpdate
+                                                ? "Modifier"
+                                                : "Voir"
+                                        }
                                     >
                                         <Pencil size={16} />
                                     </Link>

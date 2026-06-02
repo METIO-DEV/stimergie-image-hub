@@ -41,6 +41,8 @@ class ClientController extends Controller
                 'projectsCount' => $client->projects_count,
                 'imagesCount' => $client->images_count,
                 'membersCount' => $client->memberships_count,
+                'canUpdate' => $request->user()->can('update', $client),
+                'canManageMembers' => $request->user()->can('manageMembers', $client),
             ]),
             'canCreateClient' => Gate::allows('create', Client::class),
         ]);

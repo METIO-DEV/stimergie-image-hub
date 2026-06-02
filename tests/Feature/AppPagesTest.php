@@ -25,6 +25,7 @@ class AppPagesTest extends TestCase
         ]);
 
         foreach ([
+            'dashboard',
             'gallery.index',
             'contact.index',
             'downloads.index',
@@ -37,6 +38,32 @@ class AppPagesTest extends TestCase
                 ->get(route($routeName))
                 ->assertOk();
         }
+    }
+
+    public function test_default_page_redirects_to_gallery(): void
+    {
+        $this->get('/')
+            ->assertRedirect('/gallery');
+    }
+
+    public function test_dashboard_is_reserved_to_super_admins(): void
+    {
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $user = User::factory()->create([
+            'platform_role' => 'user',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('dashboard'))
+            ->assertOk();
+
+        $this->actingAs($user)
+            ->get(route('dashboard'))
+            ->assertForbidden();
     }
 
     public function test_contact_request_is_recorded_in_audit_log(): void
@@ -56,6 +83,148 @@ class AppPagesTest extends TestCase
             'actor_id' => $user->id,
             'action' => 'contact.requested',
         ]);
+    }
+
+    public function test_standard_client_user_does_not_receive_admin_actions(): void
+    {
+        $user = User::factory()->create(['status' => 'active']);
+        $client = Client::create([
+            'name' => 'Client Lecture',
+            'slug' => 'client-lecture',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Lecture',
+            'slug' => 'projet-lecture',
+            'status' => 'active',
+        ]);
+        $image = Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Image lecture',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/client-lecture/source.jpg',
+        ]);
+
+        ClientMembership::create([
+            'client_id' => $client->id,
+            'user_id' => $user->id,
+            'role' => 'viewer',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('gallery.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Gallery/Index')
+                ->where('canBulkAssignImages', false)
+                ->has('bulkProjects', 0)
+                ->where('images.0.id', $image->id)
+                ->where('images.0.canManage', false)
+                ->etc());
+
+        $this->actingAs($user)
+            ->get(route('projects.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Projects/Index')
+                ->where('canCreateProject', false)
+                ->has('manageableClients', 0)
+                ->where('projects.0.id', $project->id)
+                ->where('projects.0.canUpdate', false)
+                ->etc());
+
+        $this->actingAs($user)
+            ->get(route('images.index'))
+            ->assertForbidden();
+
+        $this->actingAs($user)
+            ->get(route('users.index'))
+            ->assertForbidden();
+    }
+
+    public function test_client_manager_receives_manage_actions_for_owned_scope(): void
+    {
+        $manager = User::factory()->create(['status' => 'active']);
+        $client = Client::create([
+            'name' => 'Client Manager',
+            'slug' => 'client-manager',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Manager',
+            'slug' => 'projet-manager',
+            'status' => 'active',
+        ]);
+        $image = Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Image manager',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/client-manager/source.jpg',
+        ]);
+
+        ClientMembership::create([
+            'client_id' => $client->id,
+            'user_id' => $manager->id,
+            'role' => 'manager',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($manager)
+            ->get(route('gallery.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Gallery/Index')
+                ->where('canBulkAssignImages', true)
+                ->has('bulkProjects', 1)
+                ->where('bulkProjects.0.id', $project->id)
+                ->where('images.0.id', $image->id)
+                ->where('images.0.canManage', true)
+                ->etc());
+
+        $this->actingAs($manager)
+            ->get(route('images.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Images/Index')
+                ->where('canManageImages', true)
+                ->where('images.0.id', $image->id)
+                ->where('images.0.canManage', true)
+                ->has('filters.projects', 1)
+                ->etc());
+
+        $this->actingAs($manager)
+            ->get(route('projects.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Projects/Index')
+                ->where('canCreateProject', true)
+                ->has('manageableClients', 1)
+                ->where('projects.0.id', $project->id)
+                ->where('projects.0.canUpdate', true)
+                ->etc());
+    }
+
+    public function test_access_periods_page_hides_unimplemented_management_action(): void
+    {
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('access-periods.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('AccessPeriods/Index')
+                ->where('canManageAccessPeriods', false)
+                ->etc());
     }
 
     public function test_gallery_resolves_image_urls_from_scaleway_object_keys(): void

@@ -21,7 +21,7 @@ import {
 } from "@/Components/Legacy/LegacyDesign";
 import { ImageEditModal } from "@/Components/Legacy/LegacyModals";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import { Head, Link, usePage } from "@inertiajs/react";
+import { Head } from "@inertiajs/react";
 import { Pencil, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -47,7 +47,6 @@ export default function ImagesIndex({
     canManageImages,
     filters,
 }: Props) {
-    const user = usePage().props.auth.user;
     const [viewMode, setViewMode] = useState<ViewMode>("list");
     const [orientation, setOrientation] = useState("");
     const [clientId, setClientId] = useState("");
@@ -166,14 +165,19 @@ export default function ImagesIndex({
                 {viewMode === "card" ? (
                     <MasonryGrid
                         images={paginatedImages}
-                        onImageClick={(image) => {
-                            setEditingImage(image);
-                            setImageModalOpen(true);
-                        }}
+                        onImageClick={
+                            canManageImages
+                                ? (image) => {
+                                      setEditingImage(image);
+                                      setImageModalOpen(true);
+                                  }
+                                : undefined
+                        }
                     />
                 ) : (
                     <ImagesTable
                         images={paginatedImages}
+                        canManageImages={canManageImages}
                         onEdit={(image) => {
                             setEditingImage(image);
                             setImageModalOpen(true);
@@ -189,9 +193,6 @@ export default function ImagesIndex({
                     pageSize={PAGE_SIZE}
                 />
 
-                {!user.platform_role && (
-                    <Link href={route("dashboard")} className="hidden" />
-                )}
             </main>
             <ImageEditModal
                 image={editingImage}
@@ -222,10 +223,12 @@ export default function ImagesIndex({
 
 function ImagesTable({
     images,
+    canManageImages,
     onEdit,
     onClientOpen,
 }: {
     images: LegacyImage[];
+    canManageImages: boolean;
     onEdit: (image: LegacyImage) => void;
     onClientOpen: (image: LegacyImage) => void;
 }) {
@@ -241,14 +244,18 @@ function ImagesTable({
                         <TableHead>Orientation</TableHead>
                         <TableHead>Tags</TableHead>
                         <TableHead>Date d'ajout</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                        {canManageImages && (
+                            <TableHead className="text-right">
+                                Actions
+                            </TableHead>
+                        )}
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {images.length === 0 ? (
                         <TableRow>
                             <TableCell
-                                colSpan={8}
+                                colSpan={canManageImages ? 8 : 7}
                                 className="py-10 text-center"
                             >
                                 Aucune image disponible
@@ -260,8 +267,13 @@ function ImagesTable({
                                 <TableCell>
                                     <button
                                         type="button"
-                                        className="relative h-16 w-16 overflow-hidden rounded transition-opacity hover:opacity-80"
+                                        className={`relative h-16 w-16 overflow-hidden rounded ${
+                                            canManageImages
+                                                ? "transition-opacity hover:opacity-80"
+                                                : ""
+                                        }`}
                                         onClick={() => onEdit(image)}
+                                        disabled={!canManageImages}
                                     >
                                         {image.thumbUrl || image.imageUrl ? (
                                             <img
@@ -332,16 +344,18 @@ function ImagesTable({
                                 <TableCell>
                                     {formatDate(image.createdAt)}
                                 </TableCell>
-                                <TableCell className="text-right">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        title="Modifier"
-                                        onClick={() => onEdit(image)}
-                                    >
-                                        <Pencil size={16} />
-                                    </Button>
-                                </TableCell>
+                                {canManageImages && (
+                                    <TableCell className="text-right">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            title="Modifier"
+                                            onClick={() => onEdit(image)}
+                                        >
+                                            <Pencil size={16} />
+                                        </Button>
+                                    </TableCell>
+                                )}
                             </TableRow>
                         ))
                     )}
