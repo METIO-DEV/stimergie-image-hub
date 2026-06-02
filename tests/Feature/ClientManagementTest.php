@@ -103,7 +103,7 @@ class ClientManagementTest extends TestCase
             'status' => 'active',
             'is_default' => false,
         ])->assertSessionHasErrors([
-            'role' => "Cet utilisateur doit d'abord etre passe en Admin Client avant de recevoir un role Owner ou Manager.",
+            'role' => "Cet utilisateur doit d'abord être passé en Admin Client avant de recevoir un rôle Owner ou Manager.",
         ]);
 
         $this->assertDatabaseMissing('client_memberships', [

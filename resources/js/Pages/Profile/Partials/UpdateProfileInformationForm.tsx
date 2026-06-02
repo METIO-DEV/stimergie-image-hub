@@ -37,7 +37,7 @@ export default function UpdateProfileInformation({
                 </h2>
 
                 <p className="mt-1 text-sm text-muted-foreground">
-                    Mettez a jour les informations de votre compte.
+                    Mettez à jour les informations de votre compte.
                 </p>
             </header>
 
@@ -76,21 +76,21 @@ export default function UpdateProfileInformation({
                 {mustVerifyEmail && user.email_verified_at === null && (
                     <div>
                         <p className="mt-2 text-sm text-gray-800">
-                            Your email address is unverified.
+                            Votre adresse e-mail n'est pas vérifiée.
                             <Link
                                 href={route("verification.send")}
                                 method="post"
                                 as="button"
                                 className="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                             >
-                                Click here to re-send the verification email.
+                                Cliquez ici pour renvoyer l'e-mail de vérification.
                             </Link>
                         </p>
 
                         {status === "verification-link-sent" && (
                             <div className="mt-2 text-sm font-medium text-green-600">
-                                A new verification link has been sent to your
-                                email address.
+                                Un nouveau lien de vérification a été envoyé à
+                                votre adresse e-mail.
                             </div>
                         )}
                     </div>
@@ -109,7 +109,7 @@ export default function UpdateProfileInformation({
                         leaveTo="opacity-0"
                     >
                         <p className="text-sm text-muted-foreground">
-                            Enregistre.
+                            Enregistré.
                         </p>
                     </Transition>
                 </div>

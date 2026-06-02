@@ -89,7 +89,7 @@ class UserController extends Controller
             $this->syncClientMemberships($user, $data['client_ids'] ?? [], $data['role'], $data['status'], $request->user()->id);
         });
 
-        return back()->with('success', 'Utilisateur mis a jour.');
+        return back()->with('success', 'Utilisateur mis à jour.');
     }
 
     /**

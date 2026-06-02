@@ -39,7 +39,7 @@ class ProjectController extends Controller
             'status' => $data['status'],
         ]);
 
-        return back()->with('success', 'Projet mis a jour.');
+        return back()->with('success', 'Projet mis à jour.');
     }
 
     private function uniqueSlug(int $clientId, string $name, ?Project $project = null): string

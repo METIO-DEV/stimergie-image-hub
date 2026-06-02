@@ -75,7 +75,7 @@ class ClientMemberController extends Controller
             ]);
         });
 
-        return back()->with('success', 'Membre mis a jour.');
+        return back()->with('success', 'Membre mis à jour.');
     }
 
     public function destroy(Client $client, ClientMembership $membership): RedirectResponse
@@ -86,7 +86,7 @@ class ClientMemberController extends Controller
 
         $membership->delete();
 
-        return back()->with('success', "Membre retire de l'entreprise.");
+        return back()->with('success', "Membre retiré de l'entreprise.");
     }
 
     private function authorizeMemberManagement(Client $client): void
@@ -106,7 +106,7 @@ class ClientMemberController extends Controller
         }
 
         throw ValidationException::withMessages([
-            'role' => "Cet utilisateur doit d'abord etre passe en Admin Client avant de recevoir un role Owner ou Manager.",
+            'role' => "Cet utilisateur doit d'abord être passé en Admin Client avant de recevoir un rôle Owner ou Manager.",
         ]);
     }
 

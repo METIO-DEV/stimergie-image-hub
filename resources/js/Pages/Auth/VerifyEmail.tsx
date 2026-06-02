@@ -28,7 +28,7 @@ export default function VerifyEmail({ status }: { status?: string }) {
 
             {status === "verification-link-sent" && (
                 <div className="mb-5 rounded-md border border-primary/15 bg-primary/5 px-4 py-3 text-sm font-medium text-primary">
-                    Un nouveau lien de verification a ete envoye.
+                    Un nouveau lien de vérification a été envoyé.
                 </div>
             )}
 
@@ -39,7 +39,7 @@ export default function VerifyEmail({ status }: { status?: string }) {
                         className="rounded-lg bg-[#264b57] font-semibold hover:bg-[#203f49] focus-visible:ring-[#264b57]"
                         disabled={processing}
                     >
-                        Renvoyer l'email
+                        Renvoyer l'e-mail
                     </Button>
 
                     <Link

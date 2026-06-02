@@ -44,7 +44,7 @@ class DownloadController extends Controller
 
         return redirect()
             ->route('downloads.index')
-            ->with('success', 'Demande de telechargement ajoutee a la file.');
+            ->with('success', 'Demande de téléchargement ajoutée à la file.');
     }
 
     public function show(Request $request, DownloadJob $downloadJob): RedirectResponse

@@ -38,7 +38,7 @@ class ImageController extends Controller
                 'updated_at' => now(),
             ]);
 
-        return back()->with('success', 'Images liees au projet.');
+        return back()->with('success', 'Images liées au projet.');
     }
 
     public function store(StoreImageRequest $request): RedirectResponse
@@ -76,7 +76,7 @@ class ImageController extends Controller
             $this->syncTags($image, $data['tags'] ?? '');
         });
 
-        return back()->with('success', 'Image ajoutee.');
+        return back()->with('success', 'Image ajoutée.');
     }
 
     public function update(UpdateImageRequest $request, Image $image): RedirectResponse
@@ -123,7 +123,7 @@ class ImageController extends Controller
             $this->syncTags($image, $data['tags'] ?? '');
         });
 
-        return back()->with('success', 'Image mise a jour.');
+        return back()->with('success', 'Image mise à jour.');
     }
 
     public function download(Request $request, Image $image)

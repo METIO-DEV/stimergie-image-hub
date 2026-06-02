@@ -56,7 +56,7 @@ export default function UpdatePasswordForm({
                 </h2>
 
                 <p className="mt-1 text-sm text-muted-foreground">
-                    Utilisez un mot de passe long et unique pour proteger votre
+                    Utilisez un mot de passe long et unique pour protéger votre
                     compte.
                 </p>
             </header>
@@ -134,7 +134,7 @@ export default function UpdatePasswordForm({
                         leaveTo="opacity-0"
                     >
                         <p className="text-sm text-muted-foreground">
-                            Enregistre.
+                            Enregistré.
                         </p>
                     </Transition>
                 </div>

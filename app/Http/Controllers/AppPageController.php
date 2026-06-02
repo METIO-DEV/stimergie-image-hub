@@ -94,7 +94,7 @@ class AppPageController extends Controller
             'user_agent' => $request->userAgent(),
         ]);
 
-        return back()->with('success', 'Votre message a ete transmis a l equipe Stimergie.');
+        return back()->with('success', "Votre message a été transmis à l'équipe Stimergie.");
     }
 
     public function downloads(Request $request): Response

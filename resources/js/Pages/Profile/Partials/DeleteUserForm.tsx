@@ -56,7 +56,7 @@ export default function DeleteUserForm({
                 </h2>
 
                 <p className="mt-1 text-sm text-muted-foreground">
-                    Cette action supprimera definitivement les donnees liees au
+                    Cette action supprimera définitivement les données liées au
                     compte.
                 </p>
             </header>
@@ -73,7 +73,7 @@ export default function DeleteUserForm({
 
                     <p className="mt-1 text-sm text-gray-600">
                         Saisissez votre mot de passe pour confirmer cette action
-                        definitive.
+                        définitive.
                     </p>
 
                     <div className="mt-6">

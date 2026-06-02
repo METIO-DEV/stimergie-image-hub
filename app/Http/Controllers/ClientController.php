@@ -165,7 +165,7 @@ class ClientController extends Controller
 
         return redirect()
             ->route('clients.show', $client)
-            ->with('success', 'Entreprise mise a jour.');
+            ->with('success', 'Entreprise mise à jour.');
     }
 
     /**
