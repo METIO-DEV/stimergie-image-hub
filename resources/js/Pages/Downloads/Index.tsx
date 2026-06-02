@@ -25,6 +25,7 @@ type DownloadRow = {
     processedAt: string | null;
     expiresAt: string | null;
     createdAt: string;
+    downloadUrl: string | null;
 };
 
 export default function DownloadsIndex({
@@ -171,20 +172,24 @@ function DownloadsTable({
                                 </TableCell>
                                 <TableCell className="text-right">
                                     <Button
+                                        asChild={download.status === "ready"}
                                         variant="outline"
                                         size="sm"
                                         className="py-4"
                                         disabled={download.status !== "ready"}
                                     >
-                                        {download.status === "pending" ||
-                                        download.status === "processing" ? (
-                                            <Clock className="mr-2 h-4 w-4" />
+                                        {download.status === "ready" &&
+                                        download.downloadUrl ? (
+                                            <a href={download.downloadUrl}>
+                                                <Download className="mr-2 h-4 w-4" />
+                                                Télécharger
+                                            </a>
                                         ) : (
-                                            <Download className="mr-2 h-4 w-4" />
+                                            <>
+                                                <Clock className="mr-2 h-4 w-4" />
+                                                En cours...
+                                            </>
                                         )}
-                                        {download.status === "ready"
-                                            ? "Télécharger"
-                                            : "En cours..."}
                                     </Button>
                                 </TableCell>
                             </TableRow>

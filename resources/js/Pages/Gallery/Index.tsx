@@ -16,7 +16,7 @@ import {
 } from "@/Components/Legacy/LegacyDesign";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, router, usePage } from "@inertiajs/react";
-import { FolderInput, Infinity, SquareCheck } from "lucide-react";
+import { Download, FolderInput, Infinity, SquareCheck } from "lucide-react";
 import { useMemo, useState } from "react";
 
 type FilterOption = {
@@ -149,6 +149,22 @@ export default function GalleryIndex({
         );
     };
 
+    const requestDownload = (variant: "web" | "hd") => {
+        router.post(
+            route("downloads.store"),
+            {
+                variant,
+                image_ids: selectedImages.map((id) => Number(id)),
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setSelectedImages([]);
+                },
+            },
+        );
+    };
+
     return (
         <AuthenticatedLayout>
             <Head title="Banque d'images" />
@@ -270,7 +286,25 @@ export default function GalleryIndex({
                             Tout sélectionner
                         </Button>
                         {selectedImages.length > 0 && (
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-2"
+                                    onClick={() => requestDownload("web")}
+                                >
+                                    <Download className="h-4 w-4" />
+                                    Version web
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-2"
+                                    onClick={() => requestDownload("hd")}
+                                >
+                                    <Download className="h-4 w-4" />
+                                    HD impression
+                                </Button>
                                 <Button
                                     variant="outline"
                                     size="sm"

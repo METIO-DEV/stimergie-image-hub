@@ -10,6 +10,7 @@ use App\Models\Project;
 use App\Models\ProjectAccessPeriod;
 use App\Models\User;
 use App\Support\ImageUrlResolver;
+use App\Support\ProjectAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -18,15 +19,19 @@ use Inertia\Response;
 
 class AppPageController extends Controller
 {
-    public function __construct(private readonly ImageUrlResolver $imageUrls) {}
+    public function __construct(
+        private readonly ImageUrlResolver $imageUrls,
+        private readonly ProjectAccess $projectAccess,
+    ) {}
 
     public function gallery(Request $request): Response
     {
-        $clientIds = $this->accessibleClientIds($request);
+        $clientIds = $this->projectAccess->accessibleClientIds($request->user());
         $page = max(1, (int) $request->integer('page', 1));
         $perPage = 100;
         $totalImages = Image::query()
-            ->when($clientIds !== null, fn ($query) => $query->whereIn('client_id', $clientIds))
+            ->tap(fn ($query) => $this->applyPhotoBucketFilter($query))
+            ->tap(fn ($query) => $this->projectAccess->applyImageVisibility($query, $request->user()))
             ->count();
 
         $images = Image::query()
@@ -37,7 +42,8 @@ class AppPageController extends Controller
                 'project:id,name',
                 'tags:id,name',
             ])
-            ->when($clientIds !== null, fn ($query) => $query->whereIn('client_id', $clientIds))
+            ->tap(fn ($query) => $this->applyPhotoBucketFilter($query))
+            ->tap(fn ($query) => $this->projectAccess->applyImageVisibility($query, $request->user()))
             ->latest()
             ->forPage($page, $perPage)
             ->get()
@@ -51,10 +57,10 @@ class AppPageController extends Controller
                     ->when($clientIds !== null, fn ($query) => $query->whereIn('id', $clientIds))
                     ->count(),
                 'projects' => Project::query()
-                    ->when($clientIds !== null, fn ($query) => $query->whereIn('client_id', $clientIds))
+                    ->tap(fn ($query) => $this->projectAccess->applyProjectVisibility($query, $request->user()))
                     ->count(),
             ],
-            'filters' => $this->filterOptions($clientIds),
+            'filters' => $this->filterOptions($request->user(), $clientIds),
             'pagination' => [
                 'currentPage' => $page,
                 'perPage' => $perPage,
@@ -89,7 +95,7 @@ class AppPageController extends Controller
     public function downloads(Request $request): Response
     {
         $user = $request->user();
-        $clientIds = $this->accessibleClientIds($request);
+        $clientIds = $this->projectAccess->accessibleClientIds($user);
 
         $downloads = DownloadJob::query()
             ->with('client:id,name')
@@ -110,6 +116,7 @@ class AppPageController extends Controller
                 'processedAt' => $job->processed_at?->toIso8601String(),
                 'expiresAt' => $job->download_url_expires_at?->toIso8601String(),
                 'createdAt' => $job->created_at->toIso8601String(),
+                'downloadUrl' => $job->status === 'ready' ? route('downloads.show', $job) : null,
             ]);
 
         return Inertia::render('Downloads/Index', [
@@ -119,7 +126,7 @@ class AppPageController extends Controller
 
     public function images(Request $request): Response
     {
-        $clientIds = $this->accessibleClientIds($request);
+        $clientIds = $this->projectAccess->accessibleClientIds($request->user());
 
         $images = Image::query()
             ->with([
@@ -129,7 +136,8 @@ class AppPageController extends Controller
                 'project:id,name',
                 'tags:id,name',
             ])
-            ->when($clientIds !== null, fn ($query) => $query->whereIn('client_id', $clientIds))
+            ->tap(fn ($query) => $this->applyPhotoBucketFilter($query))
+            ->tap(fn ($query) => $this->projectAccess->applyImageVisibility($query, $request->user()))
             ->latest()
             ->limit(100)
             ->get()
@@ -138,18 +146,18 @@ class AppPageController extends Controller
         return Inertia::render('Images/Index', [
             'images' => $images,
             'canManageImages' => $request->user()->isSuperAdmin(),
-            'filters' => $this->filterOptions($clientIds),
+            'filters' => $this->filterOptions($request->user(), $clientIds),
         ]);
     }
 
     public function projects(Request $request): Response
     {
-        $clientIds = $this->accessibleClientIds($request);
+        $clientIds = $this->projectAccess->accessibleClientIds($request->user());
 
         $projects = Project::query()
             ->with('client:id,name')
             ->withCount('images')
-            ->when($clientIds !== null, fn ($query) => $query->whereIn('client_id', $clientIds))
+            ->tap(fn ($query) => $this->projectAccess->applyProjectVisibility($query, $request->user()))
             ->orderBy('name')
             ->get()
             ->map(fn (Project $project) => [
@@ -168,7 +176,7 @@ class AppPageController extends Controller
 
         return Inertia::render('Projects/Index', [
             'projects' => $projects,
-            'filters' => $this->filterOptions($clientIds),
+            'filters' => $this->filterOptions($request->user(), $clientIds),
         ]);
     }
 
@@ -176,7 +184,7 @@ class AppPageController extends Controller
     {
         Gate::authorize('viewAny', Client::class);
 
-        $clientIds = $this->accessibleClientIds($request);
+        $clientIds = $this->projectAccess->accessibleClientIds($request->user());
 
         $users = User::query()
             ->with(['clientMemberships.client:id,name'])
@@ -225,7 +233,7 @@ class AppPageController extends Controller
 
     public function accessPeriods(Request $request): Response
     {
-        $clientIds = $this->accessibleClientIds($request);
+        $clientIds = $this->projectAccess->accessibleClientIds($request->user());
 
         $periods = ProjectAccessPeriod::query()
             ->with(['client:id,name', 'project:id,name'])
@@ -247,26 +255,9 @@ class AppPageController extends Controller
     }
 
     /**
-     * @return array<int>|null
-     */
-    private function accessibleClientIds(Request $request): ?array
-    {
-        $user = $request->user();
-
-        if ($user->isSuperAdmin()) {
-            return null;
-        }
-
-        return $user->clientMemberships()
-            ->where('status', 'active')
-            ->pluck('client_id')
-            ->all();
-    }
-
-    /**
      * @return array{clients: mixed, projects: mixed}
      */
-    private function filterOptions(?array $clientIds): array
+    private function filterOptions(User $user, ?array $clientIds): array
     {
         return [
             'clients' => Client::query()
@@ -279,7 +270,7 @@ class AppPageController extends Controller
                 ]),
             'projects' => Project::query()
                 ->with('client:id,name')
-                ->when($clientIds !== null, fn ($query) => $query->whereIn('client_id', $clientIds))
+                ->tap(fn ($query) => $this->projectAccess->applyProjectVisibility($query, $user))
                 ->orderBy('name')
                 ->get(['id', 'client_id', 'name'])
                 ->map(fn (Project $project) => [
@@ -330,11 +321,20 @@ class AppPageController extends Controller
             'projectId' => $image->project_id,
             'thumbUrl' => $this->imageUrls->thumbnailUrl($image),
             'imageUrl' => $this->imageUrls->displayUrl($image),
-            'downloadUrl' => $this->imageUrls->downloadUrl($image),
+            'downloadUrl' => route('images.download', ['image' => $image, 'variant' => 'hd']),
+            'webDownloadUrl' => route('images.download', ['image' => $image, 'variant' => 'web']),
+            'hdDownloadUrl' => route('images.download', ['image' => $image, 'variant' => 'hd']),
             'width' => $image->width,
             'height' => $image->height,
             'tags' => $image->tags->pluck('name')->values(),
             'createdAt' => $image->created_at->toIso8601String(),
         ];
+    }
+
+    private function applyPhotoBucketFilter($query): void
+    {
+        $query
+            ->where('storage_provider', 'scaleway')
+            ->where('object_key_original', 'like', 'photos/%');
     }
 }

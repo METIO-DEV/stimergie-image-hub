@@ -3,6 +3,7 @@
 use App\Http\Controllers\AppPageController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ClientMemberController;
+use App\Http\Controllers\DownloadController;
 use App\Http\Controllers\ImageController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
@@ -30,7 +31,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/contact', [AppPageController::class, 'contact'])->name('contact.index');
     Route::post('/contact', [AppPageController::class, 'sendContact'])->name('contact.send');
     Route::get('/downloads', [AppPageController::class, 'downloads'])->name('downloads.index');
+    Route::post('/downloads', [DownloadController::class, 'store'])->name('downloads.store');
+    Route::get('/downloads/{downloadJob}', [DownloadController::class, 'show'])->name('downloads.show');
     Route::get('/images', [AppPageController::class, 'images'])->name('images.index');
+    Route::get('/images/{image}/download', [ImageController::class, 'download'])->name('images.download');
     Route::post('/images', [ImageController::class, 'store'])->name('images.store');
     Route::patch('/images/bulk-project', [ImageController::class, 'bulkProject'])->name('images.bulk-project');
     Route::post('/images/{image}', [ImageController::class, 'update'])->name('images.update');

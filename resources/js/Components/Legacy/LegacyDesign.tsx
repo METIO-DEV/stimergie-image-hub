@@ -47,6 +47,8 @@ export type LegacyImage = {
     thumbUrl?: string | null;
     imageUrl?: string | null;
     downloadUrl?: string | null;
+    webDownloadUrl?: string | null;
+    hdDownloadUrl?: string | null;
     width?: number | null;
     height?: number | null;
     tags?: string[];
@@ -354,11 +356,25 @@ export function ImageInfoSheet({
                             )}
 
                             <div className="flex flex-wrap gap-2">
-                                {image.downloadUrl && (
-                                    <Button asChild>
-                                        <a href={image.downloadUrl}>
+                                {image.webDownloadUrl && (
+                                    <Button asChild variant="outline">
+                                        <a href={image.webDownloadUrl}>
                                             <Download className="mr-2 h-4 w-4" />
-                                            Télécharger
+                                            Web
+                                        </a>
+                                    </Button>
+                                )}
+                                {(image.hdDownloadUrl || image.downloadUrl) && (
+                                    <Button asChild>
+                                        <a
+                                            href={
+                                                image.hdDownloadUrl ||
+                                                image.downloadUrl ||
+                                                "#"
+                                            }
+                                        >
+                                            <Download className="mr-2 h-4 w-4" />
+                                            HD
                                         </a>
                                     </Button>
                                 )}
@@ -490,9 +506,9 @@ export const LazyImage = memo(function LazyImage({
                 <div className="absolute inset-0 scale-110 animate-pulse bg-gradient-to-br from-muted to-muted/50 blur-md" />
             )}
 
-            {isInView && (
+            {isInView && !hasError && (
                 <img
-                    src={hasError ? "/image-not-available.png" : src}
+                    src={src}
                     alt={alt}
                     className={cn(
                         "absolute inset-0 h-full w-full object-cover transition-opacity duration-500",
@@ -508,6 +524,10 @@ export const LazyImage = memo(function LazyImage({
                         onError?.();
                     }}
                 />
+            )}
+
+            {hasError && (
+                <div className="absolute inset-0 bg-muted" aria-label={alt} />
             )}
 
             {!isLoaded && !hasError && isInView && (
