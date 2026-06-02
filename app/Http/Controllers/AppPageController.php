@@ -30,11 +30,13 @@ class AppPageController extends Controller
         $user = $request->user();
         $clientIds = $this->projectAccess->accessibleClientIds($user);
         $manageableClientIds = $this->manageableClientIds($user);
+        $galleryFilters = $this->galleryFilters($request);
         $page = max(1, (int) $request->integer('page', 1));
         $perPage = 100;
         $totalImages = Image::query()
             ->tap(fn ($query) => $this->applyPhotoBucketFilter($query))
             ->tap(fn ($query) => $this->projectAccess->applyImageVisibility($query, $request->user()))
+            ->tap(fn ($query) => $this->applyGalleryFilters($query, $galleryFilters))
             ->count();
 
         $images = Image::query()
@@ -47,6 +49,7 @@ class AppPageController extends Controller
             ])
             ->tap(fn ($query) => $this->applyPhotoBucketFilter($query))
             ->tap(fn ($query) => $this->projectAccess->applyImageVisibility($query, $request->user()))
+            ->tap(fn ($query) => $this->applyGalleryFilters($query, $galleryFilters))
             ->latest()
             ->forPage($page, $perPage)
             ->get()
@@ -64,6 +67,12 @@ class AppPageController extends Controller
                     ->count(),
             ],
             'filters' => $this->filterOptions($request->user(), $clientIds),
+            'activeFilters' => [
+                'search' => $galleryFilters['search'],
+                'orientation' => $galleryFilters['orientation'],
+                'clientId' => $galleryFilters['clientId'] ? (string) $galleryFilters['clientId'] : '',
+                'projectId' => $galleryFilters['projectId'] ? (string) $galleryFilters['projectId'] : '',
+            ],
             'bulkProjects' => $this->manageableProjectOptions($user, $manageableClientIds),
             'canBulkAssignImages' => $this->canManageClientContent($user),
             'pagination' => [
@@ -72,6 +81,21 @@ class AppPageController extends Controller
                 'total' => $totalImages,
             ],
         ]);
+    }
+
+    /**
+     * @return array{search: string, orientation: string, clientId: int|null, projectId: int|null}
+     */
+    private function galleryFilters(Request $request): array
+    {
+        $orientation = (string) $request->query('orientation', '');
+
+        return [
+            'search' => trim((string) $request->query('search', '')),
+            'orientation' => in_array($orientation, ['landscape', 'portrait', 'square'], true) ? $orientation : '',
+            'clientId' => $request->query('client_id') ? max(1, (int) $request->query('client_id')) : null,
+            'projectId' => $request->query('project_id') ? max(1, (int) $request->query('project_id')) : null,
+        ];
     }
 
     public function contact(): Response
@@ -377,6 +401,27 @@ class AppPageController extends Controller
         $query
             ->where('storage_provider', 'scaleway')
             ->where('object_key_original', 'like', 'photos/%');
+    }
+
+    /**
+     * @param  array{search: string, orientation: string, clientId: int|null, projectId: int|null}  $filters
+     */
+    private function applyGalleryFilters($query, array $filters): void
+    {
+        $query
+            ->when($filters['search'] !== '', function ($query) use ($filters): void {
+                $search = $filters['search'];
+
+                $query->where(function ($query) use ($search): void {
+                    $query
+                        ->where('title', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%")
+                        ->orWhereHas('tags', fn ($tags) => $tags->where('name', 'like', "%{$search}%"));
+                });
+            })
+            ->when($filters['orientation'] !== '', fn ($query) => $query->where('orientation', $filters['orientation']))
+            ->when($filters['clientId'] !== null, fn ($query) => $query->where('client_id', $filters['clientId']))
+            ->when($filters['projectId'] !== null, fn ($query) => $query->where('project_id', $filters['projectId']));
     }
 
     private function canManageClientContent(User $user): bool

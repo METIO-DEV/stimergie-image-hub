@@ -17,7 +17,7 @@ import {
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, router, usePage } from "@inertiajs/react";
 import { Download, FolderInput, Infinity, SquareCheck } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type FilterOption = {
     id: number;
@@ -37,6 +37,12 @@ type Props = {
         clients: FilterOption[];
         projects: FilterOption[];
     };
+    activeFilters: {
+        search: string;
+        orientation: string;
+        clientId: string;
+        projectId: string;
+    };
     bulkProjects: FilterOption[];
     canBulkAssignImages: boolean;
     pagination: {
@@ -50,19 +56,20 @@ const PAGE_SIZE = 100;
 
 export default function GalleryIndex({
     images,
-    stats,
     filters,
+    activeFilters,
     bulkProjects,
     canBulkAssignImages,
     pagination,
 }: Props) {
     const user = usePage().props.auth.user;
-    const [search, setSearch] = useState("");
-    const [orientation, setOrientation] = useState("");
-    const [clientId, setClientId] = useState("");
-    const [projectId, setProjectId] = useState("");
+    const [search, setSearch] = useState(activeFilters.search);
+    const [orientation, setOrientation] = useState(activeFilters.orientation);
+    const [clientId, setClientId] = useState(activeFilters.clientId);
+    const [projectId, setProjectId] = useState(activeFilters.projectId);
     const [currentPage, setCurrentPage] = useState(pagination.currentPage);
     const [infiniteScroll, setInfiniteScroll] = useState(false);
+    const didMount = useRef(false);
     const [selectedImages, setSelectedImages] = useState<
         Array<string | number>
     >([]);
@@ -80,33 +87,6 @@ export default function GalleryIndex({
         [clientId, filters.projects],
     );
 
-    const filteredImages = useMemo(() => {
-        const query = search.trim().toLowerCase();
-
-        return images.filter((image) => {
-            const matchesSearch =
-                !query ||
-                image.title.toLowerCase().includes(query) ||
-                image.tags?.some((tag) => tag.toLowerCase().includes(query));
-            const matchesOrientation =
-                !orientation || image.orientation === orientation;
-            const matchesClient =
-                !clientId || String(image.clientId) === clientId;
-            const matchesProject =
-                !projectId || String(image.projectId) === projectId;
-
-            return (
-                matchesSearch &&
-                matchesOrientation &&
-                matchesClient &&
-                matchesProject
-            );
-        });
-    }, [clientId, images, orientation, projectId, search]);
-
-    const hasLocalFilters = Boolean(
-        search || orientation || clientId || projectId,
-    );
     const selectedImageItems = images.filter((image) =>
         selectedImages.includes(image.id),
     );
@@ -114,24 +94,57 @@ export default function GalleryIndex({
         canBulkAssignImages &&
         selectedImageItems.length === selectedImages.length &&
         selectedImageItems.every((image) => image.canManage);
-    const paginatedImages =
-        infiniteScroll || !hasLocalFilters
-            ? filteredImages
-            : filteredImages.slice(
-                  (currentPage - 1) * PAGE_SIZE,
-                  currentPage * PAGE_SIZE,
-              );
+    const paginatedImages = images;
+
+    const filterParams = (
+        nextPage = 1,
+    ): Record<string, string | number | undefined> => ({
+        search: search.trim() || undefined,
+        orientation: orientation || undefined,
+        client_id: clientId || undefined,
+        project_id: projectId || undefined,
+        page: nextPage > 1 ? nextPage : undefined,
+    });
+
+    useEffect(() => {
+        setSearch(activeFilters.search);
+        setOrientation(activeFilters.orientation);
+        setClientId(activeFilters.clientId);
+        setProjectId(activeFilters.projectId);
+        setCurrentPage(pagination.currentPage);
+    }, [
+        activeFilters.clientId,
+        activeFilters.orientation,
+        activeFilters.projectId,
+        activeFilters.search,
+        pagination.currentPage,
+    ]);
+
+    useEffect(() => {
+        if (!didMount.current) {
+            didMount.current = true;
+
+            return;
+        }
+
+        const timeout = window.setTimeout(() => {
+            setCurrentPage(1);
+            router.get(route("gallery.index"), filterParams(), {
+                preserveScroll: true,
+                preserveState: true,
+                replace: true,
+            });
+        }, 350);
+
+        return () => window.clearTimeout(timeout);
+    }, [clientId, orientation, projectId, search]);
 
     const handlePageChange = (page: number) => {
         setCurrentPage(page);
-
-        if (!hasLocalFilters) {
-            router.get(
-                route("gallery.index"),
-                { page },
-                { preserveScroll: true, preserveState: false },
-            );
-        }
+        router.get(route("gallery.index"), filterParams(page), {
+            preserveScroll: true,
+            preserveState: false,
+        });
     };
 
     const toggleSelection = (id: string | number) => {
@@ -270,11 +283,7 @@ export default function GalleryIndex({
 
                 {!infiniteScroll && (
                     <LegacyPagination
-                        totalCount={
-                            hasLocalFilters
-                                ? filteredImages.length
-                                : stats.images
-                        }
+                        totalCount={pagination.total}
                         currentPage={currentPage}
                         onPageChange={handlePageChange}
                         pageSize={PAGE_SIZE}

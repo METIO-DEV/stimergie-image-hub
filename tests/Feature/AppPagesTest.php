@@ -277,6 +277,76 @@ class AppPagesTest extends TestCase
                 ->etc());
     }
 
+    public function test_gallery_applies_filters_on_server_before_pagination(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $targetClient = Client::create([
+            'name' => '180C',
+            'slug' => '180c',
+            'status' => 'active',
+        ]);
+        $targetProject = Project::create([
+            'client_id' => $targetClient->id,
+            'name' => 'N30 Chocolatier Lille',
+            'slug' => 'n30-chocolatier-lille',
+            'status' => 'active',
+        ]);
+        $otherClient = Client::create([
+            'name' => 'Autre client',
+            'slug' => 'autre-client',
+            'status' => 'active',
+        ]);
+        $otherProject = Project::create([
+            'client_id' => $otherClient->id,
+            'name' => 'Autre projet',
+            'slug' => 'autre-projet',
+            'status' => 'active',
+        ]);
+        $targetImage = Image::create([
+            'client_id' => $targetClient->id,
+            'project_id' => $targetProject->id,
+            'title' => 'Image 180C',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/180c/source.jpg',
+            'created_at' => now()->subDays(2),
+            'updated_at' => now()->subDays(2),
+        ]);
+
+        foreach (range(1, 101) as $index) {
+            Image::create([
+                'client_id' => $otherClient->id,
+                'project_id' => $otherProject->id,
+                'title' => "Image autre {$index}",
+                'status' => 'ready',
+                'storage_provider' => 'scaleway',
+                'object_key_original' => "photos/autre/source-{$index}.jpg",
+                'created_at' => now()->subMinute(),
+                'updated_at' => now()->subMinute(),
+            ]);
+        }
+
+        $this->actingAs($admin)
+            ->get(route('gallery.index', [
+                'client_id' => $targetClient->id,
+                'project_id' => $targetProject->id,
+            ]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Gallery/Index')
+                ->has('images', 1)
+                ->where('images.0.id', $targetImage->id)
+                ->where('pagination.total', 1)
+                ->where('activeFilters.clientId', (string) $targetClient->id)
+                ->where('activeFilters.projectId', (string) $targetProject->id)
+                ->etc());
+    }
+
     public function test_client_logos_are_resolved_from_scaleway_object_keys(): void
     {
         Storage::fake('scaleway');

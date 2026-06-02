@@ -33,7 +33,11 @@ class ReconcileScalewayAssets extends Command
 
         $query = Image::query()
             ->whereNotNull('legacy_id')
-            ->when(! $force, fn ($query) => $query->whereNull('object_key_original'))
+            ->when(! $force, fn ($query) => $query->where(function ($query): void {
+                $query
+                    ->whereNull('object_key_original')
+                    ->orWhere('object_key_original', 'like', 'legacy/images/%');
+            }))
             ->orderBy('id');
 
         if ($limit) {

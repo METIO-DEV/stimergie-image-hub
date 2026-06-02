@@ -70,6 +70,31 @@ class ImageStorageReliabilityTest extends TestCase
         $this->assertSame('/storage/photos/ADAMANCE_GAMME FRAICHE 141124/JPG/ADAMANCE_010824_GAMME FRAICHE1050.jpg', $image->legacy_thumbnail_url);
     }
 
+    public function test_reconciliation_rewrites_legacy_image_placeholders_without_force(): void
+    {
+        Storage::fake('scaleway');
+
+        [$client, $project] = $this->clientAndProject();
+
+        $image = $this->image($client, $project, [
+            'legacy_id' => '2023',
+            'legacy_url' => 'https://www.stimergie.fr/photos/180°C_N°30_CHOCOLATIER LILLE/JPG/1J0A2106.jpg',
+            'object_key_original' => 'legacy/images/2023/original.jpg',
+        ]);
+
+        Storage::disk('scaleway')->put('photos/180°C_N°30_CHOCOLATIER LILLE/JPG/1J0A2106.jpg', 'web-content');
+
+        $this->artisan('images:reconcile-scaleway-assets', ['--prefix' => 'photos'])
+            ->assertExitCode(0);
+
+        $image->refresh();
+
+        $this->assertSame('photos/180°C_N°30_CHOCOLATIER LILLE/JPG/1J0A2106.jpg', $image->object_key_original);
+        $this->assertSame('photos/180°C_N°30_CHOCOLATIER LILLE/JPG/1J0A2106.jpg', $image->object_key_web);
+        $this->assertSame('photos/180°C_N°30_CHOCOLATIER LILLE/JPG/1J0A2106.jpg', $image->object_key_thumb);
+        $this->assertSame('photos/180°C_N°30_CHOCOLATIER LILLE/JPG/1J0A2106.jpg', $image->object_key_hd);
+    }
+
     public function test_audit_reports_images_already_reconciled_under_photos_prefix(): void
     {
         [$client, $project] = $this->clientAndProject();
