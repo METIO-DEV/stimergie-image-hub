@@ -4,8 +4,9 @@ import { Head, useForm } from "@inertiajs/react";
 import { FormEventHandler } from "react";
 import ClientForm, { ClientFormData } from "./Partials/ClientForm";
 
-type ClientEditable = ClientFormData & {
+type ClientEditable = Omit<ClientFormData, "logo"> & {
     id: number;
+    logo: string | null;
 };
 
 type StatusOption = {
@@ -24,11 +25,12 @@ export default function ClientsEdit({ client, statuses }: Props) {
             name: client.name,
             slug: client.slug,
             status: client.status,
+            logo: null,
         });
 
     const submit: FormEventHandler = (event) => {
         event.preventDefault();
-        patch(route("clients.update", client.id));
+        patch(route("clients.update", client.id), { forceFormData: true });
     };
 
     return (
@@ -61,6 +63,7 @@ export default function ClientsEdit({ client, statuses }: Props) {
                                 processing={processing}
                                 statuses={statuses}
                                 submitLabel="Enregistrer"
+                                currentLogo={client.logo}
                                 onSubmit={submit}
                                 setData={setData}
                             />

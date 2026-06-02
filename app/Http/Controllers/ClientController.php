@@ -10,6 +10,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -79,6 +80,12 @@ class ClientController extends Controller
                 'status' => $data['status'],
             ]);
 
+            if ($request->hasFile('logo')) {
+                $client->forceFill([
+                    'logo_object_key' => $this->storeLogo($client, $request->file('logo')),
+                ])->save();
+            }
+
             $client->memberships()->create([
                 'user_id' => $request->user()->id,
                 'role' => 'owner',
@@ -129,6 +136,7 @@ class ClientController extends Controller
                 'name' => $client->name,
                 'slug' => $client->slug,
                 'status' => $client->status,
+                'logo' => $this->clientLogos->url($client),
             ],
             'statuses' => $this->statuses(),
         ]);
@@ -143,6 +151,17 @@ class ClientController extends Controller
             'slug' => $this->uniqueSlug(($data['slug'] ?? '') ?: $data['name'], $client),
             'status' => $data['status'],
         ]);
+
+        if ($request->hasFile('logo')) {
+            $oldLogo = $client->logo_object_key;
+            $client->forceFill([
+                'logo_object_key' => $this->storeLogo($client, $request->file('logo')),
+            ])->save();
+
+            if ($oldLogo && $oldLogo !== $client->logo_object_key) {
+                Storage::disk($this->imageDisk())->delete($oldLogo);
+            }
+        }
 
         return redirect()
             ->route('clients.show', $client)
@@ -195,6 +214,7 @@ class ClientController extends Controller
             'name' => $client->name,
             'slug' => $client->slug,
             'status' => $client->status,
+            'logo' => $this->clientLogos->url($client),
             'projectsCount' => $client->projects_count,
             'imagesCount' => $client->images_count,
             'membersCount' => $client->memberships_count,
@@ -235,5 +255,21 @@ class ClientController extends Controller
         }
 
         return $slug;
+    }
+
+    private function storeLogo(Client $client, mixed $file): string
+    {
+        $extension = $file->extension() ?: $file->guessExtension() ?: 'bin';
+        $filename = 'logo-'.now()->format('YmdHis').'-'.Str::random(8).'.'.Str::lower($extension);
+
+        return $file->storeAs("clients/{$client->id}", $filename, [
+            'disk' => $this->imageDisk(),
+            'visibility' => 'public',
+        ]);
+    }
+
+    private function imageDisk(): string
+    {
+        return (string) config('filesystems.image_disk', 'scaleway');
     }
 }

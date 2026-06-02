@@ -25,6 +25,7 @@ class StoreClientRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'alpha_dash:ascii', 'max:255', Rule::unique('clients', 'slug')],
             'status' => ['required', 'string', Rule::in(['active', 'paused', 'archived'])],
+            'logo' => ['nullable', 'image', 'max:5120'],
         ];
     }
 }

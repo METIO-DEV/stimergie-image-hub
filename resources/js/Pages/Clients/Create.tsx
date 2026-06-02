@@ -19,12 +19,13 @@ export default function ClientsCreate({ statuses }: Props) {
             name: "",
             slug: "",
             status: "active",
+            logo: null,
         },
     );
 
     const submit: FormEventHandler = (event) => {
         event.preventDefault();
-        post(route("clients.store"));
+        post(route("clients.store"), { forceFormData: true });
     };
 
     return (

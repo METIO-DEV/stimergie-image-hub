@@ -16,6 +16,7 @@ export type ClientFormData = {
     name: string;
     slug: string;
     status: string;
+    logo: File | null;
 };
 
 type StatusOption = {
@@ -29,8 +30,12 @@ type Props = {
     processing: boolean;
     statuses: StatusOption[];
     submitLabel: string;
+    currentLogo?: string | null;
     onSubmit: FormEventHandler;
-    setData: (key: keyof ClientFormData, value: string) => void;
+    setData: <K extends keyof ClientFormData>(
+        key: K,
+        value: ClientFormData[K],
+    ) => void;
 };
 
 export default function ClientForm({
@@ -39,6 +44,7 @@ export default function ClientForm({
     processing,
     statuses,
     submitLabel,
+    currentLogo,
     onSubmit,
     setData,
 }: Props) {
@@ -87,6 +93,29 @@ export default function ClientForm({
                     </SelectContent>
                 </Select>
                 <InputError message={errors.status} className="mt-2" />
+            </div>
+
+            <div>
+                <Label htmlFor="logo">Logo</Label>
+                {currentLogo && (
+                    <div className="mt-2 flex h-24 w-24 items-center justify-center overflow-hidden rounded-md border bg-card">
+                        <img
+                            src={currentLogo}
+                            alt="Logo actuel"
+                            className="h-full w-full object-contain"
+                        />
+                    </div>
+                )}
+                <Input
+                    id="logo"
+                    type="file"
+                    accept="image/*"
+                    className="mt-2"
+                    onChange={(event) =>
+                        setData("logo", event.target.files?.[0] ?? null)
+                    }
+                />
+                <InputError message={errors.logo} className="mt-2" />
             </div>
 
             <div className="flex items-center gap-3">

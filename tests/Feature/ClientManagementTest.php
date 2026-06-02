@@ -6,6 +6,9 @@ use App\Models\Client;
 use App\Models\ClientMembership;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class ClientManagementTest extends TestCase
@@ -188,6 +191,49 @@ class ClientManagementTest extends TestCase
                 ->where('clients.0.id', $managedClient->id)
                 ->where('clients.1.id', $ownedClient->id)
                 ->etc());
+    }
+
+    public function test_admin_client_owner_can_update_client_logo_in_scaleway(): void
+    {
+        Storage::fake('scaleway');
+
+        [$client, $owner] = $this->createClientWithOwner();
+
+        $this->actingAs($owner)->patch(route('clients.update', $client), [
+            'name' => $client->name,
+            'slug' => $client->slug,
+            'status' => 'active',
+            'logo' => UploadedFile::fake()->image('logo.png', 120, 80),
+        ])->assertRedirect(route('clients.show', $client));
+
+        $client->refresh();
+
+        $this->assertNotNull($client->logo_object_key);
+        $this->assertStringStartsWith("clients/{$client->id}/logo-", $client->logo_object_key);
+        Storage::disk('scaleway')->assertExists($client->logo_object_key);
+    }
+
+    public function test_client_logo_reconciliation_uploads_remote_asset_to_scaleway(): void
+    {
+        Storage::fake('scaleway');
+        Http::fake([
+            'https://supabase.example/storage/v1/object/public/logos/acme.png' => Http::response('logo-content', 200),
+        ]);
+
+        $client = Client::create([
+            'name' => 'Acme',
+            'slug' => 'acme',
+            'status' => 'active',
+            'legacy_logo_url' => 'https://supabase.example/storage/v1/object/public/logos/acme.png',
+        ]);
+
+        $this->artisan('clients:reconcile-logos')
+            ->assertSuccessful();
+
+        $client->refresh();
+
+        $this->assertSame("clients/{$client->id}/logo-legacy-acme.png", $client->logo_object_key);
+        Storage::disk('scaleway')->assertExists($client->logo_object_key);
     }
 
     /**

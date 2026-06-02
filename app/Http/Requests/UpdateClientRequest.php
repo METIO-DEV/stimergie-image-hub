@@ -36,6 +36,7 @@ class UpdateClientRequest extends FormRequest
                 Rule::unique('clients', 'slug')->ignore($client?->id),
             ],
             'status' => ['required', 'string', Rule::in(['active', 'paused', 'archived'])],
+            'logo' => ['nullable', 'image', 'max:5120'],
         ];
     }
 }
