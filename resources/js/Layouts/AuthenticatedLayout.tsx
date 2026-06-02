@@ -464,7 +464,7 @@ function breadcrumbItems(): BreadcrumbItem[] {
     };
 
     if (route().current("gallery.index")) {
-        return [{ label: "Galerie" }];
+        return [];
     }
 
     const current = route().current();

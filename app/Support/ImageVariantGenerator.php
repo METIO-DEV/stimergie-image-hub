@@ -13,7 +13,7 @@ class ImageVariantGenerator
     /**
      * @return array{disk: string, original: string, web: string, thumb: string, hd: string, url: string, width: int|null, height: int|null, orientation: string|null, mime_type: string|null, size_bytes: int|null, checksum: string, variants: array<string, array{object_key: string, mime_type: string|null, width: int|null, height: int|null, size_bytes: int|null}>}
      */
-    public function store(UploadedFile $file): array
+    public function store(UploadedFile $file, string $targetPrefix = 'images'): array
     {
         $disk = (string) config('filesystems.image_disk', 'scaleway');
         $mimeType = $file->getMimeType();
@@ -28,7 +28,8 @@ class ImageVariantGenerator
         $size = @getimagesize($sourcePath);
         $width = $size ? $size[0] : null;
         $height = $size ? $size[1] : null;
-        $originalKey = "images/originals/{$baseName}.{$extension}";
+        $targetPrefix = trim($targetPrefix, '/') ?: 'images';
+        $originalKey = "{$targetPrefix}/originals/{$baseName}.{$extension}";
 
         $this->putFile($disk, $originalKey, $sourcePath, $mimeType);
 
@@ -43,9 +44,9 @@ class ImageVariantGenerator
         ];
 
         foreach ([
-            'web' => ['directory' => 'images/web', 'max' => 1600],
-            'thumb' => ['directory' => 'images/thumbs', 'max' => 480],
-            'hd' => ['directory' => 'images/hd', 'max' => 3200],
+            'web' => ['directory' => "{$targetPrefix}/web", 'max' => 1600],
+            'thumb' => ['directory' => "{$targetPrefix}/thumbs", 'max' => 480],
+            'hd' => ['directory' => "{$targetPrefix}/hd", 'max' => 3200],
         ] as $kind => $config) {
             $key = "{$config['directory']}/{$baseName}.{$extension}";
             $variant = $this->putResizedVariant($disk, $key, $sourcePath, $mimeType, $config['max']);

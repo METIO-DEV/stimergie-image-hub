@@ -6,6 +6,7 @@ use App\Jobs\ProcessImageImportItem;
 use App\Models\Import;
 use App\Models\ImportItem;
 use App\Models\Project;
+use App\Support\ProjectImageStoragePath;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -15,6 +16,10 @@ use Illuminate\Validation\Rule;
 
 class ImageImportController extends Controller
 {
+    public function __construct(
+        private readonly ProjectImageStoragePath $storagePath,
+    ) {}
+
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -70,7 +75,7 @@ class ImageImportController extends Controller
         $checksum = hash_file('sha256', $sourcePath);
         $extension = $this->extension($file);
         $baseName = (string) Str::uuid();
-        $objectKey = "photos/imports/{$import->id}/originals/{$baseName}.{$extension}";
+        $objectKey = "{$this->storagePath->prefix($import->project)}/originals/{$baseName}.{$extension}";
         $disk = (string) config('filesystems.image_disk', 'scaleway');
 
         $stream = fopen($sourcePath, 'r');

@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Image;
 use App\Models\ImportItem;
 use App\Support\ImageVariantGenerator;
+use App\Support\ProjectImageStoragePath;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
@@ -23,7 +24,7 @@ class ProcessImageImportItem implements ShouldQueue
         public readonly int $importItemId,
     ) {}
 
-    public function handle(ImageVariantGenerator $imageVariants): void
+    public function handle(ImageVariantGenerator $imageVariants, ProjectImageStoragePath $storagePath): void
     {
         $item = ImportItem::with('import.project.client')->find($this->importItemId);
 
@@ -94,7 +95,10 @@ class ProcessImageImportItem implements ShouldQueue
                 ]);
             }
 
-            $fileData = $imageVariants->generateFromOriginal($image);
+            $fileData = $imageVariants->generateFromOriginal(
+                $image,
+                $storagePath->prefix($project),
+            );
 
             DB::transaction(function () use ($fileData, $image, $imageVariants, $item): void {
                 $image->update([

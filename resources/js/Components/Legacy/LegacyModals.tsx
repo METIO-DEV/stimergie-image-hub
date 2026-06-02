@@ -320,6 +320,7 @@ export function ProjectEditModal({
                 </div>
                 <DialogFooter>
                     <Button
+                        type="button"
                         variant="outline"
                         onClick={() => onOpenChange(false)}
                     >

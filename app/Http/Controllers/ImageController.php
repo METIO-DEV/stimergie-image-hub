@@ -10,6 +10,7 @@ use App\Models\Project;
 use App\Models\Tag;
 use App\Support\ImageUrlResolver;
 use App\Support\ImageVariantGenerator;
+use App\Support\ProjectImageStoragePath;
 use App\Support\ProjectAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,6 +23,7 @@ class ImageController extends Controller
     public function __construct(
         private readonly ImageVariantGenerator $imageVariants,
         private readonly ImageUrlResolver $imageUrls,
+        private readonly ProjectImageStoragePath $storagePath,
         private readonly ProjectAccess $projectAccess,
     ) {}
 
@@ -47,7 +49,10 @@ class ImageController extends Controller
         $project = Project::findOrFail($data['project_id']);
 
         DB::transaction(function () use ($data, $project, $request): void {
-            $fileData = $this->imageVariants->store($request->file('file'));
+            $fileData = $this->imageVariants->store(
+                $request->file('file'),
+                $this->storagePath->prefix($project),
+            );
 
             $image = Image::create([
                 'client_id' => $project->client_id,
@@ -95,7 +100,10 @@ class ImageController extends Controller
             ];
 
             if ($request->hasFile('file')) {
-                $fileData = $this->imageVariants->store($request->file('file'));
+                $fileData = $this->imageVariants->store(
+                    $request->file('file'),
+                    $this->storagePath->prefix($project),
+                );
                 $payload = [
                     ...$payload,
                     'orientation' => $data['orientation'] ?: $fileData['orientation'],

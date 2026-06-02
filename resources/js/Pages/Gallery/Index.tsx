@@ -195,20 +195,16 @@ export default function GalleryIndex({
 
             <main className="w-screen flex-grow px-0">
                 <section className="border-b border-border bg-[#dcd0bb]">
-                    <div className="mx-auto max-w-7xl px-6 py-16">
-                        <div className="mb-10 text-center">
-                            <h1 className="mb-6 text-3xl font-bold">
+                    <div className="mx-auto max-w-7xl px-6 py-10">
+                        <div className="mb-6 text-center">
+                            <h1 className="mb-3 text-3xl font-bold">
                                 Banque d'images
                             </h1>
-                            <p className="mx-auto max-w-3xl text-[#150B0D]">
+                            <p className="mx-auto max-w-2xl text-sm leading-6 text-[#150B0D]">
                                 Bonjour {user?.name},
-                                <br />
-                                <br />
-                                Cette galerie vous propose l'ensemble des photos
-                                créées par Imprononçable pour vos projets. Vous
-                                pouvez les filtrer par catégorie, par type de
-                                droits, puis les prévisualiser et les
-                                télécharger.
+                                cette galerie vous propose l'ensemble des photos
+                                créées pour vos projets. Filtrez, prévisualisez
+                                et téléchargez les visuels disponibles.
                             </p>
                         </div>
 
