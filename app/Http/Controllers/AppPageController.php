@@ -9,6 +9,7 @@ use App\Models\Image;
 use App\Models\Project;
 use App\Models\ProjectAccessPeriod;
 use App\Models\User;
+use App\Support\ClientLogoUrlResolver;
 use App\Support\ImageUrlResolver;
 use App\Support\ProjectAccess;
 use Illuminate\Http\RedirectResponse;
@@ -19,6 +20,7 @@ use Inertia\Response;
 class AppPageController extends Controller
 {
     public function __construct(
+        private readonly ClientLogoUrlResolver $clientLogos,
         private readonly ImageUrlResolver $imageUrls,
         private readonly ProjectAccess $projectAccess,
     ) {}
@@ -38,7 +40,7 @@ class AppPageController extends Controller
         $images = Image::query()
             ->with([
                 'client' => fn ($query) => $query
-                    ->select('id', 'name', 'slug', 'legacy_logo_url', 'status')
+                    ->select('id', 'name', 'slug', 'logo_object_key', 'status')
                     ->withCount(['projects', 'images', 'memberships']),
                 'project:id,name',
                 'tags:id,name',
@@ -138,7 +140,7 @@ class AppPageController extends Controller
         $images = Image::query()
             ->with([
                 'client' => fn ($query) => $query
-                    ->select('id', 'name', 'slug', 'legacy_logo_url', 'status')
+                    ->select('id', 'name', 'slug', 'logo_object_key', 'status')
                     ->withCount(['projects', 'images', 'memberships']),
                 'project:id,name',
                 'tags:id,name',
@@ -167,7 +169,7 @@ class AppPageController extends Controller
         $manageableClientIds = $this->manageableClientIds($user);
 
         $projects = Project::query()
-            ->with('client:id,name')
+            ->with('client:id,name,logo_object_key')
             ->withCount('images')
             ->tap(fn ($query) => $this->projectAccess->applyProjectVisibility($query, $request->user()))
             ->orderBy('name')
@@ -180,7 +182,7 @@ class AppPageController extends Controller
                 'type' => $project->type,
                 'clientId' => $project->client_id,
                 'clientName' => $project->client->name,
-                'clientLogo' => $project->client->legacy_logo_url,
+                'clientLogo' => $this->clientLogos->url($project->client),
                 'sourceFolder' => $project->source_folder,
                 'imagesCount' => $project->images_count,
                 'createdAt' => $project->created_at->toIso8601String(),
@@ -352,7 +354,7 @@ class AppPageController extends Controller
                 'id' => $image->client->id,
                 'name' => $image->client->name,
                 'slug' => $image->client->slug,
-                'logo' => $image->client->legacy_logo_url,
+                'logo' => $this->clientLogos->url($image->client),
                 'status' => $image->client->status,
                 'projectsCount' => $image->client->projects_count,
                 'imagesCount' => $image->client->images_count,

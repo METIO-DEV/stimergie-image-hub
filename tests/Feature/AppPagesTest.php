@@ -274,6 +274,45 @@ class AppPagesTest extends TestCase
                 ->etc());
     }
 
+    public function test_client_logos_are_resolved_from_scaleway_object_keys(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $client = Client::create([
+            'name' => 'Client Logo',
+            'slug' => 'client-logo',
+            'status' => 'active',
+            'logo_object_key' => 'legacy/clients/client-logo/logo.png',
+            'legacy_logo_url' => 'https://legacy.example/logo.png',
+        ]);
+        Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Logo',
+            'slug' => 'projet-logo',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('projects.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Projects/Index')
+                ->where('projects.0.clientLogo', '/storage/legacy/clients/client-logo/logo.png')
+                ->etc());
+
+        $this->actingAs($admin)
+            ->get(route('clients.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Clients/Index')
+                ->where('clients.0.logo', '/storage/legacy/clients/client-logo/logo.png')
+                ->etc());
+    }
+
     public function test_image_download_route_serves_attachment_from_scaleway_object(): void
     {
         Storage::fake('scaleway');

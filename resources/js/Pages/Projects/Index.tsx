@@ -144,12 +144,17 @@ export default function ProjectsIndex({
                         {filteredProjects.map((project) => (
                             <div
                                 key={project.id}
-                                className="grid gap-4 border-b p-5 last:border-b-0 md:grid-cols-[1fr_220px_120px_96px]"
+                                className="grid gap-4 border-b p-5 last:border-b-0 md:grid-cols-[minmax(0,1fr)_220px_120px_96px]"
                             >
-                                <div className="font-semibold">
-                                    {project.name}
-                                    <div className="mt-1 text-sm font-normal text-muted-foreground">
-                                        {project.clientName}
+                                <div className="flex min-w-0 items-center gap-3">
+                                    <ClientLogo project={project} size="list" />
+                                    <div className="min-w-0 font-semibold">
+                                        <div className="truncate">
+                                            {project.name}
+                                        </div>
+                                        <div className="mt-1 truncate text-sm font-normal text-muted-foreground">
+                                            {project.clientName}
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="text-sm text-muted-foreground">
@@ -229,20 +234,7 @@ function ProjectCard({
             <CardContent className="flex flex-grow flex-col justify-between">
                 <div className="space-y-3 text-sm">
                     <p className="flex items-center gap-2">
-                        {project.clientLogo ? (
-                            <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-card">
-                                <img
-                                    src={project.clientLogo}
-                                    alt={project.clientName}
-                                    className="h-full w-full object-contain"
-                                />
-                            </span>
-                        ) : (
-                            <Building2
-                                size={16}
-                                className="flex-shrink-0 text-muted-foreground"
-                            />
-                        )}
+                        <ClientLogo project={project} size="card" />
                         <span className="truncate">{project.clientName}</span>
                     </p>
 
@@ -275,6 +267,44 @@ function ProjectCard({
                 </p>
             </CardContent>
         </Card>
+    );
+}
+
+function ClientLogo({
+    project,
+    size,
+}: {
+    project: Project;
+    size: "card" | "list";
+}) {
+    const className =
+        size === "list"
+            ? "h-11 w-11 rounded-md"
+            : "h-10 w-10 rounded-full";
+
+    if (!project.clientLogo) {
+        return (
+            <span
+                className={`${className} flex flex-shrink-0 items-center justify-center border bg-muted/40`}
+            >
+                <Building2
+                    size={size === "list" ? 18 : 16}
+                    className="text-muted-foreground"
+                />
+            </span>
+        );
+    }
+
+    return (
+        <span
+            className={`${className} flex flex-shrink-0 items-center justify-center overflow-hidden border bg-card`}
+        >
+            <img
+                src={project.clientLogo}
+                alt={`Logo de ${project.clientName}`}
+                className="h-full w-full object-contain"
+            />
+        </span>
     );
 }
 

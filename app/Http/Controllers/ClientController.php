@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreClientRequest;
 use App\Http\Requests\UpdateClientRequest;
 use App\Models\Client;
+use App\Support\ClientLogoUrlResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +16,10 @@ use Inertia\Response;
 
 class ClientController extends Controller
 {
+    public function __construct(
+        private readonly ClientLogoUrlResolver $clientLogos,
+    ) {}
+
     public function index(Request $request): Response
     {
         Gate::authorize('viewAny', Client::class);
@@ -37,7 +42,7 @@ class ClientController extends Controller
                 'name' => $client->name,
                 'slug' => $client->slug,
                 'status' => $client->status,
-                'logo' => $client->legacy_logo_url,
+                'logo' => $this->clientLogos->url($client),
                 'projectsCount' => $client->projects_count,
                 'imagesCount' => $client->images_count,
                 'membersCount' => $client->memberships_count,
