@@ -13,6 +13,8 @@ import { Sheet, SheetContent, SheetTrigger } from "@/Components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { Link, usePage } from "@inertiajs/react";
 import {
+    Building2,
+    ChevronRight,
     Download,
     FolderOpen,
     Image,
@@ -20,7 +22,6 @@ import {
     LogOut,
     Mail,
     Menu,
-    Settings,
     Shield,
     User,
     Users,
@@ -33,6 +34,11 @@ type MenuItem = {
     icon: typeof Image;
     active?: boolean;
     disabled?: boolean;
+};
+
+type BreadcrumbItem = {
+    label: string;
+    href?: string;
 };
 
 export default function Authenticated({
@@ -112,7 +118,7 @@ export default function Authenticated({
     const adminMenu: MenuItem[] = [
         {
             href: route("dashboard"),
-            label: "Dashboard",
+            label: "Tableau de bord",
             icon: LayoutDashboard,
             active: route().current("dashboard"),
         },
@@ -125,7 +131,7 @@ export default function Authenticated({
         {
             href: route("clients.index"),
             label: "Gestion des entreprises",
-            icon: Settings,
+            icon: Building2,
             active: route().current("clients.*"),
         },
         {
@@ -163,6 +169,7 @@ export default function Authenticated({
 
               return false;
           });
+    const breadcrumbs = breadcrumbItems();
 
     return (
         <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -375,6 +382,46 @@ export default function Authenticated({
                         </div>
                     </div>
                 )}
+                {breadcrumbs.length > 0 && (
+                    <nav
+                        aria-label="Fil d'Ariane"
+                        className="container pt-5 text-sm text-muted-foreground"
+                    >
+                        <ol className="flex flex-wrap items-center gap-2">
+                            {breadcrumbs.map((item, index) => {
+                                const isLast = index === breadcrumbs.length - 1;
+
+                                return (
+                                    <li
+                                        key={`${item.label}-${index}`}
+                                        className="flex items-center gap-2"
+                                    >
+                                        {index > 0 && (
+                                            <ChevronRight className="h-4 w-4" />
+                                        )}
+                                        {item.href && !isLast ? (
+                                            <Link
+                                                href={item.href}
+                                                className="font-medium text-foreground transition-colors hover:text-primary"
+                                            >
+                                                {item.label}
+                                            </Link>
+                                        ) : (
+                                            <span
+                                                className={cn(
+                                                    isLast &&
+                                                        "font-medium text-foreground",
+                                                )}
+                                            >
+                                                {item.label}
+                                            </span>
+                                        )}
+                                    </li>
+                                );
+                            })}
+                        </ol>
+                    </nav>
+                )}
                 {header && <div className="container pt-9">{header}</div>}
                 {children}
             </main>
@@ -408,6 +455,81 @@ export default function Authenticated({
             <ContactModal open={contactOpen} onOpenChange={setContactOpen} />
         </div>
     );
+}
+
+function breadcrumbItems(): BreadcrumbItem[] {
+    const home: BreadcrumbItem = {
+        label: "Galerie",
+        href: route("gallery.index"),
+    };
+
+    if (route().current("gallery.index")) {
+        return [{ label: "Galerie" }];
+    }
+
+    const current = route().current();
+
+    if (route().current("dashboard")) {
+        return [home, { label: "Tableau de bord" }];
+    }
+
+    if (route().current("contact.index")) {
+        return [home, { label: "Contact" }];
+    }
+
+    if (route().current("downloads.index")) {
+        return [home, { label: "Téléchargements" }];
+    }
+
+    if (route().current("projects.index")) {
+        return [home, { label: "Projets" }];
+    }
+
+    if (route().current("images.index")) {
+        return [home, { label: "Images" }];
+    }
+
+    if (route().current("clients.create")) {
+        return [
+            home,
+            { label: "Entreprises", href: route("clients.index") },
+            { label: "Nouvelle entreprise" },
+        ];
+    }
+
+    if (route().current("clients.edit")) {
+        return [
+            home,
+            { label: "Entreprises", href: route("clients.index") },
+            { label: "Modifier" },
+        ];
+    }
+
+    if (route().current("clients.show")) {
+        return [
+            home,
+            { label: "Entreprises", href: route("clients.index") },
+            { label: "Détail" },
+        ];
+    }
+
+    if (route().current("clients.index")) {
+        return [home, { label: "Entreprises" }];
+    }
+
+    if (route().current("users.index")) {
+        return [home, { label: "Utilisateurs" }];
+    }
+
+    if (route().current("access-periods.index")) {
+        return [home, { label: "Droits d'accès" }];
+    }
+
+    if (route().current("profile.edit")) {
+        return [home, { label: "Profil" }];
+    }
+
+    return current ? [home, { label: current }] : [];
 }
 
 function UserMenuItem({ item }: { item: MenuItem }) {

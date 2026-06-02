@@ -138,7 +138,7 @@ class ClientManagementTest extends TestCase
         $this->actingAs($user)
             ->get(route('clients.index'))
             ->assertRedirect(route('gallery.index'))
-            ->assertSessionHas('warning', "La gestion des entreprises est reservee aux Admin Client owner/manager.");
+            ->assertSessionHas('warning', "La gestion des entreprises est réservée aux Admin Client owner/manager.");
     }
 
     public function test_client_management_lists_only_owned_or_managed_clients_for_admin_client(): void

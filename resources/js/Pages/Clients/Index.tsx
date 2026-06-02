@@ -17,6 +17,7 @@ import {
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, Link } from "@inertiajs/react";
 import {
+    Building2,
     FileText,
     ImageIcon,
     Mail,
@@ -24,7 +25,6 @@ import {
     Phone,
     PlusCircle,
     UserRound,
-    Users,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -72,7 +72,7 @@ export default function ClientsIndex({ clients, canCreateClient }: Props) {
             <Head title="Entreprises" />
 
             <SectionHeader
-                icon={<Users className="h-8 w-8 text-primary" />}
+                icon={<Building2 className="h-8 w-8 text-primary" />}
                 title="Entreprises"
                 description="Consultez et administrez les entreprises auxquelles vous avez un rôle de gestion."
                 action={
@@ -125,7 +125,7 @@ function ClientCard({ client }: { client: ClientSummary }) {
             <CardHeader className="pb-2">
                 <div className="flex items-start justify-between">
                     <CardTitle className="flex items-center gap-2 text-lg">
-                        <UserRound
+                        <Building2
                             size={18}
                             className="text-muted-foreground"
                         />
@@ -211,7 +211,7 @@ function ClientsTable({ clients }: { clients: ClientSummary[] }) {
                                             />
                                         </div>
                                     ) : (
-                                        <UserRound
+                                        <Building2
                                             size={16}
                                             className="text-muted-foreground"
                                         />

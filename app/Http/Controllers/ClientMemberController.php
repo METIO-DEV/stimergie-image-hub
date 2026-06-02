@@ -49,7 +49,7 @@ class ClientMemberController extends Controller
             );
         });
 
-        return back()->with('success', "Membre ajoute a l'entreprise.");
+        return back()->with('success', "Membre ajouté à l'entreprise.");
     }
 
     public function update(

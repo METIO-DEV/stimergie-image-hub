@@ -245,7 +245,7 @@ export function MasonryGrid({
                                         event.stopPropagation();
                                         onToggle?.(imageId);
                                     }}
-                                    aria-label="Selectionner l'image"
+                                    aria-label="Sélectionner l'image"
                                 >
                                     {isSelected && (
                                         <Check className="h-4 w-4" />

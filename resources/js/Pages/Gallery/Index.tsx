@@ -372,7 +372,7 @@ export default function GalleryIndex({
                             }
                             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                         >
-                            <option value="">Selectionner un projet</option>
+                            <option value="">Sélectionner un projet</option>
                             {bulkProjects.map((project) => (
                                 <option key={project.id} value={project.id}>
                                     {project.clientName

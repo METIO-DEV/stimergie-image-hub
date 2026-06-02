@@ -14,11 +14,11 @@ export default function VerifyEmail({ status }: { status?: string }) {
 
     return (
         <GuestLayout>
-            <Head title="Verification email" />
+            <Head title="Vérification email" />
 
             <div className="mb-8 text-center">
                 <h1 className="text-[28px] font-bold leading-tight text-[#080506]">
-                    Verification email
+                    Vérification email
                 </h1>
                 <p className="mt-3 text-sm leading-6 text-[#657078]">
                     Validez votre adresse email avec le lien que nous venons de

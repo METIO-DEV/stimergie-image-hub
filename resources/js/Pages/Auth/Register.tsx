@@ -138,7 +138,7 @@ export default function Register() {
                         className="rounded-lg bg-[#264b57] text-base font-semibold hover:bg-[#203f49] focus-visible:ring-[#264b57]"
                         disabled={processing}
                     >
-                        Creer le compte
+                        Créer le compte
                     </Button>
                 </div>
             </form>

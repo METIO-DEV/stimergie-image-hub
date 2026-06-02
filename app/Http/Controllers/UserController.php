@@ -66,7 +66,7 @@ class UserController extends Controller
             $this->syncClientMemberships($user, $data['client_ids'] ?? [], $data['role'], $data['status'], $request->user()->id);
         });
 
-        return back()->with('success', 'Utilisateur cree.');
+        return back()->with('success', 'Utilisateur créé.');
     }
 
     public function update(UpdateUserRequest $request, User $user): RedirectResponse

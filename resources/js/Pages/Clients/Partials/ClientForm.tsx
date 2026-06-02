@@ -69,7 +69,7 @@ export default function ClientForm({
                     className="mt-2"
                     value={data.slug}
                     onChange={(event) => setData("slug", event.target.value)}
-                    placeholder="genere depuis le nom si vide"
+                    placeholder="généré depuis le nom si vide"
                 />
                 <InputError message={errors.slug} className="mt-2" />
             </div>

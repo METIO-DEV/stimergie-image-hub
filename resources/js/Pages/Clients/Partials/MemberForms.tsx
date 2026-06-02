@@ -330,7 +330,7 @@ export function MemberRow({
                                 setData("is_default", event.target.checked)
                             }
                         />
-                        Defaut
+                        Défaut
                     </label>
 
                     <div className="flex gap-2">

@@ -119,7 +119,7 @@ export default function ClientsShow({
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead>Utilisateur</TableHead>
-                                            <TableHead>Acces</TableHead>
+                                            <TableHead>Accès</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -154,7 +154,7 @@ export default function ClientsShow({
                                                         {membership.role} ·{" "}
                                                         {membership.status}
                                                         {membership.isDefault
-                                                            ? " · defaut"
+                                                            ? " · défaut"
                                                             : ""}
                                                     </TableCell>
                                                 </TableRow>

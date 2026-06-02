@@ -30,7 +30,7 @@ export default function ResetPassword({
 
     return (
         <GuestLayout>
-            <Head title="Reinitialiser le mot de passe" />
+            <Head title="Réinitialiser le mot de passe" />
 
             <div className="mb-8 text-center">
                 <h1 className="text-[28px] font-bold leading-tight text-[#080506]">
@@ -112,7 +112,7 @@ export default function ResetPassword({
                     className="h-[46px] w-full rounded-lg bg-[#264b57] text-base font-semibold hover:bg-[#203f49] focus-visible:ring-[#264b57]"
                     disabled={processing}
                 >
-                    Reinitialiser
+                    Réinitialiser
                 </Button>
             </form>
         </GuestLayout>

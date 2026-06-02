@@ -23,7 +23,7 @@ class ProjectController extends Controller
             'status' => $data['status'],
         ]);
 
-        return back()->with('success', 'Projet cree.');
+        return back()->with('success', 'Projet créé.');
     }
 
     public function update(UpdateProjectRequest $request, Project $project): RedirectResponse
