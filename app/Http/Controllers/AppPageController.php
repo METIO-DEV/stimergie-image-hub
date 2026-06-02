@@ -331,10 +331,7 @@ class AppPageController extends Controller
             return 'admin';
         }
 
-        return $user->clientMemberships
-            ->contains(fn ($membership) => in_array($membership->role, ['owner', 'manager'], true))
-            ? 'admin_client'
-            : 'user';
+        return $user->platform_role === 'admin_client' ? 'admin_client' : 'user';
     }
 
     /**

@@ -21,7 +21,7 @@ class UserController extends Controller
                 'name' => $this->fullName($data['first_name'], $data['last_name'] ?? ''),
                 'email' => Str::lower($data['email']),
                 'password' => $data['password'] ?: Str::password(40),
-                'platform_role' => $data['role'] === 'admin' ? 'super_admin' : 'user',
+                'platform_role' => $this->platformRole($data['role']),
                 'status' => $data['status'],
             ]);
 
@@ -39,7 +39,7 @@ class UserController extends Controller
             $payload = [
                 'name' => $this->fullName($data['first_name'], $data['last_name'] ?? ''),
                 'email' => Str::lower($data['email']),
-                'platform_role' => $data['role'] === 'admin' ? 'super_admin' : 'user',
+                'platform_role' => $this->platformRole($data['role']),
                 'status' => $data['status'],
             ];
 
@@ -95,5 +95,14 @@ class UserController extends Controller
     private function fullName(string $firstName, string $lastName): string
     {
         return trim("{$firstName} {$lastName}");
+    }
+
+    private function platformRole(string $role): string
+    {
+        return match ($role) {
+            'admin' => 'super_admin',
+            'admin_client' => 'admin_client',
+            default => 'user',
+        };
     }
 }

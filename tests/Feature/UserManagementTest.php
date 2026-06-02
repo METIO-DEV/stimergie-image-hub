@@ -46,6 +46,10 @@ class UserManagementTest extends TestCase
             'role' => 'manager',
             'status' => 'active',
         ]);
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'platform_role' => 'admin_client',
+        ]);
 
         $this->actingAs($admin)->patch(route('users.update', $user), [
             'first_name' => 'Alice',

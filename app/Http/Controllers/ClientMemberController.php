@@ -29,6 +29,8 @@ class ClientMemberController extends Controller
                 ],
             );
 
+            $this->ensureUserCanHoldClientRole($user, $data['role']);
+
             if ($data['is_default'] ?? false) {
                 $this->clearDefaultClient($user);
             }
@@ -58,6 +60,7 @@ class ClientMemberController extends Controller
         $this->ensureMembershipBelongsToClient($client, $membership);
 
         $data = $request->validated();
+        $this->ensureUserCanHoldClientRole($membership->user, $data['role']);
         $this->ensureClientKeepsActiveOwner($client, $membership, $data['role'], $data['status']);
 
         DB::transaction(function () use ($data, $membership): void {
@@ -94,6 +97,17 @@ class ClientMemberController extends Controller
     private function clearDefaultClient(User $user): void
     {
         $user->clientMemberships()->update(['is_default' => false]);
+    }
+
+    private function ensureUserCanHoldClientRole(User $user, string $role): void
+    {
+        if (! in_array($role, ['owner', 'manager'], true) || $user->canHoldClientManagementRole()) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'role' => "Cet utilisateur doit d'abord etre passe en Admin Client avant de recevoir un role Owner ou Manager.",
+        ]);
     }
 
     private function ensureMembershipBelongsToClient(Client $client, ClientMembership $membership): void

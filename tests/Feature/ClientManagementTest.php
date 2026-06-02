@@ -39,16 +39,21 @@ class ClientManagementTest extends TestCase
     public function test_owner_can_manage_client_members(): void
     {
         [$client, $owner] = $this->createClientWithOwner();
-
-        $this->actingAs($owner)->post(route('clients.members.store', $client), [
+        $member = User::factory()->create([
             'name' => 'Membre Client',
             'email' => 'membre@example.test',
+            'platform_role' => 'admin_client',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($owner)->post(route('clients.members.store', $client), [
+            'name' => $member->name,
+            'email' => $member->email,
             'role' => 'manager',
             'status' => 'active',
             'is_default' => true,
         ])->assertRedirect();
 
-        $member = User::query()->where('email', 'membre@example.test')->firstOrFail();
         $membership = ClientMembership::query()
             ->where('client_id', $client->id)
             ->where('user_id', $member->id)
@@ -78,6 +83,33 @@ class ClientManagementTest extends TestCase
         ]);
     }
 
+    public function test_standard_user_cannot_be_assigned_owner_or_manager_role(): void
+    {
+        [$client, $owner] = $this->createClientWithOwner();
+        $standardUser = User::factory()->create([
+            'name' => 'Utilisateur Standard',
+            'email' => 'standard@example.test',
+            'platform_role' => 'user',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($owner)->post(route('clients.members.store', $client), [
+            'name' => $standardUser->name,
+            'email' => $standardUser->email,
+            'role' => 'manager',
+            'status' => 'active',
+            'is_default' => false,
+        ])->assertSessionHasErrors([
+            'role' => "Cet utilisateur doit d'abord etre passe en Admin Client avant de recevoir un role Owner ou Manager.",
+        ]);
+
+        $this->assertDatabaseMissing('client_memberships', [
+            'client_id' => $client->id,
+            'user_id' => $standardUser->id,
+            'role' => 'manager',
+        ]);
+    }
+
     public function test_client_keeps_at_least_one_active_owner(): void
     {
         [$client, $owner, $membership] = $this->createClientWithOwner();
@@ -98,7 +130,10 @@ class ClientManagementTest extends TestCase
      */
     private function createClientWithOwner(): array
     {
-        $owner = User::factory()->create(['status' => 'active']);
+        $owner = User::factory()->create([
+            'platform_role' => 'admin_client',
+            'status' => 'active',
+        ]);
         $client = Client::create([
             'name' => 'Client Test',
             'slug' => 'client-test',

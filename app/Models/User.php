@@ -46,6 +46,16 @@ class User extends Authenticatable
         return $this->platform_role === 'super_admin';
     }
 
+    public function isClientAdmin(): bool
+    {
+        return $this->platform_role === 'admin_client';
+    }
+
+    public function canHoldClientManagementRole(): bool
+    {
+        return $this->isSuperAdmin() || $this->isClientAdmin();
+    }
+
     public function hasActiveClientMembership(Client $client): bool
     {
         return $this->clientMemberships()
