@@ -48,8 +48,28 @@ class ImageManagementTest extends TestCase
         $image = Image::query()->where('title', 'Matcha Latte')->firstOrFail();
 
         Storage::disk('scaleway')->assertExists($image->object_key_original);
+        Storage::disk('scaleway')->assertExists($image->object_key_web);
+        Storage::disk('scaleway')->assertExists($image->object_key_thumb);
+        Storage::disk('scaleway')->assertExists($image->object_key_hd);
+        $this->assertNotSame($image->object_key_original, $image->object_key_web);
+        $this->assertNotSame($image->object_key_web, $image->object_key_thumb);
         $this->assertSame('scaleway', $image->storage_provider);
         $this->assertSame('landscape', $image->orientation);
+        $this->assertDatabaseHas('image_variants', [
+            'image_id' => $image->id,
+            'kind' => 'web',
+            'object_key' => $image->object_key_web,
+        ]);
+        $this->assertDatabaseHas('image_variants', [
+            'image_id' => $image->id,
+            'kind' => 'thumb',
+            'object_key' => $image->object_key_thumb,
+        ]);
+        $this->assertDatabaseHas('image_variants', [
+            'image_id' => $image->id,
+            'kind' => 'hd',
+            'object_key' => $image->object_key_hd,
+        ]);
         $this->assertDatabaseHas('tags', ['slug' => 'matcha']);
         $this->assertDatabaseHas('tags', ['slug' => 'boisson']);
 

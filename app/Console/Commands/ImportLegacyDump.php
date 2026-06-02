@@ -392,6 +392,11 @@ class ImportLegacyDump extends Command
                 continue;
             }
 
+            $downloadObjectKey = $this->legacyDownloadObjectKey($row['download_url'] ?? null);
+            $downloadUrl = $downloadObjectKey
+                ? Storage::disk('scaleway')->url($downloadObjectKey)
+                : null;
+
             DownloadJob::updateOrCreate(
                 ['legacy_id' => $row['id']],
                 [
@@ -401,9 +406,9 @@ class ImportLegacyDump extends Command
                     'status' => $row['status'],
                     'is_hd' => (bool) $row['is_hd'],
                     'image_count' => 1,
-                    'storage_provider' => null,
-                    'object_key' => null,
-                    'download_url' => $row['download_url'],
+                    'storage_provider' => $downloadObjectKey ? 'scaleway' : null,
+                    'object_key' => $downloadObjectKey,
+                    'download_url' => $downloadUrl,
                     'download_url_expires_at' => $this->date($row['expires_at']),
                     'processed_at' => $this->date($row['processed_at'] ?? null),
                     'error_details' => $row['error_details'] ?? null,
@@ -416,6 +421,26 @@ class ImportLegacyDump extends Command
                 ],
             );
         }
+    }
+
+    private function legacyDownloadObjectKey(?string $url): ?string
+    {
+        $path = parse_url((string) $url, PHP_URL_PATH);
+
+        if (! is_string($path) || trim($path) === '') {
+            return null;
+        }
+
+        $path = trim(rawurldecode($path), '/');
+        $offset = strpos("/{$path}", '/zip-downloads/');
+
+        if ($offset === false) {
+            return null;
+        }
+
+        $objectKey = substr("/{$path}", $offset + 1);
+
+        return $objectKey !== '' ? $objectKey : null;
     }
 
     private function uploadAssets(): void

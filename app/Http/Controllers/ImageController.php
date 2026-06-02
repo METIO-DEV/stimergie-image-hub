@@ -8,15 +8,23 @@ use App\Http\Requests\UpdateImageRequest;
 use App\Models\Image;
 use App\Models\Project;
 use App\Models\Tag;
+use App\Support\ImageUrlResolver;
+use App\Support\ImageVariantGenerator;
+use App\Support\ProjectAccess;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\UploadedFile;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use RuntimeException;
 
 class ImageController extends Controller
 {
+    public function __construct(
+        private readonly ImageVariantGenerator $imageVariants,
+        private readonly ImageUrlResolver $imageUrls,
+        private readonly ProjectAccess $projectAccess,
+    ) {}
+
     public function bulkProject(BulkAssignImagesProjectRequest $request): RedirectResponse
     {
         $data = $request->validated();
@@ -39,7 +47,7 @@ class ImageController extends Controller
         $project = Project::findOrFail($data['project_id']);
 
         DB::transaction(function () use ($data, $project, $request): void {
-            $fileData = $this->storeFile($request->file('file'));
+            $fileData = $this->imageVariants->store($request->file('file'));
 
             $image = Image::create([
                 'client_id' => $project->client_id,
@@ -54,16 +62,17 @@ class ImageController extends Controller
                 'size_bytes' => $fileData['size_bytes'],
                 'checksum' => $fileData['checksum'],
                 'storage_provider' => $fileData['disk'],
-                'object_key_original' => $fileData['path'],
-                'object_key_web' => $fileData['path'],
-                'object_key_thumb' => $fileData['path'],
-                'object_key_hd' => $fileData['path'],
+                'object_key_original' => $fileData['original'],
+                'object_key_web' => $fileData['web'],
+                'object_key_thumb' => $fileData['thumb'],
+                'object_key_hd' => $fileData['hd'],
                 'legacy_url' => $fileData['url'],
                 'legacy_thumbnail_url' => $fileData['url'],
                 'status' => $data['status'],
                 'processed_at' => now(),
             ]);
 
+            $this->imageVariants->syncImageVariants($image, $fileData['variants']);
             $this->syncTags($image, $data['tags'] ?? '');
         });
 
@@ -86,7 +95,7 @@ class ImageController extends Controller
             ];
 
             if ($request->hasFile('file')) {
-                $fileData = $this->storeFile($request->file('file'));
+                $fileData = $this->imageVariants->store($request->file('file'));
                 $payload = [
                     ...$payload,
                     'orientation' => $data['orientation'] ?: $fileData['orientation'],
@@ -96,10 +105,10 @@ class ImageController extends Controller
                     'size_bytes' => $fileData['size_bytes'],
                     'checksum' => $fileData['checksum'],
                     'storage_provider' => $fileData['disk'],
-                    'object_key_original' => $fileData['path'],
-                    'object_key_web' => $fileData['path'],
-                    'object_key_thumb' => $fileData['path'],
-                    'object_key_hd' => $fileData['path'],
+                    'object_key_original' => $fileData['original'],
+                    'object_key_web' => $fileData['web'],
+                    'object_key_thumb' => $fileData['thumb'],
+                    'object_key_hd' => $fileData['hd'],
                     'legacy_url' => $fileData['url'],
                     'legacy_thumbnail_url' => $fileData['url'],
                     'processed_at' => now(),
@@ -108,54 +117,31 @@ class ImageController extends Controller
             }
 
             $image->update($payload);
+            if (isset($fileData)) {
+                $this->imageVariants->syncImageVariants($image, $fileData['variants']);
+            }
             $this->syncTags($image, $data['tags'] ?? '');
         });
 
         return back()->with('success', 'Image mise a jour.');
     }
 
-    /**
-     * @return array{path: string, disk: string, url: string, width: int|null, height: int|null, orientation: string|null, mime_type: string|null, size_bytes: int|null, checksum: string}
-     */
-    private function storeFile(UploadedFile $file): array
+    public function download(Request $request, Image $image)
     {
-        $disk = (string) config('filesystems.image_disk', 'scaleway');
-        $path = Storage::disk($disk)->putFile('images/originals', $file, [
-            'visibility' => 'public',
-            'CacheControl' => 'public, max-age=31536000, immutable',
-        ]);
+        abort_unless($this->projectAccess->userCanViewImage($request->user(), $image), 403);
 
-        if (! is_string($path)) {
-            throw new RuntimeException('Image upload failed.');
-        }
-        $size = @getimagesize($file->getRealPath());
-        $width = $size ? $size[0] : null;
-        $height = $size ? $size[1] : null;
+        $variant = (string) $request->query('variant', 'hd');
+        abort_unless(in_array($variant, ['web', 'hd'], true), 404);
 
-        return [
-            'path' => $path,
-            'disk' => $disk,
-            'url' => Storage::disk($disk)->url($path),
-            'width' => $width,
-            'height' => $height,
-            'orientation' => $this->orientation($width, $height),
-            'mime_type' => $file->getMimeType(),
-            'size_bytes' => $file->getSize(),
-            'checksum' => hash_file('sha256', $file->getRealPath()),
-        ];
-    }
+        $source = $this->imageUrls->downloadSource($image, $variant);
+        abort_unless($source['objectKey'], 404);
+        abort_if(str_contains($source['objectKey'], 'legacy/'), 404);
+        abort_unless(Storage::disk($source['disk'])->exists($source['objectKey']), 404);
 
-    private function orientation(?int $width, ?int $height): ?string
-    {
-        if (! $width || ! $height) {
-            return null;
-        }
-
-        if ($width === $height) {
-            return 'square';
-        }
-
-        return $width > $height ? 'landscape' : 'portrait';
+        return Storage::disk($source['disk'])->download(
+            $source['objectKey'],
+            $this->downloadFilename($image, $source['objectKey'], $variant),
+        );
     }
 
     private function syncTags(Image $image, ?string $tags): void
@@ -172,5 +158,13 @@ class ImageController extends Controller
             });
 
         $image->tags()->sync($tagIds);
+    }
+
+    private function downloadFilename(Image $image, string $objectKey, string $variant): string
+    {
+        $extension = pathinfo($objectKey, PATHINFO_EXTENSION) ?: 'jpg';
+        $name = Str::slug($image->title) ?: "image-{$image->id}";
+
+        return "{$name}-{$variant}.{$extension}";
     }
 }
