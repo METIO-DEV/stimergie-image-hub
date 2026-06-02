@@ -148,7 +148,10 @@ class AppPagesTest extends TestCase
 
     public function test_client_manager_receives_manage_actions_for_owned_scope(): void
     {
-        $manager = User::factory()->create(['status' => 'active']);
+        $manager = User::factory()->create([
+            'platform_role' => 'admin_client',
+            'status' => 'active',
+        ]);
         $client = Client::create([
             'name' => 'Client Manager',
             'slug' => 'client-manager',

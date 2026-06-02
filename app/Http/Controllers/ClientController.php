@@ -20,9 +20,13 @@ class ClientController extends Controller
         private readonly ClientLogoUrlResolver $clientLogos,
     ) {}
 
-    public function index(Request $request): Response
+    public function index(Request $request): Response|RedirectResponse
     {
-        Gate::authorize('viewAny', Client::class);
+        if (! Gate::allows('viewAny', Client::class)) {
+            return redirect()
+                ->route('gallery.index')
+                ->with('warning', "La gestion des clients est reservee aux Admin Client owner/manager.");
+        }
 
         $user = $request->user();
 
@@ -33,7 +37,8 @@ class ClientController extends Controller
         if (! $user->isSuperAdmin()) {
             $query->whereHas('memberships', fn ($membership) => $membership
                 ->where('user_id', $user->id)
-                ->where('status', 'active'));
+                ->where('status', 'active')
+                ->whereIn('role', ['owner', 'manager']));
         }
 
         return Inertia::render('Clients/Index', [

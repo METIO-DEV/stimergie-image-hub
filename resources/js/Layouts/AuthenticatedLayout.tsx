@@ -40,6 +40,7 @@ export default function Authenticated({
     children,
 }: PropsWithChildren<{ header?: ReactNode }>) {
     const { abilities, user } = usePage().props.auth;
+    const { flash } = usePage().props;
     const [mobileOpen, setMobileOpen] = useState(false);
     const [contactOpen, setContactOpen] = useState(false);
 
@@ -354,6 +355,26 @@ export default function Authenticated({
             </header>
 
             <main className="flex-1 bg-background">
+                {(flash.warning || flash.error || flash.success) && (
+                    <div className="container pt-6">
+                        <div
+                            className={cn(
+                                "rounded-md border px-4 py-3 text-sm font-medium",
+                                flash.error &&
+                                    "border-destructive/30 bg-destructive/10 text-destructive",
+                                flash.warning &&
+                                    !flash.error &&
+                                    "border-amber-300 bg-amber-50 text-amber-900",
+                                flash.success &&
+                                    !flash.error &&
+                                    !flash.warning &&
+                                    "border-emerald-300 bg-emerald-50 text-emerald-900",
+                            )}
+                        >
+                            {flash.error || flash.warning || flash.success}
+                        </div>
+                    </div>
+                )}
                 {header && <div className="container pt-9">{header}</div>}
                 {children}
             </main>

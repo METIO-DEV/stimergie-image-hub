@@ -43,7 +43,10 @@ class BulkImageProjectAssignmentTest extends TestCase
 
     public function test_client_manager_must_manage_source_and_target_clients(): void
     {
-        $manager = User::factory()->create(['status' => 'active']);
+        $manager = User::factory()->create([
+            'platform_role' => 'admin_client',
+            'status' => 'active',
+        ]);
         [$sourceClient, $sourceProject] = $this->clientAndProject('Source');
         [, $targetProject] = $this->clientAndProject('Target');
         $image = Image::create([

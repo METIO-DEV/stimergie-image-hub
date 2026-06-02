@@ -9,7 +9,11 @@ class ClientPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->status === 'active';
+        return $user->status === 'active'
+            && (
+                $user->isSuperAdmin()
+                || ($user->isClientAdmin() && $user->hasAnyClientRole(['owner', 'manager']))
+            );
     }
 
     public function view(User $user, Client $client): bool

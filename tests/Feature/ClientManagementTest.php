@@ -125,6 +125,71 @@ class ClientManagementTest extends TestCase
         ]);
     }
 
+    public function test_standard_user_is_redirected_away_from_client_management(): void
+    {
+        $user = User::factory()->create([
+            'platform_role' => 'user',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('clients.index'))
+            ->assertRedirect(route('gallery.index'))
+            ->assertSessionHas('warning', "La gestion des clients est reservee aux Admin Client owner/manager.");
+    }
+
+    public function test_client_management_lists_only_owned_or_managed_clients_for_admin_client(): void
+    {
+        $adminClient = User::factory()->create([
+            'platform_role' => 'admin_client',
+            'status' => 'active',
+        ]);
+        $ownedClient = Client::create([
+            'name' => 'Entreprise Owner',
+            'slug' => 'entreprise-owner',
+            'status' => 'active',
+        ]);
+        $managedClient = Client::create([
+            'name' => 'Entreprise Manager',
+            'slug' => 'entreprise-manager',
+            'status' => 'active',
+        ]);
+        $viewerClient = Client::create([
+            'name' => 'Entreprise Viewer',
+            'slug' => 'entreprise-viewer',
+            'status' => 'active',
+        ]);
+
+        ClientMembership::create([
+            'client_id' => $ownedClient->id,
+            'user_id' => $adminClient->id,
+            'role' => 'owner',
+            'status' => 'active',
+        ]);
+        ClientMembership::create([
+            'client_id' => $managedClient->id,
+            'user_id' => $adminClient->id,
+            'role' => 'manager',
+            'status' => 'active',
+        ]);
+        ClientMembership::create([
+            'client_id' => $viewerClient->id,
+            'user_id' => $adminClient->id,
+            'role' => 'viewer',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($adminClient)
+            ->get(route('clients.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Clients/Index')
+                ->has('clients', 2)
+                ->where('clients.0.id', $managedClient->id)
+                ->where('clients.1.id', $ownedClient->id)
+                ->etc());
+    }
+
     /**
      * @return array{Client, User, ClientMembership}
      */

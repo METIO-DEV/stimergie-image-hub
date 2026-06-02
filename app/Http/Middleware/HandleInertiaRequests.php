@@ -31,7 +31,8 @@ class HandleInertiaRequests extends Middleware
     {
         $user = $request->user();
         $canManageClientContent = $user
-            ? $user->isSuperAdmin() || $user->hasAnyClientRole(['owner', 'manager'])
+            ? $user->isSuperAdmin()
+                || ($user->isClientAdmin() && $user->hasAnyClientRole(['owner', 'manager']))
             : false;
 
         return [
@@ -47,6 +48,11 @@ class HandleInertiaRequests extends Middleware
                     'canViewAccessPeriods' => $user?->isSuperAdmin() ?? false,
                     'canManageAccessPeriods' => false,
                 ],
+            ],
+            'flash' => [
+                'success' => fn () => $request->session()->get('success'),
+                'warning' => fn () => $request->session()->get('warning'),
+                'error' => fn () => $request->session()->get('error'),
             ],
         ];
     }

@@ -54,7 +54,10 @@ class ProjectManagementTest extends TestCase
 
     public function test_client_manager_can_only_create_project_for_accessible_client(): void
     {
-        $manager = User::factory()->create(['status' => 'active']);
+        $manager = User::factory()->create([
+            'platform_role' => 'admin_client',
+            'status' => 'active',
+        ]);
         $managedClient = Client::create([
             'name' => 'Client Gere',
             'slug' => 'client-gere',

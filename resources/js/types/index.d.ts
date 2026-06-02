@@ -24,4 +24,9 @@ export type PageProps<
         user: User;
         abilities: Abilities;
     };
+    flash: {
+        success?: string | null;
+        warning?: string | null;
+        error?: string | null;
+    };
 };

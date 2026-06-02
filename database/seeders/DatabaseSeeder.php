@@ -31,7 +31,7 @@ class DatabaseSeeder extends Seeder
             'name' => 'Responsable client',
             'email' => 'client@stimergie.test',
             'password' => Hash::make('password'),
-            'platform_role' => 'user',
+            'platform_role' => 'admin_client',
             'status' => 'active',
         ]);
 
