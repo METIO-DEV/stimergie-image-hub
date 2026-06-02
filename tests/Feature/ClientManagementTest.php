@@ -236,6 +236,42 @@ class ClientManagementTest extends TestCase
         Storage::disk('scaleway')->assertExists($client->logo_object_key);
     }
 
+    public function test_admin_client_can_search_existing_users_for_membership_form(): void
+    {
+        [$client, $owner] = $this->createClientWithOwner();
+        $matchingUser = User::factory()->create([
+            'name' => 'Alice Martin',
+            'email' => 'alice@example.test',
+            'status' => 'active',
+        ]);
+        User::factory()->create([
+            'name' => 'Bob Martin',
+            'email' => 'bob@example.test',
+            'status' => 'paused',
+        ]);
+
+        $this->actingAs($owner)
+            ->getJson(route('users.search', ['q' => 'Ali']))
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonFragment([
+                'id' => $matchingUser->id,
+                'name' => 'Alice Martin',
+                'email' => 'alice@example.test',
+                'platformRole' => 'user',
+                'status' => 'active',
+            ]);
+
+        $standardUser = User::factory()->create([
+            'platform_role' => 'user',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($standardUser)
+            ->getJson(route('users.search', ['q' => 'Ali']))
+            ->assertForbidden();
+    }
+
     /**
      * @return array{Client, User, ClientMembership}
      */

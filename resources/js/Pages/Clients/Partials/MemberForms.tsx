@@ -11,7 +11,7 @@ import {
 } from "@/Components/ui/select";
 import { TableCell, TableRow } from "@/Components/ui/table";
 import { router, useForm } from "@inertiajs/react";
-import { FormEventHandler } from "react";
+import { FormEventHandler, useEffect, useState } from "react";
 
 export type Option = {
     value: string;
@@ -39,6 +39,14 @@ type MemberFormData = {
     is_default: boolean;
 };
 
+type UserSuggestion = {
+    id: number;
+    name: string;
+    email: string;
+    platformRole: string;
+    status: string;
+};
+
 export function AddMemberForm({
     clientId,
     roleOptions,
@@ -56,26 +64,95 @@ export function AddMemberForm({
             status: "active",
             is_default: false,
         });
+    const [search, setSearch] = useState("");
+    const [suggestions, setSuggestions] = useState<UserSuggestion[]>([]);
+    const [searching, setSearching] = useState(false);
+
+    useEffect(() => {
+        const query = search.trim();
+
+        if (query.length < 2) {
+            setSuggestions([]);
+            return;
+        }
+
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => {
+            setSearching(true);
+            fetch(route("users.search", { q: query }), {
+                signal: controller.signal,
+            })
+                .then((response) => (response.ok ? response.json() : []))
+                .then((users: UserSuggestion[]) => setSuggestions(users))
+                .catch(() => setSuggestions([]))
+                .finally(() => setSearching(false));
+        }, 250);
+
+        return () => {
+            window.clearTimeout(timeout);
+            controller.abort();
+        };
+    }, [search]);
 
     const submit: FormEventHandler = (event) => {
         event.preventDefault();
         post(route("clients.members.store", clientId), {
             preserveScroll: true,
-            onSuccess: () => reset(),
+            onSuccess: () => {
+                reset();
+                setSearch("");
+                setSuggestions([]);
+            },
         });
+    };
+
+    const selectUser = (user: UserSuggestion) => {
+        setSearch(user.name);
+        setData("name", user.name);
+        setData("email", user.email);
+        setSuggestions([]);
     };
 
     return (
         <form onSubmit={submit} className="mt-6 grid gap-4 lg:grid-cols-6">
-            <div className="lg:col-span-2">
-                <Label htmlFor="member-name">Nom</Label>
+            <div className="relative lg:col-span-2">
+                <Label htmlFor="member-search">Utilisateur</Label>
                 <Input
-                    id="member-name"
+                    id="member-search"
                     className="mt-2"
-                    value={data.name}
-                    onChange={(event) => setData("name", event.target.value)}
+                    value={search}
+                    onChange={(event) => {
+                        setSearch(event.target.value);
+                        setData("name", "");
+                        setData("email", "");
+                    }}
+                    placeholder="Tapez les premieres lettres du nom"
                     required
                 />
+                {suggestions.length > 0 && (
+                    <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-md border bg-background shadow-lg">
+                        {suggestions.map((user) => (
+                            <button
+                                key={user.id}
+                                type="button"
+                                className="block w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                                onClick={() => selectUser(user)}
+                            >
+                                <span className="block font-medium">
+                                    {user.name}
+                                </span>
+                                <span className="text-muted-foreground">
+                                    {user.email}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                )}
+                {searching && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                        Recherche...
+                    </p>
+                )}
                 <InputError message={errors.name} className="mt-2" />
             </div>
 
@@ -86,7 +163,7 @@ export function AddMemberForm({
                     type="email"
                     className="mt-2"
                     value={data.email}
-                    onChange={(event) => setData("email", event.target.value)}
+                    readOnly
                     required
                 />
                 <InputError message={errors.email} className="mt-2" />
