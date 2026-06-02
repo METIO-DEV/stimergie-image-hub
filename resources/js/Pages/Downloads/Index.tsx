@@ -52,8 +52,8 @@ export default function DownloadsIndex({
                                 Vos téléchargements
                             </h1>
                             <p className="mt-2 text-muted-foreground">
-                                Retrouvez ici toutes vos demandes de
-                                téléchargements.
+                                Retrouvez l'état de vos archives demandées et
+                                récupérez les fichiers prêts avant expiration.
                             </p>
                         </div>
                         <Button

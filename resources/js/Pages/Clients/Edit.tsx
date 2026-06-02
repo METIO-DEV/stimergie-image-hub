@@ -38,11 +38,14 @@ export default function ClientsEdit({ client, statuses }: Props) {
             header={
                 <div>
                     <p className="text-sm font-medium text-muted-foreground">
-                        Clients
+                        Entreprises
                     </p>
                     <h1 className="mt-1 text-2xl font-semibold tracking-tight">
                         Modifier {client.name}
                     </h1>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                        Mettez à jour les informations et le logo de cette entreprise.
+                    </p>
                 </div>
             }
         >
@@ -53,7 +56,7 @@ export default function ClientsEdit({ client, statuses }: Props) {
                     <Card className="border-border/70">
                         <CardHeader>
                             <CardTitle className="text-base">
-                                Parametres client
+                                Paramètres entreprise
                             </CardTitle>
                         </CardHeader>
                         <CardContent>

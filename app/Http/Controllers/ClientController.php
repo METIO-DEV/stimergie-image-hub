@@ -26,7 +26,7 @@ class ClientController extends Controller
         if (! Gate::allows('viewAny', Client::class)) {
             return redirect()
                 ->route('gallery.index')
-                ->with('warning', "La gestion des clients est reservee aux Admin Client owner/manager.");
+                ->with('warning', "La gestion des entreprises est reservee aux Admin Client owner/manager.");
         }
 
         $user = $request->user();
@@ -99,7 +99,7 @@ class ClientController extends Controller
 
         return redirect()
             ->route('clients.show', $client)
-            ->with('success', 'Client cree.');
+            ->with('success', 'Entreprise creee.');
     }
 
     public function show(Request $request, Client $client): Response
@@ -165,7 +165,7 @@ class ClientController extends Controller
 
         return redirect()
             ->route('clients.show', $client)
-            ->with('success', 'Client mis a jour.');
+            ->with('success', 'Entreprise mise a jour.');
     }
 
     /**

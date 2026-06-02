@@ -59,11 +59,14 @@ export default function ClientsShow({
                 <div className="flex items-center justify-between gap-4">
                     <div>
                         <p className="text-sm font-medium text-muted-foreground">
-                            Client
+                            Entreprise
                         </p>
                         <h1 className="mt-1 text-2xl font-semibold tracking-tight">
                             {client.name}
                         </h1>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                            Retrouvez les membres et projets associés à cette entreprise.
+                        </p>
                     </div>
                     {canUpdateClient && (
                         <Button asChild>
@@ -90,11 +93,11 @@ export default function ClientsShow({
                         <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
                             <div>
                                 <CardTitle className="text-lg">
-                                    Utilisateurs du client
+                                    Utilisateurs de l'entreprise
                                 </CardTitle>
                                 <p className="mt-1 text-sm text-muted-foreground">
-                                    Le rattachement client/utilisateur est
-                                    centralise ici via un role de membership.
+                                    Le rattachement entreprise/utilisateur est
+                                    centralisé ici via un rôle de membership.
                                 </p>
                             </div>
                             {canManageMembers && (

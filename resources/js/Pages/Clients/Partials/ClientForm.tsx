@@ -51,7 +51,7 @@ export default function ClientForm({
     return (
         <form onSubmit={onSubmit} className="space-y-6">
             <div>
-                <Label htmlFor="name">Nom du client</Label>
+                <Label htmlFor="name">Nom de l'entreprise</Label>
                 <Input
                     id="name"
                     className="mt-2"

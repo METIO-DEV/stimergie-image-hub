@@ -18,12 +18,16 @@ export default function Dashboard({ stats }: { stats: DashboardStats }) {
                 <h1 className="text-4xl font-bold tracking-normal text-foreground">
                     Tableau de bord administrateur
                 </h1>
+                <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
+                    Suivez les volumes globaux et accédez rapidement aux
+                    espaces d'administration de la plateforme.
+                </p>
 
                 <div className="mt-10 grid gap-7 lg:grid-cols-3">
                     <MetricCard
-                        label="Clients"
+                        label="Entreprises"
                         value={stats.clients}
-                        description="Nombre total de clients"
+                        description="Nombre total d'entreprises"
                         icon={Users}
                     />
                     <MetricCard
@@ -46,14 +50,14 @@ export default function Dashboard({ stats }: { stats: DashboardStats }) {
 
                 <div className="mt-10 grid gap-7 lg:grid-cols-3">
                     <FeatureCard
-                        title="Clients"
-                        subtitle="Gérer les clients et leurs informations"
-                        description="Ajouter, modifier ou supprimer des clients"
+                        title="Entreprises"
+                        subtitle="Gérer les entreprises et leurs informations"
+                        description="Ajouter, modifier ou supprimer des entreprises"
                     />
                     <FeatureCard
                         title="Projets"
-                        subtitle="Gérer les projets de tous les clients"
-                        description="Créer et gérer des projets pour chaque client"
+                        subtitle="Gérer les projets de toutes les entreprises"
+                        description="Créer et gérer des projets pour chaque entreprise"
                     />
                     <FeatureCard
                         title="Banque d'images"

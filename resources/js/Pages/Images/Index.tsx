@@ -95,6 +95,7 @@ export default function ImagesIndex({
 
             <SectionHeader
                 title="Images"
+                description="Gérez les images, leurs métadonnées et leur rattachement aux projets accessibles."
                 action={
                     <div className="flex items-center gap-4">
                         <ViewToggle
@@ -124,7 +125,7 @@ export default function ImagesIndex({
                             setClientId(value);
                             setCurrentPage(1);
                         }}
-                        allLabel="Tous les clients"
+                        allLabel="Toutes les entreprises"
                         options={filters.clients}
                         className="w-full sm:w-64"
                     />
@@ -239,7 +240,7 @@ function ImagesTable({
                     <TableRow>
                         <TableHead>Image</TableHead>
                         <TableHead>Titre</TableHead>
-                        <TableHead>Client</TableHead>
+                        <TableHead>Entreprise</TableHead>
                         <TableHead>Dimensions</TableHead>
                         <TableHead>Orientation</TableHead>
                         <TableHead>Tags</TableHead>

@@ -558,9 +558,9 @@ export function ClientInfoSheet({
             >
                 <div className="p-6">
                     <SheetHeader className="text-left">
-                        <SheetTitle>Informations client</SheetTitle>
+                        <SheetTitle>Informations entreprise</SheetTitle>
                         <SheetDescription>
-                            Données associées au client de cette image.
+                            Données associées à l'entreprise de cette image.
                         </SheetDescription>
                     </SheetHeader>
 
@@ -623,8 +623,8 @@ export function ClientInfoSheet({
                                 </div>
                                 <p className="mt-2 text-sm leading-6">
                                     Ce panneau remplace la navigation directe
-                                    vers un filtre client. Les actions métier
-                                    restent à brancher sur la fiche client
+                                    vers un filtre entreprise. Les actions métier
+                                    restent à brancher sur la fiche entreprise
                                     Laravel complète.
                                 </p>
                             </div>
@@ -849,19 +849,28 @@ export function LegacyUserCard({
 export function SectionHeader({
     icon,
     title,
+    description,
     action,
 }: {
     icon?: ReactNode;
     title: string;
+    description?: string;
     action?: ReactNode;
 }) {
     return (
         <div className="border-b border-border bg-muted/30">
             <div className="mx-auto max-w-7xl px-6 py-16">
                 <div className="flex items-center justify-between gap-6">
-                    <div className="flex items-center gap-3">
-                        {icon}
-                        <h1 className="text-3xl font-bold">{title}</h1>
+                    <div>
+                        <div className="flex items-center gap-3">
+                            {icon}
+                            <h1 className="text-3xl font-bold">{title}</h1>
+                        </div>
+                        {description && (
+                            <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
+                                {description}
+                            </p>
+                        )}
                     </div>
                     {action}
                 </div>

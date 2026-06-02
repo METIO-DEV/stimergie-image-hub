@@ -230,7 +230,7 @@ export default function GalleryIndex({
                                         setProjectId("");
                                         setCurrentPage(1);
                                     }}
-                                    allLabel="Tous les clients"
+                                    allLabel="Toutes les entreprises"
                                     options={filters.clients}
                                     className="w-full md:w-64"
                                 />

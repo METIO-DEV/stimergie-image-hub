@@ -124,7 +124,7 @@ export default function Authenticated({
         },
         {
             href: route("clients.index"),
-            label: "Gestion des clients",
+            label: "Gestion des entreprises",
             icon: Settings,
             active: route().current("clients.*"),
         },
@@ -149,7 +149,7 @@ export default function Authenticated({
                   return abilities.canManageClientContent;
               }
 
-              if (item.label === "Gestion des clients") {
+              if (item.label === "Gestion des entreprises") {
                   return abilities.canViewClientManagement;
               }
 

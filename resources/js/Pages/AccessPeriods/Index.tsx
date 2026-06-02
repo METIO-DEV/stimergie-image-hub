@@ -57,7 +57,7 @@ export default function AccessPeriodsIndex({
                                 </h1>
                                 <p className="text-muted-foreground">
                                     Gérez les périodes d'accès aux projets pour
-                                    les clients
+                                    les entreprises
                                 </p>
                             </div>
                             {canManageAccessPeriods && (
@@ -89,7 +89,7 @@ export default function AccessPeriodsIndex({
                                 icon={<Clock className="h-4 w-4" />}
                             />
                             <MetricCard
-                                title="Clients concernés"
+                                title="Entreprises concernées"
                                 value={
                                     new Set(
                                         filteredPeriods.map(
@@ -107,7 +107,7 @@ export default function AccessPeriodsIndex({
                                 onChange={(event) =>
                                     setSearch(event.target.value)
                                 }
-                                placeholder="Rechercher par client, projet ou date..."
+                                placeholder="Rechercher par entreprise, projet ou date..."
                             />
                             <select
                                 value={status}
@@ -197,7 +197,7 @@ function AccessPeriodCard({ period }: { period: AccessPeriod }) {
                             {period.projectName || "Projet sans nom"}
                         </CardTitle>
                         <p className="text-sm text-muted-foreground">
-                            Client: {period.clientName || "Client inconnu"}
+                            Entreprise: {period.clientName || "Entreprise inconnue"}
                         </p>
                     </div>
                     <div className="flex items-center space-x-2">

@@ -86,6 +86,7 @@ export default function ProjectsIndex({
 
             <SectionHeader
                 title="Projets"
+                description="Pilotez les projets associés à vos entreprises et suivez le volume d'images disponible."
                 action={
                     <div className="flex items-center gap-4">
                         <ViewToggle
@@ -112,7 +113,7 @@ export default function ProjectsIndex({
                     <LegacySelect
                         value={clientFilter}
                         onChange={setClientFilter}
-                        allLabel="Tous les clients"
+                        allLabel="Toutes les entreprises"
                         options={filters.clients}
                     />
                     <Input

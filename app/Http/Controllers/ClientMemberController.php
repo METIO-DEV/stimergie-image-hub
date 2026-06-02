@@ -49,7 +49,7 @@ class ClientMemberController extends Controller
             );
         });
 
-        return back()->with('success', 'Membre ajoute au client.');
+        return back()->with('success', "Membre ajoute a l'entreprise.");
     }
 
     public function update(
@@ -86,7 +86,7 @@ class ClientMemberController extends Controller
 
         $membership->delete();
 
-        return back()->with('success', 'Membre retire du client.');
+        return back()->with('success', "Membre retire de l'entreprise.");
     }
 
     private function authorizeMemberManagement(Client $client): void
@@ -131,7 +131,7 @@ class ClientMemberController extends Controller
 
         if ($activeOwners === 0 && ! $membershipRemainsActiveOwner) {
             throw ValidationException::withMessages([
-                'role' => 'Un client doit conserver au moins un owner actif.',
+                'role' => 'Une entreprise doit conserver au moins un owner actif.',
             ]);
         }
     }

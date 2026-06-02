@@ -33,22 +33,25 @@ export default function ClientsCreate({ statuses }: Props) {
             header={
                 <div>
                     <p className="text-sm font-medium text-muted-foreground">
-                        Clients
+                        Entreprises
                     </p>
                     <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-                        Nouveau client
+                        Nouvelle entreprise
                     </h1>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                        Créez une entreprise et définissez ses informations principales.
+                    </p>
                 </div>
             }
         >
-            <Head title="Nouveau client" />
+            <Head title="Nouvelle entreprise" />
 
             <div className="py-8">
                 <div className="container max-w-3xl">
                     <Card className="border-border/70">
                         <CardHeader>
                             <CardTitle className="text-base">
-                                Informations client
+                                Informations entreprise
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -57,7 +60,7 @@ export default function ClientsCreate({ statuses }: Props) {
                                 errors={errors}
                                 processing={processing}
                                 statuses={statuses}
-                                submitLabel="Creer le client"
+                                submitLabel="Créer l'entreprise"
                                 onSubmit={submit}
                                 setData={setData}
                             />

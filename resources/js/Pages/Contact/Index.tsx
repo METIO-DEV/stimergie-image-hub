@@ -43,6 +43,10 @@ export default function ContactIndex() {
                             Formulaire de contact
                         </h1>
                     </div>
+                    <p className="mb-6 text-sm leading-6 text-foreground/80">
+                        Envoyez une demande à l'équipe Stimergie depuis votre
+                        compte connecté.
+                    </p>
 
                     <div className="space-y-4">
                         <form onSubmit={submit} className="space-y-6">

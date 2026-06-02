@@ -219,7 +219,7 @@ export function AddMemberForm({
                             setData("is_default", event.target.checked)
                         }
                     />
-                    Client par defaut pour cet utilisateur
+                    Entreprise par défaut pour cet utilisateur
                 </label>
 
                 <Button type="submit" disabled={processing}>
@@ -255,7 +255,7 @@ export function MemberRow({
     };
 
     const removeMember = () => {
-        if (!window.confirm("Retirer cet utilisateur du client ?")) {
+        if (!window.confirm("Retirer cet utilisateur de l'entreprise ?")) {
             return;
         }
 
@@ -339,7 +339,7 @@ export function MemberRow({
                             variant="secondary"
                             disabled={processing}
                         >
-                            Sauver
+                            Sauvegarder
                         </Button>
                         <Button
                             type="button"

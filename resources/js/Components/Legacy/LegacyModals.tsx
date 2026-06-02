@@ -256,7 +256,7 @@ export function ProjectEditModal({
                             <InputError message={errors.name} />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="project-client">Client</Label>
+                            <Label htmlFor="project-client">Entreprise</Label>
                             <select
                                 id="project-client"
                                 value={data.client_id}
@@ -265,7 +265,7 @@ export function ProjectEditModal({
                                 }
                                 className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                             >
-                                <option value="">Selectionner un client</option>
+                                <option value="">Sélectionner une entreprise</option>
                                 {clients.map((client) => (
                                     <option key={client.id} value={client.id}>
                                         {client.name}
@@ -499,7 +499,7 @@ export function ImageEditModal({
                     </div>
                     <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2">
-                            <Label>Client</Label>
+                            <Label>Entreprise</Label>
                             <Input
                                 value={
                                     selectedProject?.clientName ||
@@ -747,7 +747,7 @@ export function UserEditModal({
                             <InputError message={errors.last_name} />
                         </div>
                         <div className="space-y-2 md:col-span-2">
-                            <Label>Clients</Label>
+                            <Label>Entreprises</Label>
                             <div className="grid max-h-40 gap-2 overflow-y-auto rounded-md border p-3 md:grid-cols-2">
                                 {clients.map((client) => (
                                     <label

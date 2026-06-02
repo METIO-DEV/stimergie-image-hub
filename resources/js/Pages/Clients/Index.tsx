@@ -69,17 +69,18 @@ export default function ClientsIndex({ clients, canCreateClient }: Props) {
 
     return (
         <AuthenticatedLayout>
-            <Head title="Clients" />
+            <Head title="Entreprises" />
 
             <SectionHeader
                 icon={<Users className="h-8 w-8 text-primary" />}
-                title="Clients"
+                title="Entreprises"
+                description="Consultez et administrez les entreprises auxquelles vous avez un rôle de gestion."
                 action={
                     canCreateClient && (
                         <Button asChild className="gap-2">
                             <Link href={route("clients.create")}>
                                 <PlusCircle size={18} />
-                                Ajouter un client
+                                Ajouter une entreprise
                             </Link>
                         </Button>
                     )
@@ -92,7 +93,7 @@ export default function ClientsIndex({ clients, canCreateClient }: Props) {
                         <Input
                             value={search}
                             onChange={(event) => setSearch(event.target.value)}
-                            placeholder="Rechercher un client..."
+                            placeholder="Rechercher une entreprise..."
                             className="h-11"
                         />
                     </div>

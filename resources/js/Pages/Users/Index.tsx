@@ -90,6 +90,7 @@ export default function UsersIndex({ users, clients, roles }: Props) {
             <SectionHeader
                 icon={<Users className="h-8 w-8 text-primary" />}
                 title="Utilisateurs"
+                description="Créez les comptes, attribuez leurs statuts et rattachez-les aux entreprises."
                 action={
                     <Button
                         className="gap-2"
@@ -108,10 +109,10 @@ export default function UsersIndex({ users, clients, roles }: Props) {
                 <div className="mb-8 flex flex-col gap-4 md:flex-row">
                     <div className="grid flex-grow grid-cols-1 gap-4 md:grid-cols-2">
                         <LegacySelect
-                            label="Filtrer par client"
+                            label="Filtrer par entreprise"
                             value={clientId}
                             onChange={setClientId}
-                            allLabel="Tous les clients"
+                            allLabel="Toutes les entreprises"
                             options={clients}
                         />
                         <LegacySelect
@@ -194,7 +195,7 @@ function UsersTable({
                         <TableHead>Nom</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Rôle</TableHead>
-                        <TableHead>Client</TableHead>
+                        <TableHead>Entreprise</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
