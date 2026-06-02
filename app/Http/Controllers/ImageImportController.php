@@ -63,7 +63,7 @@ class ImageImportController extends Controller
         abort_unless(in_array($import->status, ['pending', 'processing'], true), 409);
 
         $data = $request->validate([
-            'file' => ['required', 'image', 'max:20480'],
+            'file' => ['required', 'image', 'max:102400'],
             'relative_path' => ['nullable', 'string', 'max:1000'],
         ]);
 

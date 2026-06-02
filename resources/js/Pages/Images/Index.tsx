@@ -69,6 +69,14 @@ type ImportSummary = {
     }>;
 };
 
+type BucketSyncSummary = {
+    prefix: string;
+    total: number;
+    created: number;
+    updated: number;
+    skipped: number;
+};
+
 const PAGE_SIZE = 20;
 
 export default function ImagesIndex({
@@ -279,7 +287,10 @@ function FolderImportModal({
     const [files, setFiles] = useState<File[]>([]);
     const [summary, setSummary] = useState<ImportSummary | null>(null);
     const [uploading, setUploading] = useState(false);
+    const [syncingBucket, setSyncingBucket] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [bucketSyncResult, setBucketSyncResult] =
+        useState<BucketSyncSummary | null>(null);
 
     const imageFiles = useMemo(
         () => files.filter((file) => file.type.startsWith("image/")),
@@ -303,7 +314,7 @@ function FolderImportModal({
 
         const interval = window.setInterval(async () => {
             const response = await window.axios.get<ImportSummary>(
-                route("image-imports.show", summary.id),
+                imageImportUrl(summary.id),
             );
             setSummary(response.data);
 
@@ -325,6 +336,8 @@ function FolderImportModal({
         setSummary(null);
         setError(null);
         setUploading(false);
+        setSyncingBucket(false);
+        setBucketSyncResult(null);
     }, [open]);
 
     const submit = async (event: FormEvent) => {
@@ -337,10 +350,11 @@ function FolderImportModal({
 
         setUploading(true);
         setError(null);
+        setBucketSyncResult(null);
 
         try {
             const batchResponse = await window.axios.post<ImportSummary>(
-                route("image-imports.store"),
+                imageImportUrl(),
                 {
                     project_id: Number(projectId),
                     total_items: imageFiles.length,
@@ -357,7 +371,7 @@ function FolderImportModal({
                 payload.append("relative_path", relativePath(file));
 
                 const itemResponse = await window.axios.post<ImportSummary>(
-                    route("image-imports.items.store", latestSummary.id),
+                    imageImportItemUrl(latestSummary.id),
                     payload,
                     {
                         headers: {
@@ -383,16 +397,40 @@ function FolderImportModal({
 
         setUploading(true);
         setError(null);
+        setBucketSyncResult(null);
 
         try {
             const response = await window.axios.post<ImportSummary>(
-                route("image-imports.retry-failed", summary.id),
+                imageImportRetryUrl(summary.id),
             );
             setSummary(response.data);
         } catch (exception) {
             setError(errorMessage(exception));
         } finally {
             setUploading(false);
+        }
+    };
+
+    const syncBucket = async () => {
+        if (!projectId) {
+            setError("Sélectionnez un projet à synchroniser.");
+            return;
+        }
+
+        setSyncingBucket(true);
+        setError(null);
+        setBucketSyncResult(null);
+
+        try {
+            const response = await window.axios.post<BucketSyncSummary>(
+                projectBucketSyncUrl(Number(projectId)),
+            );
+            setBucketSyncResult(response.data);
+            router.reload({ only: ["images"] });
+        } catch (exception) {
+            setError(errorMessage(exception));
+        } finally {
+            setSyncingBucket(false);
         }
     };
 
@@ -418,7 +456,11 @@ function FolderImportModal({
                                     setProjectId(event.target.value)
                                 }
                                 className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                disabled={uploading || Boolean(summary)}
+                                disabled={
+                                    uploading ||
+                                    syncingBucket ||
+                                    Boolean(summary)
+                                }
                             >
                                 <option value="">Sélectionner un projet</option>
                                 {projects.map((project) => (
@@ -437,14 +479,18 @@ function FolderImportModal({
                                 Choisir un dossier
                             </span>
                             <span className="mt-1 text-xs text-muted-foreground">
-                                JPEG, PNG ou WebP, 20 Mo maximum par image.
+                                JPEG, PNG ou WebP, 100 Mo maximum par image.
                             </span>
                             <input
                                 type="file"
                                 accept="image/*"
                                 multiple
                                 className="hidden"
-                                disabled={uploading || Boolean(summary)}
+                                disabled={
+                                    uploading ||
+                                    syncingBucket ||
+                                    Boolean(summary)
+                                }
                                 onChange={(event) =>
                                     setFiles(
                                         Array.from(event.target.files ?? []),
@@ -535,6 +581,21 @@ function FolderImportModal({
                             </div>
                         )}
 
+                        {bucketSyncResult && (
+                            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                                {bucketSyncResult.created} image
+                                {bucketSyncResult.created > 1 ? "s" : ""} ajoutée
+                                {bucketSyncResult.created > 1 ? "s" : ""}
+                                {bucketSyncResult.updated > 0
+                                    ? `, ${bucketSyncResult.updated} mise${bucketSyncResult.updated > 1 ? "s" : ""} à jour`
+                                    : ""}
+                                {bucketSyncResult.skipped > 0
+                                    ? `, ${bucketSyncResult.skipped} déjà connue${bucketSyncResult.skipped > 1 ? "s" : ""}`
+                                    : ""}
+                                . Dossier synchronisé : {bucketSyncResult.prefix}.
+                            </div>
+                        )}
+
                         {error && (
                             <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
                                 {error}
@@ -562,7 +623,23 @@ function FolderImportModal({
                             Fermer
                         </Button>
                         {!summary && (
-                            <Button type="submit" disabled={uploading}>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={syncBucket}
+                                disabled={syncingBucket || uploading || !projectId}
+                            >
+                                <RotateCcw className="mr-2 h-4 w-4" />
+                                {syncingBucket
+                                    ? "Synchronisation..."
+                                    : "Synchroniser le bucket"}
+                            </Button>
+                        )}
+                        {!summary && (
+                            <Button
+                                type="submit"
+                                disabled={uploading || syncingBucket}
+                            >
                                 {uploading
                                     ? "Import en cours..."
                                     : "Lancer l'import"}
@@ -596,6 +673,22 @@ function folderInputAttributes() {
         webkitdirectory: "",
         directory: "",
     } as Record<string, string>;
+}
+
+function imageImportUrl(importId?: number): string {
+    return importId ? `/image-imports/${importId}` : "/image-imports";
+}
+
+function imageImportItemUrl(importId: number): string {
+    return `/image-imports/${importId}/items`;
+}
+
+function imageImportRetryUrl(importId: number): string {
+    return `/image-imports/${importId}/retry-failed`;
+}
+
+function projectBucketSyncUrl(projectId: number): string {
+    return `/projects/${projectId}/sync-bucket-images`;
 }
 
 function formatBytes(bytes: number): string {
@@ -636,14 +729,36 @@ function errorMessage(exception: unknown): string {
         const response = (
             exception as {
                 response?: {
-                    data?: { message?: string };
+                    status?: number;
+                    data?: {
+                        message?: string;
+                        errors?: Record<string, string[]>;
+                    };
                 };
             }
         ).response;
 
+        if (response?.status === 413) {
+            return "Le fichier est trop volumineux pour la configuration du serveur.";
+        }
+
+        if (response?.data?.errors) {
+            const firstError = Object.values(response.data.errors)
+                .flat()
+                .find(Boolean);
+
+            if (firstError) {
+                return firstError;
+            }
+        }
+
         if (response?.data?.message) {
             return response.data.message;
         }
+    }
+
+    if (exception instanceof Error && exception.message) {
+        return exception.message;
     }
 
     return "L'import n'a pas pu être lancé. Réessayez dans quelques instants.";

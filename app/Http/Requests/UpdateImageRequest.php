@@ -40,7 +40,7 @@ class UpdateImageRequest extends FormRequest
             'orientation' => ['nullable', 'string', Rule::in(['landscape', 'portrait', 'square'])],
             'status' => ['required', 'string', Rule::in(['ready', 'pending_upload', 'archived'])],
             'tags' => ['nullable', 'string', 'max:1000'],
-            'file' => ['nullable', 'image', 'max:20480'],
+            'file' => ['nullable', 'image', 'max:102400'],
         ];
     }
 }

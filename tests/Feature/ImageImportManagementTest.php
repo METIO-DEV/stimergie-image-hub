@@ -229,6 +229,132 @@ class ImageImportManagementTest extends TestCase
         $this->assertDatabaseCount('images', 1);
     }
 
+    public function test_super_admin_can_sync_project_bucket_images_into_database(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        [$client, $project] = $this->clientAndProject();
+        $original = UploadedFile::fake()->image('source.jpg', 1800, 1200);
+        $web = UploadedFile::fake()->image('source.jpg', 900, 600);
+
+        Storage::disk('scaleway')->put(
+            'photos/projet-import/source.jpg',
+            file_get_contents($original->getRealPath()),
+        );
+        Storage::disk('scaleway')->put(
+            'photos/projet-import/JPG/source.jpg',
+            file_get_contents($web->getRealPath()),
+        );
+
+        $this->actingAs($admin)
+            ->postJson(route('projects.sync-bucket-images', $project))
+            ->assertOk()
+            ->assertJsonPath('prefix', 'photos/projet-import')
+            ->assertJsonPath('total', 1)
+            ->assertJsonPath('created', 1)
+            ->assertJsonPath('skipped', 0);
+
+        $image = Image::query()->firstOrFail();
+
+        $this->assertSame($client->id, $image->client_id);
+        $this->assertSame($project->id, $image->project_id);
+        $this->assertSame('Source', $image->title);
+        $this->assertSame('ready', $image->status);
+        $this->assertSame('photos/projet-import/source.jpg', $image->object_key_original);
+        $this->assertSame('photos/projet-import/JPG/source.jpg', $image->object_key_web);
+        $this->assertSame('photos/projet-import/source.jpg', $image->object_key_hd);
+        $this->assertNull($image->object_key_thumb);
+        $this->assertSame('landscape', $image->orientation);
+        $this->assertDatabaseHas('image_variants', [
+            'image_id' => $image->id,
+            'kind' => 'web',
+            'object_key' => 'photos/projet-import/JPG/source.jpg',
+        ]);
+    }
+
+    public function test_client_manager_can_sync_project_bucket_images_into_database(): void
+    {
+        Storage::fake('scaleway');
+
+        $manager = User::factory()->create([
+            'platform_role' => 'admin_client',
+            'status' => 'active',
+        ]);
+        [$client, $project] = $this->clientAndProject();
+        ClientMembership::create([
+            'client_id' => $client->id,
+            'user_id' => $manager->id,
+            'role' => 'manager',
+            'status' => 'active',
+        ]);
+        $original = UploadedFile::fake()->image('manager-source.jpg', 800, 600);
+
+        Storage::disk('scaleway')->put(
+            'photos/projet-import/manager-source.jpg',
+            file_get_contents($original->getRealPath()),
+        );
+
+        $this->actingAs($manager)
+            ->postJson(route('projects.sync-bucket-images', $project))
+            ->assertOk()
+            ->assertJsonPath('created', 1);
+
+        $this->assertDatabaseHas('images', [
+            'project_id' => $project->id,
+            'created_by' => $manager->id,
+            'object_key_original' => 'photos/projet-import/manager-source.jpg',
+        ]);
+    }
+
+    public function test_project_bucket_sync_does_not_duplicate_existing_images(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        [, $project] = $this->clientAndProject();
+        $original = UploadedFile::fake()->image('source.jpg', 1200, 900);
+
+        Storage::disk('scaleway')->put(
+            'photos/projet-import/source.jpg',
+            file_get_contents($original->getRealPath()),
+        );
+
+        $this->actingAs($admin)
+            ->postJson(route('projects.sync-bucket-images', $project))
+            ->assertOk()
+            ->assertJsonPath('created', 1);
+
+        $this->actingAs($admin)
+            ->postJson(route('projects.sync-bucket-images', $project))
+            ->assertOk()
+            ->assertJsonPath('created', 0)
+            ->assertJsonPath('skipped', 1);
+
+        $this->assertDatabaseCount('images', 1);
+    }
+
+    public function test_standard_user_cannot_sync_project_bucket_images(): void
+    {
+        Storage::fake('scaleway');
+
+        $user = User::factory()->create([
+            'platform_role' => 'user',
+            'status' => 'active',
+        ]);
+        [, $project] = $this->clientAndProject();
+
+        $this->actingAs($user)
+            ->postJson(route('projects.sync-bucket-images', $project))
+            ->assertForbidden();
+    }
+
     /**
      * @return array{Client, Project}
      */

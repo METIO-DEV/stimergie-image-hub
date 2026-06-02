@@ -7,6 +7,7 @@ use App\Http\Controllers\DownloadController;
 use App\Http\Controllers\ImageController;
 use App\Http\Controllers\ImageImportController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ProjectBucketSyncController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\UserController;
 use App\Models\Client;
@@ -73,6 +74,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/image-imports/{import}/retry-failed', [ImageImportController::class, 'retryFailed'])->name('image-imports.retry-failed');
     Route::get('/projects', [AppPageController::class, 'projects'])->name('projects.index');
     Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
+    Route::post('/projects/{project}/sync-bucket-images', [ProjectBucketSyncController::class, 'store'])->name('projects.sync-bucket-images');
     Route::patch('/projects/{project}', [ProjectController::class, 'update'])->name('projects.update');
     Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
     Route::get('/users', [AppPageController::class, 'users'])->name('users.index');
