@@ -6,6 +6,7 @@ import {
     Building2,
     CalendarRange,
     FolderOpen,
+    FolderUp,
     Image,
     Users,
 } from "lucide-react";
@@ -14,9 +15,30 @@ type DashboardStats = {
     clients: number;
     projects: number;
     images: number;
+    imports: number;
+    activeImports: number;
 };
 
-export default function Dashboard({ stats }: { stats: DashboardStats }) {
+type RecentImport = {
+    id: number;
+    status: string;
+    clientName?: string | null;
+    projectName?: string | null;
+    totalItems: number;
+    uploadedItems: number;
+    processedItems: number;
+    failedItems: number;
+    duplicateItems: number;
+    startedAt?: string | null;
+};
+
+export default function Dashboard({
+    stats,
+    recentImports,
+}: {
+    stats: DashboardStats;
+    recentImports: RecentImport[];
+}) {
     return (
         <AuthenticatedLayout>
             <Head title="Tableau de bord administrateur" />
@@ -41,7 +63,7 @@ export default function Dashboard({ stats }: { stats: DashboardStats }) {
                     </Link>
                 </div>
 
-                <div className="mt-10 grid gap-7 lg:grid-cols-3">
+                <div className="mt-10 grid gap-7 md:grid-cols-2 xl:grid-cols-4">
                     <MetricCard
                         label="Entreprises"
                         value={stats.clients}
@@ -63,6 +85,47 @@ export default function Dashboard({ stats }: { stats: DashboardStats }) {
                         icon={Image}
                         href={route("images.index")}
                     />
+                    <MetricCard
+                        label="Imports actifs"
+                        value={stats.activeImports}
+                        description={`${stats.imports} imports dossiers au total`}
+                        icon={FolderUp}
+                        href={route("images.index")}
+                    />
+                </div>
+
+                <div className="mt-12 grid gap-7 lg:grid-cols-[1.1fr_0.9fr]">
+                    <div>
+                        <h2 className="text-3xl font-bold tracking-normal text-foreground">
+                            Imports dossiers
+                        </h2>
+                        <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+                            Suivez les derniers imports d'images et accédez à la
+                            gestion des images pour lancer un nouveau dossier.
+                        </p>
+                    </div>
+                    <Link
+                        href={route("images.index")}
+                        className="inline-flex items-center justify-start gap-2 self-end text-sm font-semibold text-primary transition-colors hover:text-primary/80 lg:justify-end"
+                    >
+                        Ouvrir la gestion des images
+                        <ArrowRight className="h-4 w-4" />
+                    </Link>
+                </div>
+
+                <div className="mt-6 overflow-hidden rounded-lg border bg-card">
+                    {recentImports.length === 0 ? (
+                        <div className="p-7 text-sm text-muted-foreground">
+                            Aucun import dossier n'a encore été lancé.
+                        </div>
+                    ) : (
+                        recentImports.map((importBatch) => (
+                            <ImportRow
+                                key={importBatch.id}
+                                importBatch={importBatch}
+                            />
+                        ))
+                    )}
                 </div>
 
                 <h2 className="mt-12 text-3xl font-bold tracking-normal text-foreground">
@@ -108,6 +171,88 @@ export default function Dashboard({ stats }: { stats: DashboardStats }) {
                 </div>
             </div>
         </AuthenticatedLayout>
+    );
+}
+
+function ImportRow({ importBatch }: { importBatch: RecentImport }) {
+    const terminal =
+        importBatch.status === "completed" || importBatch.status === "failed";
+    const done = importBatch.processedItems + importBatch.failedItems;
+    const total = importBatch.totalItems || 1;
+    const progress = terminal
+        ? 100
+        : Math.min(100, Math.round((done / total) * 100));
+
+    return (
+        <Link
+            href={route("images.index")}
+            className="grid gap-4 border-b p-5 transition-colors last:border-b-0 hover:bg-muted/30 md:grid-cols-[1fr_220px]"
+        >
+            <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-3">
+                    <span className="font-semibold">
+                        Import #{importBatch.id}
+                    </span>
+                    <span className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
+                        {statusLabel(importBatch.status)}
+                    </span>
+                </div>
+                <div className="mt-2 truncate text-sm text-muted-foreground">
+                    {importBatch.clientName || "Entreprise inconnue"} ·{" "}
+                    {importBatch.projectName || "Projet inconnu"}
+                </div>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+                    <div
+                        className="h-full bg-primary"
+                        style={{ width: `${progress}%` }}
+                    />
+                </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+                <DashboardImportMetric
+                    label="Traitées"
+                    value={importBatch.processedItems}
+                />
+                <DashboardImportMetric
+                    label="Erreurs"
+                    value={importBatch.failedItems}
+                />
+                <DashboardImportMetric
+                    label="Doublons"
+                    value={importBatch.duplicateItems}
+                />
+                <DashboardImportMetric
+                    label="Total"
+                    value={importBatch.totalItems}
+                />
+            </div>
+        </Link>
+    );
+}
+
+function DashboardImportMetric({
+    label,
+    value,
+}: {
+    label: string;
+    value: number;
+}) {
+    return (
+        <div>
+            <div className="text-xs text-muted-foreground">{label}</div>
+            <div className="font-semibold">{value}</div>
+        </div>
+    );
+}
+
+function statusLabel(status: string): string {
+    return (
+        {
+            pending: "En attente",
+            processing: "Traitement",
+            completed: "Terminé",
+            failed: "Avec erreurs",
+        }[status] || status
     );
 }
 

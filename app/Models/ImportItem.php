@@ -13,6 +13,7 @@ class ImportItem extends Model
     {
         return [
             'metadata' => 'array',
+            'processed_at' => 'datetime',
         ];
     }
 

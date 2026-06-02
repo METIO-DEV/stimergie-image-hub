@@ -5,11 +5,13 @@ use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ClientMemberController;
 use App\Http\Controllers\DownloadController;
 use App\Http\Controllers\ImageController;
+use App\Http\Controllers\ImageImportController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\UserController;
 use App\Models\Client;
 use App\Models\Image;
+use App\Models\Import;
 use App\Models\Project;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -25,7 +27,31 @@ Route::get('/dashboard', function (Request $request) {
             'clients' => Client::count(),
             'projects' => Project::count(),
             'images' => Image::count(),
+            'imports' => Import::query()->where('source', 'folder_upload')->count(),
+            'activeImports' => Import::query()
+                ->where('source', 'folder_upload')
+                ->whereIn('status', ['pending', 'processing'])
+                ->count(),
         ],
+        'recentImports' => Import::query()
+            ->with(['client:id,name', 'project:id,name'])
+            ->where('source', 'folder_upload')
+            ->latest()
+            ->limit(6)
+            ->get()
+            ->map(fn (Import $import) => [
+                'id' => $import->id,
+                'status' => $import->status,
+                'clientName' => $import->client?->name,
+                'projectName' => $import->project?->name,
+                'totalItems' => $import->total_items,
+                'uploadedItems' => $import->uploaded_items,
+                'processedItems' => $import->processed_items,
+                'failedItems' => $import->failed_items,
+                'duplicateItems' => $import->duplicate_items,
+                'startedAt' => $import->started_at?->toIso8601String(),
+                'finishedAt' => $import->finished_at?->toIso8601String(),
+            ]),
     ]);
 })->middleware(['auth', 'verified'])->name('dashboard');
 
@@ -41,6 +67,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/images', [ImageController::class, 'store'])->name('images.store');
     Route::patch('/images/bulk-project', [ImageController::class, 'bulkProject'])->name('images.bulk-project');
     Route::post('/images/{image}', [ImageController::class, 'update'])->name('images.update');
+    Route::post('/image-imports', [ImageImportController::class, 'store'])->name('image-imports.store');
+    Route::get('/image-imports/{import}', [ImageImportController::class, 'show'])->name('image-imports.show');
+    Route::post('/image-imports/{import}/items', [ImageImportController::class, 'item'])->name('image-imports.items.store');
+    Route::post('/image-imports/{import}/retry-failed', [ImageImportController::class, 'retryFailed'])->name('image-imports.retry-failed');
     Route::get('/projects', [AppPageController::class, 'projects'])->name('projects.index');
     Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
     Route::patch('/projects/{project}', [ProjectController::class, 'update'])->name('projects.update');

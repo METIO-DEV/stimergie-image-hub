@@ -1,6 +1,15 @@
 import { Badge } from "@/Components/ui/badge";
 import { Button } from "@/Components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/Components/ui/dialog";
 import { Input } from "@/Components/ui/input";
+import { Label } from "@/Components/ui/label";
 import {
     Table,
     TableBody,
@@ -21,14 +30,15 @@ import {
 } from "@/Components/Legacy/LegacyDesign";
 import { ImageEditModal } from "@/Components/Legacy/LegacyModals";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import { Head } from "@inertiajs/react";
-import { Pencil, Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Head, router } from "@inertiajs/react";
+import { FolderUp, Pencil, Plus, RotateCcw, Upload } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type FilterOption = {
     id: number;
     name: string;
     clientId?: number;
+    clientName?: string;
 };
 
 type Props = {
@@ -38,6 +48,25 @@ type Props = {
         clients: FilterOption[];
         projects: FilterOption[];
     };
+};
+
+type ImportSummary = {
+    id: number;
+    status: string;
+    projectName?: string | null;
+    clientName?: string | null;
+    totalItems: number;
+    uploadedItems: number;
+    processedItems: number;
+    failedItems: number;
+    duplicateItems: number;
+    items: Array<{
+        id: number;
+        filename: string;
+        relativePath?: string | null;
+        status: string;
+        error?: string | null;
+    }>;
 };
 
 const PAGE_SIZE = 20;
@@ -55,6 +84,7 @@ export default function ImagesIndex({
     const [currentPage, setCurrentPage] = useState(1);
     const [editingImage, setEditingImage] = useState<LegacyImage | null>(null);
     const [imageModalOpen, setImageModalOpen] = useState(false);
+    const [importModalOpen, setImportModalOpen] = useState(false);
     const [selectedClientImage, setSelectedClientImage] =
         useState<LegacyImage | null>(null);
 
@@ -103,15 +133,24 @@ export default function ImagesIndex({
                             onViewChange={setViewMode}
                         />
                         {canManageImages && (
-                            <Button
-                                onClick={() => {
-                                    setEditingImage(null);
-                                    setImageModalOpen(true);
-                                }}
-                            >
-                                <Plus size={16} className="mr-2" />
-                                Ajouter une image
-                            </Button>
+                            <div className="flex items-center gap-3">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setImportModalOpen(true)}
+                                >
+                                    <FolderUp size={16} className="mr-2" />
+                                    Importer un dossier
+                                </Button>
+                                <Button
+                                    onClick={() => {
+                                        setEditingImage(null);
+                                        setImageModalOpen(true);
+                                    }}
+                                >
+                                    <Plus size={16} className="mr-2" />
+                                    Ajouter une image
+                                </Button>
+                            </div>
                         )}
                     </div>
                 }
@@ -206,6 +245,11 @@ export default function ImagesIndex({
                     }
                 }}
             />
+            <FolderImportModal
+                open={importModalOpen}
+                projects={filters.projects}
+                onOpenChange={setImportModalOpen}
+            />
             <ClientInfoSheet
                 client={
                     selectedClientImage?.client ||
@@ -220,6 +264,389 @@ export default function ImagesIndex({
             />
         </AuthenticatedLayout>
     );
+}
+
+function FolderImportModal({
+    open,
+    projects,
+    onOpenChange,
+}: {
+    open: boolean;
+    projects: FilterOption[];
+    onOpenChange: (open: boolean) => void;
+}) {
+    const [projectId, setProjectId] = useState("");
+    const [files, setFiles] = useState<File[]>([]);
+    const [summary, setSummary] = useState<ImportSummary | null>(null);
+    const [uploading, setUploading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const imageFiles = useMemo(
+        () => files.filter((file) => file.type.startsWith("image/")),
+        [files],
+    );
+    const ignoredCount = files.length - imageFiles.length;
+    const totalBytes = imageFiles.reduce((total, file) => total + file.size, 0);
+    const terminal =
+        summary?.status === "completed" ||
+        summary?.status === "failed" ||
+        summary?.status === "cancelled";
+    const progressTotal = summary?.totalItems || imageFiles.length || 1;
+    const progressDone =
+        (summary?.processedItems || 0) + (summary?.failedItems || 0);
+    const progress = Math.min(100, Math.round((progressDone / progressTotal) * 100));
+
+    useEffect(() => {
+        if (!open || !summary || terminal) {
+            return;
+        }
+
+        const interval = window.setInterval(async () => {
+            const response = await window.axios.get<ImportSummary>(
+                route("image-imports.show", summary.id),
+            );
+            setSummary(response.data);
+
+            if (response.data.status === "completed") {
+                router.reload({ only: ["images"] });
+            }
+        }, 2500);
+
+        return () => window.clearInterval(interval);
+    }, [open, summary, terminal]);
+
+    useEffect(() => {
+        if (open) {
+            return;
+        }
+
+        setProjectId("");
+        setFiles([]);
+        setSummary(null);
+        setError(null);
+        setUploading(false);
+    }, [open]);
+
+    const submit = async (event: FormEvent) => {
+        event.preventDefault();
+
+        if (!projectId || imageFiles.length === 0) {
+            setError("Sélectionnez un projet et au moins une image.");
+            return;
+        }
+
+        setUploading(true);
+        setError(null);
+
+        try {
+            const batchResponse = await window.axios.post<ImportSummary>(
+                route("image-imports.store"),
+                {
+                    project_id: Number(projectId),
+                    total_items: imageFiles.length,
+                    total_bytes: totalBytes,
+                },
+            );
+
+            let latestSummary = batchResponse.data;
+            setSummary(latestSummary);
+
+            for (const file of imageFiles) {
+                const payload = new FormData();
+                payload.append("file", file);
+                payload.append("relative_path", relativePath(file));
+
+                const itemResponse = await window.axios.post<ImportSummary>(
+                    route("image-imports.items.store", latestSummary.id),
+                    payload,
+                    {
+                        headers: {
+                            "Content-Type": "multipart/form-data",
+                        },
+                    },
+                );
+
+                latestSummary = itemResponse.data;
+                setSummary(latestSummary);
+            }
+        } catch (exception) {
+            setError(errorMessage(exception));
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const retryFailed = async () => {
+        if (!summary) {
+            return;
+        }
+
+        setUploading(true);
+        setError(null);
+
+        try {
+            const response = await window.axios.post<ImportSummary>(
+                route("image-imports.retry-failed", summary.id),
+            );
+            setSummary(response.data);
+        } catch (exception) {
+            setError(errorMessage(exception));
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-h-[90vh] max-w-2xl overflow-hidden">
+                <DialogHeader>
+                    <DialogTitle>Importer un dossier d'images</DialogTitle>
+                    <DialogDescription>
+                        Les images sont envoyées une par une puis traitées en
+                        arrière-plan pour éviter les surcharges.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <form onSubmit={submit}>
+                    <div className="max-h-[calc(90vh-210px)] space-y-5 overflow-y-auto pr-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="folder-import-project">Projet</Label>
+                            <select
+                                id="folder-import-project"
+                                value={projectId}
+                                onChange={(event) =>
+                                    setProjectId(event.target.value)
+                                }
+                                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                disabled={uploading || Boolean(summary)}
+                            >
+                                <option value="">Sélectionner un projet</option>
+                                {projects.map((project) => (
+                                    <option key={project.id} value={project.id}>
+                                        {project.clientName
+                                            ? `${project.clientName} - ${project.name}`
+                                            : project.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <label className="flex cursor-pointer flex-col items-center rounded-lg border-2 border-dashed p-10 text-center transition-colors hover:bg-muted/50">
+                            <Upload className="h-9 w-9 text-muted-foreground" />
+                            <span className="mt-3 text-sm font-medium">
+                                Choisir un dossier
+                            </span>
+                            <span className="mt-1 text-xs text-muted-foreground">
+                                JPEG, PNG ou WebP, 20 Mo maximum par image.
+                            </span>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                className="hidden"
+                                disabled={uploading || Boolean(summary)}
+                                onChange={(event) =>
+                                    setFiles(
+                                        Array.from(event.target.files ?? []),
+                                    )
+                                }
+                                {...folderInputAttributes()}
+                            />
+                        </label>
+
+                        {files.length > 0 && (
+                            <div className="rounded-md border p-4 text-sm">
+                                <div className="font-medium">
+                                    {imageFiles.length} image
+                                    {imageFiles.length > 1 ? "s" : ""} prête
+                                    {imageFiles.length > 1 ? "s" : ""} à importer
+                                </div>
+                                <div className="mt-1 text-muted-foreground">
+                                    {formatBytes(totalBytes)}
+                                    {ignoredCount > 0
+                                        ? ` · ${ignoredCount} fichier${ignoredCount > 1 ? "s" : ""} ignoré${ignoredCount > 1 ? "s" : ""}`
+                                        : ""}
+                                </div>
+                            </div>
+                        )}
+
+                        {summary && (
+                            <div className="space-y-4 rounded-md border p-4">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                        <div className="text-sm font-semibold">
+                                            Import #{summary.id}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                            {statusLabel(summary.status)}
+                                        </div>
+                                    </div>
+                                    <Badge>{progress}%</Badge>
+                                </div>
+                                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                                    <div
+                                        className="h-full bg-primary transition-all"
+                                        style={{ width: `${progress}%` }}
+                                    />
+                                </div>
+                                <div className="grid gap-3 text-sm sm:grid-cols-4">
+                                    <ImportMetric
+                                        label="Envoyées"
+                                        value={summary.uploadedItems}
+                                    />
+                                    <ImportMetric
+                                        label="Traitées"
+                                        value={summary.processedItems}
+                                    />
+                                    <ImportMetric
+                                        label="Doublons"
+                                        value={summary.duplicateItems}
+                                    />
+                                    <ImportMetric
+                                        label="Erreurs"
+                                        value={summary.failedItems}
+                                    />
+                                </div>
+                                {summary.items.length > 0 && (
+                                    <div className="max-h-44 overflow-y-auto rounded border">
+                                        {summary.items.map((item) => (
+                                            <div
+                                                key={item.id}
+                                                className="flex items-start justify-between gap-3 border-b px-3 py-2 text-xs last:border-b-0"
+                                            >
+                                                <div className="min-w-0">
+                                                    <div className="truncate font-medium">
+                                                        {item.relativePath ||
+                                                            item.filename}
+                                                    </div>
+                                                    {item.error && (
+                                                        <div className="mt-1 text-destructive">
+                                                            {item.error}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <span className="shrink-0 text-muted-foreground">
+                                                    {statusLabel(item.status)}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {error && (
+                            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                                {error}
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter className="border-t pt-4">
+                        {summary?.failedItems ? (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={retryFailed}
+                                disabled={uploading}
+                            >
+                                <RotateCcw className="mr-2 h-4 w-4" />
+                                Relancer les erreurs
+                            </Button>
+                        ) : null}
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => onOpenChange(false)}
+                        >
+                            Fermer
+                        </Button>
+                        {!summary && (
+                            <Button type="submit" disabled={uploading}>
+                                {uploading
+                                    ? "Import en cours..."
+                                    : "Lancer l'import"}
+                            </Button>
+                        )}
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function ImportMetric({ label, value }: { label: string; value: number }) {
+    return (
+        <div className="rounded border px-3 py-2">
+            <div className="text-xs text-muted-foreground">{label}</div>
+            <div className="mt-1 font-semibold">{value}</div>
+        </div>
+    );
+}
+
+function relativePath(file: File): string {
+    return (
+        (file as File & { webkitRelativePath?: string }).webkitRelativePath ||
+        file.name
+    );
+}
+
+function folderInputAttributes() {
+    return {
+        webkitdirectory: "",
+        directory: "",
+    } as Record<string, string>;
+}
+
+function formatBytes(bytes: number): string {
+    if (bytes === 0) {
+        return "0 octet";
+    }
+
+    const units = ["octets", "Ko", "Mo", "Go"];
+    const exponent = Math.min(
+        Math.floor(Math.log(bytes) / Math.log(1024)),
+        units.length - 1,
+    );
+    const value = bytes / 1024 ** exponent;
+
+    return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
+}
+
+function statusLabel(status: string): string {
+    return (
+        {
+            pending: "En attente",
+            uploaded: "Envoyée",
+            processing: "Traitement",
+            done: "Terminée",
+            completed: "Terminé",
+            failed: "Erreur",
+            duplicate: "Doublon",
+        }[status] || status
+    );
+}
+
+function errorMessage(exception: unknown): string {
+    if (
+        typeof exception === "object" &&
+        exception !== null &&
+        "response" in exception
+    ) {
+        const response = (
+            exception as {
+                response?: {
+                    data?: { message?: string };
+                };
+            }
+        ).response;
+
+        if (response?.data?.message) {
+            return response.data.message;
+        }
+    }
+
+    return "L'import n'a pas pu être lancé. Réessayez dans quelques instants.";
 }
 
 function ImagesTable({
