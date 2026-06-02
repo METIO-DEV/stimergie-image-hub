@@ -23,6 +23,8 @@
 /public/fonts-manifest.dev.json
 /public/hot
 /public/storage
+/scripts/*.env
+/scripts/*.log
 /storage/*.key
 /storage/logs
 /storage/pail
