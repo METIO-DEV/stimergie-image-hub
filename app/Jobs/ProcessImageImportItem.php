@@ -111,7 +111,7 @@ class ProcessImageImportItem implements ShouldQueue
                     'storage_provider' => $fileData['disk'],
                     'object_key_original' => $fileData['original'],
                     'object_key_web' => $fileData['web'],
-                    'object_key_thumb' => $fileData['thumb'],
+                    'object_key_thumb' => $fileData['thumb'] ?? null,
                     'object_key_hd' => $fileData['hd'],
                     'legacy_url' => null,
                     'legacy_thumbnail_url' => null,

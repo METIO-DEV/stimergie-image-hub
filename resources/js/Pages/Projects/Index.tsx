@@ -9,7 +9,7 @@ import {
 } from "@/Components/Legacy/LegacyDesign";
 import { ProjectEditModal } from "@/Components/Legacy/LegacyModals";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import { Head } from "@inertiajs/react";
+import { Head, router } from "@inertiajs/react";
 import {
     Building2,
     Calendar,
@@ -17,6 +17,7 @@ import {
     HardDrive,
     Pencil,
     Plus,
+    Trash2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -33,6 +34,7 @@ type Project = {
     imagesCount: number;
     createdAt: string;
     canUpdate: boolean;
+    canDelete: boolean;
 };
 
 type Props = {
@@ -55,6 +57,20 @@ export default function ProjectsIndex({
     const [search, setSearch] = useState("");
     const [editingProject, setEditingProject] = useState<Project | null>(null);
     const [projectModalOpen, setProjectModalOpen] = useState(false);
+
+    const deleteProject = (project: Project) => {
+        if (
+            !window.confirm(
+                `Supprimer le projet "${project.name}" et toutes ses images ? Cette action est définitive.`,
+            )
+        ) {
+            return;
+        }
+
+        router.delete(route("projects.destroy", project.id), {
+            preserveScroll: true,
+        });
+    };
 
     const filteredProjects = useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -137,6 +153,9 @@ export default function ProjectsIndex({
                                           }
                                         : undefined
                                 }
+                                onDelete={
+                                    project.canDelete ? deleteProject : undefined
+                                }
                             />
                         ))}
                     </div>
@@ -178,6 +197,18 @@ export default function ProjectsIndex({
                                             <Pencil size={16} />
                                         </Button>
                                     )}
+                                    {project.canDelete && (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            title="Supprimer"
+                                            onClick={() =>
+                                                deleteProject(project)
+                                            }
+                                        >
+                                            <Trash2 size={16} />
+                                        </Button>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -202,9 +233,11 @@ export default function ProjectsIndex({
 function ProjectCard({
     project,
     onEdit,
+    onDelete,
 }: {
     project: Project;
     onEdit?: (project: Project) => void;
+    onDelete?: (project: Project) => void;
 }) {
     return (
         <Card className="flex h-full flex-col transition-shadow hover:shadow-md">
@@ -226,6 +259,16 @@ function ProjectCard({
                                 onClick={() => onEdit(project)}
                             >
                                 <Pencil size={16} />
+                            </Button>
+                        )}
+                        {onDelete && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Supprimer"
+                                onClick={() => onDelete(project)}
+                            >
+                                <Trash2 size={16} />
                             </Button>
                         )}
                     </div>

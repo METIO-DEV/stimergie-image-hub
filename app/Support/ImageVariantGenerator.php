@@ -11,7 +11,7 @@ use RuntimeException;
 class ImageVariantGenerator
 {
     /**
-     * @return array{disk: string, original: string, web: string, thumb: string, hd: string, url: string, width: int|null, height: int|null, orientation: string|null, mime_type: string|null, size_bytes: int|null, checksum: string, variants: array<string, array{object_key: string, mime_type: string|null, width: int|null, height: int|null, size_bytes: int|null}>}
+     * @return array{disk: string, original: string, web: string, thumb: string|null, hd: string, url: string, width: int|null, height: int|null, orientation: string|null, mime_type: string|null, size_bytes: int|null, checksum: string, variants: array<string, array{object_key: string, mime_type: string|null, width: int|null, height: int|null, size_bytes: int|null}>}
      */
     public function store(UploadedFile $file, string $targetPrefix = 'images'): array
     {
@@ -29,7 +29,7 @@ class ImageVariantGenerator
         $width = $size ? $size[0] : null;
         $height = $size ? $size[1] : null;
         $targetPrefix = trim($targetPrefix, '/') ?: 'images';
-        $originalKey = "{$targetPrefix}/originals/{$baseName}.{$extension}";
+        $originalKey = "{$targetPrefix}/{$baseName}.{$extension}";
 
         $this->putFile($disk, $originalKey, $sourcePath, $mimeType);
 
@@ -43,21 +43,14 @@ class ImageVariantGenerator
             ],
         ];
 
-        foreach ([
-            'web' => ['directory' => "{$targetPrefix}/web", 'max' => 1600],
-            'thumb' => ['directory' => "{$targetPrefix}/thumbs", 'max' => 480],
-            'hd' => ['directory' => "{$targetPrefix}/hd", 'max' => 3200],
-        ] as $kind => $config) {
-            $key = "{$config['directory']}/{$baseName}.{$extension}";
-            $variant = $this->putResizedVariant($disk, $key, $sourcePath, $mimeType, $config['max']);
-            $variants[$kind] = $variant;
-        }
+        $variants['web'] = $this->putResizedVariant($disk, "{$targetPrefix}/JPG/{$baseName}.{$extension}", $sourcePath, $mimeType, 1600);
+        $variants['hd'] = $variants['original'];
 
         return [
             'disk' => $disk,
             'original' => $variants['original']['object_key'],
             'web' => $variants['web']['object_key'],
-            'thumb' => $variants['thumb']['object_key'],
+            'thumb' => null,
             'hd' => $variants['hd']['object_key'],
             'url' => Storage::disk($disk)->url($variants['web']['object_key']),
             'width' => $width,
@@ -71,7 +64,7 @@ class ImageVariantGenerator
     }
 
     /**
-     * @return array{disk: string, original: string, web: string, thumb: string, hd: string, width: int|null, height: int|null, orientation: string|null, mime_type: string|null, size_bytes: int|null, checksum: string, variants: array<string, array{object_key: string, mime_type: string|null, width: int|null, height: int|null, size_bytes: int|null}>}
+     * @return array{disk: string, original: string, web: string, thumb: string|null, hd: string, width: int|null, height: int|null, orientation: string|null, mime_type: string|null, size_bytes: int|null, checksum: string, variants: array<string, array{object_key: string, mime_type: string|null, width: int|null, height: int|null, size_bytes: int|null}>}
      */
     public function generateFromOriginal(Image $image, string $targetPrefix = 'images'): array
     {
@@ -134,20 +127,14 @@ class ImageVariantGenerator
                 ],
             ];
 
-            foreach ([
-                'web' => ['directory' => "{$targetPrefix}/web", 'max' => 1600],
-                'thumb' => ['directory' => "{$targetPrefix}/thumbs", 'max' => 480],
-                'hd' => ['directory' => "{$targetPrefix}/hd", 'max' => 3200],
-            ] as $kind => $config) {
-                $key = "{$config['directory']}/{$image->id}.{$extension}";
-                $variants[$kind] = $this->putResizedVariant($disk, $key, $sourcePath, $mimeType, $config['max']);
-            }
+            $variants['web'] = $this->putResizedVariant($disk, "{$targetPrefix}/JPG/{$image->id}.{$extension}", $sourcePath, $mimeType, 1600);
+            $variants['hd'] = $variants['original'];
 
             return [
                 'disk' => $disk,
                 'original' => $variants['original']['object_key'],
                 'web' => $variants['web']['object_key'],
-                'thumb' => $variants['thumb']['object_key'],
+                'thumb' => null,
                 'hd' => $variants['hd']['object_key'],
                 'width' => $width,
                 'height' => $height,

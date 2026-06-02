@@ -106,7 +106,8 @@ class ImageImportManagementTest extends TestCase
         $item = ImportItem::query()->firstOrFail();
 
         Storage::disk('scaleway')->assertExists($item->object_key_original);
-        $this->assertStringStartsWith('photos/entreprise-import/projet-import/originals/', $item->object_key_original);
+        $this->assertStringStartsWith('photos/projet-import/', $item->object_key_original);
+        $this->assertStringNotContainsString('/originals/', $item->object_key_original);
         $this->assertSame('uploaded', $item->status);
         $this->assertSame('dossier/matcha.jpg', $item->relative_path);
         Queue::assertPushed(ProcessImageImportItem::class);
@@ -122,7 +123,7 @@ class ImageImportManagementTest extends TestCase
         ]);
         [$client, $project] = $this->clientAndProject();
         $file = UploadedFile::fake()->image('source.jpg', 800, 600);
-        $objectKey = 'photos/entreprise-import/projet-import/originals/source.jpg';
+        $objectKey = 'photos/projet-import/source.jpg';
 
         Storage::disk('scaleway')->put($objectKey, file_get_contents($file->getRealPath()));
 
@@ -157,16 +158,19 @@ class ImageImportManagementTest extends TestCase
 
         $this->assertSame('ready', $image->status);
         $this->assertSame($objectKey, $image->object_key_original);
-        $this->assertStringStartsWith('photos/entreprise-import/projet-import/web/', $image->object_key_web);
-        $this->assertStringStartsWith('photos/entreprise-import/projet-import/thumbs/', $image->object_key_thumb);
-        $this->assertStringStartsWith('photos/entreprise-import/projet-import/hd/', $image->object_key_hd);
+        $this->assertStringStartsWith('photos/projet-import/JPG/', $image->object_key_web);
+        $this->assertNull($image->object_key_thumb);
+        $this->assertSame($image->object_key_original, $image->object_key_hd);
         $this->assertSame('landscape', $image->orientation);
         $this->assertSame($image->id, $item->image_id);
         $this->assertSame('done', $item->status);
         $this->assertSame('completed', $import->status);
         $this->assertSame(1, $import->processed_items);
         Storage::disk('scaleway')->assertExists($image->object_key_web);
-        Storage::disk('scaleway')->assertExists($image->object_key_thumb);
+        $this->assertDatabaseMissing('image_variants', [
+            'image_id' => $image->id,
+            'kind' => 'thumb',
+        ]);
         Storage::disk('scaleway')->assertExists($image->object_key_hd);
     }
 
@@ -205,7 +209,7 @@ class ImageImportManagementTest extends TestCase
             'mime_type' => 'image/jpeg',
             'size_bytes' => 16,
             'checksum' => $checksum,
-            'object_key_original' => 'photos/entreprise-import/projet-import/originals/duplicate.jpg',
+            'object_key_original' => 'photos/projet-import/duplicate.jpg',
             'status' => 'uploaded',
         ]);
 

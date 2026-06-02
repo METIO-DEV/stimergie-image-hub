@@ -74,13 +74,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/projects', [AppPageController::class, 'projects'])->name('projects.index');
     Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
     Route::patch('/projects/{project}', [ProjectController::class, 'update'])->name('projects.update');
+    Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
     Route::get('/users', [AppPageController::class, 'users'])->name('users.index');
     Route::get('/users/search', [UserController::class, 'search'])->name('users.search');
     Route::post('/users', [UserController::class, 'store'])->name('users.store');
     Route::patch('/users/{user}', [UserController::class, 'update'])->name('users.update');
     Route::get('/access-periods', [AppPageController::class, 'accessPeriods'])->name('access-periods.index');
 
-    Route::resource('clients', ClientController::class)->except(['destroy']);
+    Route::resource('clients', ClientController::class);
     Route::post('/clients/{client}/members', [ClientMemberController::class, 'store'])->name('clients.members.store');
     Route::patch('/clients/{client}/members/{membership}', [ClientMemberController::class, 'update'])->name('clients.members.update');
     Route::delete('/clients/{client}/members/{membership}', [ClientMemberController::class, 'destroy'])->name('clients.members.destroy');

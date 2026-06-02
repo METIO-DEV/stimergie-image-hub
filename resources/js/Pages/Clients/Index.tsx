@@ -15,7 +15,7 @@ import {
     TableRow,
 } from "@/Components/ui/table";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import { Head, Link } from "@inertiajs/react";
+import { Head, Link, router } from "@inertiajs/react";
 import {
     Building2,
     FileText,
@@ -24,6 +24,7 @@ import {
     Pencil,
     Phone,
     PlusCircle,
+    Trash2,
     UserRound,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -38,6 +39,7 @@ type ClientSummary = {
     imagesCount: number;
     membersCount: number;
     canUpdate: boolean;
+    canDelete: boolean;
     canManageMembers: boolean;
 };
 
@@ -66,6 +68,20 @@ export default function ClientsIndex({ clients, canCreateClient }: Props) {
                 }),
             );
     }, [clients, search]);
+
+    const deleteClient = (client: ClientSummary) => {
+        if (
+            !window.confirm(
+                `Supprimer l'entreprise "${client.name}", ses projets et toutes ses images ? Cette action est définitive.`,
+            )
+        ) {
+            return;
+        }
+
+        router.delete(route("clients.destroy", client.id), {
+            preserveScroll: true,
+        });
+    };
 
     return (
         <AuthenticatedLayout>
@@ -108,18 +124,33 @@ export default function ClientsIndex({ clients, canCreateClient }: Props) {
                 {viewMode === "card" ? (
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                         {filteredClients.map((client) => (
-                            <ClientCard key={client.id} client={client} />
+                            <ClientCard
+                                key={client.id}
+                                client={client}
+                                onDelete={
+                                    client.canDelete ? deleteClient : undefined
+                                }
+                            />
                         ))}
                     </div>
                 ) : (
-                    <ClientsTable clients={filteredClients} />
+                    <ClientsTable
+                        clients={filteredClients}
+                        onDelete={deleteClient}
+                    />
                 )}
             </main>
         </AuthenticatedLayout>
     );
 }
 
-function ClientCard({ client }: { client: ClientSummary }) {
+function ClientCard({
+    client,
+    onDelete,
+}: {
+    client: ClientSummary;
+    onDelete?: (client: ClientSummary) => void;
+}) {
     return (
         <Card className="transition-shadow hover:shadow-md">
             <CardHeader className="pb-2">
@@ -140,6 +171,16 @@ function ClientCard({ client }: { client: ClientSummary }) {
                                 <Pencil size={16} />
                             </Link>
                         </Button>
+                        {onDelete && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Supprimer"
+                                onClick={() => onDelete(client)}
+                            >
+                                <Trash2 size={16} />
+                            </Button>
+                        )}
                     </div>
                 </div>
             </CardHeader>
@@ -184,7 +225,13 @@ function ClientCard({ client }: { client: ClientSummary }) {
     );
 }
 
-function ClientsTable({ clients }: { clients: ClientSummary[] }) {
+function ClientsTable({
+    clients,
+    onDelete,
+}: {
+    clients: ClientSummary[];
+    onDelete: (client: ClientSummary) => void;
+}) {
     return (
         <div className="w-full overflow-hidden rounded-md border">
             <Table>
@@ -240,6 +287,16 @@ function ClientsTable({ clients }: { clients: ClientSummary[] }) {
                                         <Pencil size={16} />
                                     </Link>
                                 </Button>
+                                {client.canDelete && (
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        title="Supprimer"
+                                        onClick={() => onDelete(client)}
+                                    >
+                                        <Trash2 size={16} />
+                                    </Button>
+                                )}
                             </TableCell>
                         </TableRow>
                     ))}

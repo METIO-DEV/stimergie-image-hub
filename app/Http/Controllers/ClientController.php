@@ -6,6 +6,7 @@ use App\Http\Requests\StoreClientRequest;
 use App\Http\Requests\UpdateClientRequest;
 use App\Models\Client;
 use App\Support\ClientLogoUrlResolver;
+use App\Support\StoredImageObjectCleaner;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +20,7 @@ class ClientController extends Controller
 {
     public function __construct(
         private readonly ClientLogoUrlResolver $clientLogos,
+        private readonly StoredImageObjectCleaner $objectCleaner,
     ) {}
 
     public function index(Request $request): Response|RedirectResponse
@@ -53,6 +55,7 @@ class ClientController extends Controller
                 'imagesCount' => $client->images_count,
                 'membersCount' => $client->memberships_count,
                 'canUpdate' => $request->user()->can('update', $client),
+                'canDelete' => $request->user()->can('delete', $client),
                 'canManageMembers' => $request->user()->can('manageMembers', $client),
             ]),
             'canCreateClient' => Gate::allows('create', Client::class),
@@ -120,6 +123,7 @@ class ClientController extends Controller
         return Inertia::render('Clients/Show', [
             'client' => $this->clientDetails($client),
             'canUpdateClient' => $request->user()->can('update', $client),
+            'canDeleteClient' => $request->user()->can('delete', $client),
             'canManageMembers' => $request->user()->can('manageMembers', $client),
             'roleOptions' => $this->memberRoles(),
             'membershipStatuses' => $this->membershipStatuses(),
@@ -166,6 +170,32 @@ class ClientController extends Controller
         return redirect()
             ->route('clients.show', $client)
             ->with('success', 'Entreprise mise à jour.');
+    }
+
+    public function destroy(Client $client): RedirectResponse
+    {
+        Gate::authorize('delete', $client);
+
+        $images = $client->images()->get();
+        $logoObjectKey = $client->logo_object_key;
+
+        DB::transaction(function () use ($client): void {
+            DB::table('imports')
+                ->where('client_id', $client->id)
+                ->delete();
+
+            $client->delete();
+        });
+
+        $this->objectCleaner->deleteImageObjects($images);
+
+        if ($logoObjectKey) {
+            Storage::disk($this->imageDisk())->delete($logoObjectKey);
+        }
+
+        return redirect()
+            ->route('clients.index')
+            ->with('success', 'Entreprise supprimée.');
     }
 
     /**

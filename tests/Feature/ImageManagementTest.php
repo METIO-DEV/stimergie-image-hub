@@ -49,25 +49,18 @@ class ImageManagementTest extends TestCase
 
         Storage::disk('scaleway')->assertExists($image->object_key_original);
         Storage::disk('scaleway')->assertExists($image->object_key_web);
-        Storage::disk('scaleway')->assertExists($image->object_key_thumb);
         Storage::disk('scaleway')->assertExists($image->object_key_hd);
-        $this->assertStringStartsWith('photos/client-image/projet-image/originals/', $image->object_key_original);
-        $this->assertStringStartsWith('photos/client-image/projet-image/web/', $image->object_key_web);
-        $this->assertStringStartsWith('photos/client-image/projet-image/thumbs/', $image->object_key_thumb);
-        $this->assertStringStartsWith('photos/client-image/projet-image/hd/', $image->object_key_hd);
+        $this->assertStringStartsWith('photos/projet-image/', $image->object_key_original);
+        $this->assertStringStartsWith('photos/projet-image/JPG/', $image->object_key_web);
+        $this->assertNull($image->object_key_thumb);
+        $this->assertSame($image->object_key_original, $image->object_key_hd);
         $this->assertNotSame($image->object_key_original, $image->object_key_web);
-        $this->assertNotSame($image->object_key_web, $image->object_key_thumb);
         $this->assertSame('scaleway', $image->storage_provider);
         $this->assertSame('landscape', $image->orientation);
         $this->assertDatabaseHas('image_variants', [
             'image_id' => $image->id,
             'kind' => 'web',
             'object_key' => $image->object_key_web,
-        ]);
-        $this->assertDatabaseHas('image_variants', [
-            'image_id' => $image->id,
-            'kind' => 'thumb',
-            'object_key' => $image->object_key_thumb,
         ]);
         $this->assertDatabaseHas('image_variants', [
             'image_id' => $image->id,
@@ -94,7 +87,7 @@ class ImageManagementTest extends TestCase
         $this->assertSame('archived', $image->status);
         $this->assertSame('scaleway', $image->storage_provider);
         Storage::disk('scaleway')->assertExists($image->object_key_original);
-        $this->assertStringStartsWith('photos/client-image/projet-image/originals/', $image->object_key_original);
+        $this->assertStringStartsWith('photos/projet-image/', $image->object_key_original);
         $this->assertSame(['archive', 'matcha'], $image->tags()->orderBy('slug')->pluck('slug')->all());
     }
 }

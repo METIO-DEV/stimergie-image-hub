@@ -4,6 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\Client;
 use App\Models\ClientMembership;
+use App\Models\Image;
+use App\Models\Import as ImageImport;
+use App\Models\Project;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -270,6 +273,75 @@ class ClientManagementTest extends TestCase
         $this->actingAs($standardUser)
             ->getJson(route('users.search', ['q' => 'Ali']))
             ->assertForbidden();
+    }
+
+    public function test_super_admin_can_delete_client_with_projects_images_and_logo(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $client = Client::create([
+            'name' => 'Entreprise Suppression',
+            'slug' => 'entreprise-suppression',
+            'status' => 'active',
+            'logo_object_key' => 'clients/1/logo.png',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Suppression',
+            'slug' => 'projet-suppression',
+            'status' => 'active',
+        ]);
+        $image = Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'created_by' => $admin->id,
+            'title' => 'Image suppression entreprise',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/projet-suppression/source.jpg',
+            'object_key_web' => 'photos/projet-suppression/JPG/source.jpg',
+            'object_key_hd' => 'photos/projet-suppression/source.jpg',
+        ]);
+        ImageImport::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'started_by' => $admin->id,
+            'source' => 'folder_upload',
+            'status' => 'completed',
+            'total_items' => 1,
+        ]);
+
+        Storage::disk('scaleway')->put($client->logo_object_key, 'logo');
+        Storage::disk('scaleway')->put($image->object_key_original, 'original');
+        Storage::disk('scaleway')->put($image->object_key_web, 'web');
+
+        $this->actingAs($admin)
+            ->delete(route('clients.destroy', $client))
+            ->assertRedirect(route('clients.index'))
+            ->assertSessionHas('success', 'Entreprise supprimée.');
+
+        $this->assertDatabaseMissing('clients', ['id' => $client->id]);
+        $this->assertDatabaseMissing('projects', ['id' => $project->id]);
+        $this->assertDatabaseMissing('images', ['id' => $image->id]);
+        $this->assertDatabaseMissing('imports', ['client_id' => $client->id]);
+        Storage::disk('scaleway')->assertMissing('clients/1/logo.png');
+        Storage::disk('scaleway')->assertMissing('photos/projet-suppression/source.jpg');
+        Storage::disk('scaleway')->assertMissing('photos/projet-suppression/JPG/source.jpg');
+    }
+
+    public function test_admin_client_cannot_delete_client(): void
+    {
+        [$client, $owner] = $this->createClientWithOwner();
+
+        $this->actingAs($owner)
+            ->delete(route('clients.destroy', $client))
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('clients', ['id' => $client->id]);
     }
 
     /**

@@ -75,7 +75,7 @@ class ImageImportController extends Controller
         $checksum = hash_file('sha256', $sourcePath);
         $extension = $this->extension($file);
         $baseName = (string) Str::uuid();
-        $objectKey = "{$this->storagePath->prefix($import->project)}/originals/{$baseName}.{$extension}";
+        $objectKey = "{$this->storagePath->prefix($import->project)}/{$baseName}.{$extension}";
         $disk = (string) config('filesystems.image_disk', 'scaleway');
 
         $stream = fopen($sourcePath, 'r');

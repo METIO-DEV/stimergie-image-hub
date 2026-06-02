@@ -10,7 +10,8 @@ import {
     TableRow,
 } from "@/Components/ui/table";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import { Head, Link } from "@inertiajs/react";
+import { Head, Link, router } from "@inertiajs/react";
+import { Trash2 } from "lucide-react";
 import {
     AddMemberForm,
     MemberRow,
@@ -41,6 +42,7 @@ type ClientDetails = {
 type Props = {
     client: ClientDetails;
     canUpdateClient: boolean;
+    canDeleteClient: boolean;
     canManageMembers: boolean;
     roleOptions: Option[];
     membershipStatuses: Option[];
@@ -49,10 +51,23 @@ type Props = {
 export default function ClientsShow({
     client,
     canUpdateClient,
+    canDeleteClient,
     canManageMembers,
     roleOptions,
     membershipStatuses,
 }: Props) {
+    const deleteClient = () => {
+        if (
+            !window.confirm(
+                `Supprimer l'entreprise "${client.name}", ses projets et toutes ses images ? Cette action est définitive.`,
+            )
+        ) {
+            return;
+        }
+
+        router.delete(route("clients.destroy", client.id));
+    };
+
     return (
         <AuthenticatedLayout
             header={
@@ -68,13 +83,24 @@ export default function ClientsShow({
                             Retrouvez les membres et projets associés à cette entreprise.
                         </p>
                     </div>
-                    {canUpdateClient && (
-                        <Button asChild>
-                            <Link href={route("clients.edit", client.id)}>
-                                Modifier
-                            </Link>
-                        </Button>
-                    )}
+                    <div className="flex items-center gap-3">
+                        {canUpdateClient && (
+                            <Button asChild>
+                                <Link href={route("clients.edit", client.id)}>
+                                    Modifier
+                                </Link>
+                            </Button>
+                        )}
+                        {canDeleteClient && (
+                            <Button
+                                variant="destructive"
+                                onClick={deleteClient}
+                            >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Supprimer
+                            </Button>
+                        )}
+                    </div>
                 </div>
             }
         >

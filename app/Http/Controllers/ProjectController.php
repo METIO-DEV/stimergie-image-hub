@@ -4,12 +4,20 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreProjectRequest;
 use App\Http\Requests\UpdateProjectRequest;
+use App\Models\Import;
 use App\Models\Project;
+use App\Support\StoredImageObjectCleaner;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class ProjectController extends Controller
 {
+    public function __construct(
+        private readonly StoredImageObjectCleaner $objectCleaner,
+    ) {}
+
     public function store(StoreProjectRequest $request): RedirectResponse
     {
         $data = $request->validated();
@@ -40,6 +48,25 @@ class ProjectController extends Controller
         ]);
 
         return back()->with('success', 'Projet mis à jour.');
+    }
+
+    public function destroy(Request $request, Project $project): RedirectResponse
+    {
+        abort_unless($request->user()?->can('update', $project->client), 403);
+
+        $images = $project->images()->get();
+
+        DB::transaction(function () use ($project): void {
+            Import::query()
+                ->where('project_id', $project->id)
+                ->delete();
+
+            $project->delete();
+        });
+
+        $this->objectCleaner->deleteImageObjects($images);
+
+        return back()->with('success', 'Projet supprimé.');
     }
 
     private function uniqueSlug(int $clientId, string $name, ?Project $project = null): string

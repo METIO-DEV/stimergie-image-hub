@@ -211,6 +211,7 @@ class AppPageController extends Controller
                 'imagesCount' => $project->images_count,
                 'createdAt' => $project->created_at->toIso8601String(),
                 'canUpdate' => $this->canManageClientId($project->client_id, $manageableClientIds),
+                'canDelete' => $this->canManageClientId($project->client_id, $manageableClientIds),
             ]);
 
         return Inertia::render('Projects/Index', [
