@@ -64,6 +64,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/downloads', [DownloadController::class, 'store'])->name('downloads.store');
     Route::get('/downloads/{downloadJob}', [DownloadController::class, 'show'])->name('downloads.show');
     Route::get('/images', [AppPageController::class, 'images'])->name('images.index');
+    Route::get('/imports', [AppPageController::class, 'imports'])->name('imports.index');
     Route::get('/images/{image}/download', [ImageController::class, 'download'])->name('images.download');
     Route::post('/images', [ImageController::class, 'store'])->name('images.store');
     Route::patch('/images/bulk-project', [ImageController::class, 'bulkProject'])->name('images.bulk-project');

@@ -9,14 +9,23 @@ class ProjectImageStoragePath
 {
     public function prefix(Project $project): string
     {
-        $projectSegment = $this->segment(
-            $project->source_folder ?: $project->slug ?: $project->name ?: "projet-{$project->id}",
-        );
+        $projectSegment = $project->source_folder
+            ? $this->sourceFolderSegment($project->source_folder)
+            : $this->slugSegment($project->slug ?: $project->name ?: "projet-{$project->id}");
 
         return "photos/{$projectSegment}";
     }
 
-    private function segment(string $value): string
+    private function sourceFolderSegment(string $value): string
+    {
+        $value = str_replace('\\', '/', $value);
+        $value = preg_replace('#/+#', '/', $value);
+        $value = trim((string) $value, "/ \t\n\r\0\x0B");
+
+        return $value !== '' ? $value : 'dossier';
+    }
+
+    private function slugSegment(string $value): string
     {
         return Str::slug($value) ?: 'dossier';
     }

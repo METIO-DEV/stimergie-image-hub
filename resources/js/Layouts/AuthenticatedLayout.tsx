@@ -17,6 +17,7 @@ import {
     ChevronRight,
     Download,
     FolderOpen,
+    FolderUp,
     Image,
     LayoutDashboard,
     LogOut,
@@ -129,6 +130,12 @@ export default function Authenticated({
             active: route().current("images.index"),
         },
         {
+            href: route("imports.index"),
+            label: "Suivi des imports",
+            icon: FolderUp,
+            active: route().current("imports.index"),
+        },
+        {
             href: route("clients.index"),
             label: "Gestion des entreprises",
             icon: Building2,
@@ -152,6 +159,10 @@ export default function Authenticated({
         ? adminMenu
         : adminMenu.filter((item) => {
               if (item.label === "Gestion des images") {
+                  return abilities.canManageClientContent;
+              }
+
+              if (item.label === "Suivi des imports") {
                   return abilities.canManageClientContent;
               }
 
@@ -487,6 +498,10 @@ function breadcrumbItems(): BreadcrumbItem[] {
 
     if (route().current("images.index")) {
         return [home, { label: "Images" }];
+    }
+
+    if (route().current("imports.index")) {
+        return [home, { label: "Imports" }];
     }
 
     if (route().current("clients.create")) {

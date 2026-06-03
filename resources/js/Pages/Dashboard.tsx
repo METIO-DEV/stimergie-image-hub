@@ -90,7 +90,7 @@ export default function Dashboard({
                         value={stats.activeImports}
                         description={`${stats.imports} imports dossiers au total`}
                         icon={FolderUp}
-                        href={route("images.index")}
+                        href={route("imports.index")}
                     />
                 </div>
 
@@ -105,10 +105,10 @@ export default function Dashboard({
                         </p>
                     </div>
                     <Link
-                        href={route("images.index")}
+                        href={route("imports.index")}
                         className="inline-flex items-center justify-start gap-2 self-end text-sm font-semibold text-primary transition-colors hover:text-primary/80 lg:justify-end"
                     >
-                        Ouvrir la gestion des images
+                        Ouvrir le suivi des imports
                         <ArrowRight className="h-4 w-4" />
                     </Link>
                 </div>
@@ -185,7 +185,7 @@ function ImportRow({ importBatch }: { importBatch: RecentImport }) {
 
     return (
         <Link
-            href={route("images.index")}
+            href={route("imports.index")}
             className="grid gap-4 border-b p-5 transition-colors last:border-b-0 hover:bg-muted/30 md:grid-cols-[1fr_220px]"
         >
             <div className="min-w-0">

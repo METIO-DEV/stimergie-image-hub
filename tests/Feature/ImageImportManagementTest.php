@@ -340,6 +340,82 @@ class ImageImportManagementTest extends TestCase
         $this->assertDatabaseCount('images', 1);
     }
 
+    public function test_project_bucket_sync_keeps_same_filenames_from_distinct_folders(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        [, $project] = $this->clientAndProject();
+        $first = UploadedFile::fake()->image('source.jpg', 1200, 900);
+        $second = UploadedFile::fake()->image('source.jpg', 900, 1200);
+
+        Storage::disk('scaleway')->put(
+            'photos/projet-import/set-a/source.jpg',
+            file_get_contents($first->getRealPath()),
+        );
+        Storage::disk('scaleway')->put(
+            'photos/projet-import/set-a/JPG/source.jpg',
+            file_get_contents($first->getRealPath()),
+        );
+        Storage::disk('scaleway')->put(
+            'photos/projet-import/set-b/source.jpg',
+            file_get_contents($second->getRealPath()),
+        );
+        Storage::disk('scaleway')->put(
+            'photos/projet-import/set-b/JPG/source.jpg',
+            file_get_contents($second->getRealPath()),
+        );
+
+        $this->actingAs($admin)
+            ->postJson(route('projects.sync-bucket-images', $project))
+            ->assertOk()
+            ->assertJsonPath('total', 2)
+            ->assertJsonPath('created', 2);
+
+        $this->assertDatabaseHas('images', [
+            'project_id' => $project->id,
+            'object_key_original' => 'photos/projet-import/set-a/source.jpg',
+            'object_key_web' => 'photos/projet-import/set-a/JPG/source.jpg',
+        ]);
+        $this->assertDatabaseHas('images', [
+            'project_id' => $project->id,
+            'object_key_original' => 'photos/projet-import/set-b/source.jpg',
+            'object_key_web' => 'photos/projet-import/set-b/JPG/source.jpg',
+        ]);
+    }
+
+    public function test_project_bucket_sync_uses_exact_source_folder_as_bucket_prefix(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        [, $project] = $this->clientAndProject();
+        $project->update(['source_folder' => 'Client Name/SHOOT HD_01012026']);
+        $original = UploadedFile::fake()->image('source.jpg', 1200, 900);
+
+        Storage::disk('scaleway')->put(
+            'photos/Client Name/SHOOT HD_01012026/source.jpg',
+            file_get_contents($original->getRealPath()),
+        );
+
+        $this->actingAs($admin)
+            ->postJson(route('projects.sync-bucket-images', $project))
+            ->assertOk()
+            ->assertJsonPath('prefix', 'photos/Client Name/SHOOT HD_01012026')
+            ->assertJsonPath('created', 1);
+
+        $this->assertDatabaseHas('images', [
+            'project_id' => $project->id,
+            'object_key_original' => 'photos/Client Name/SHOOT HD_01012026/source.jpg',
+        ]);
+    }
+
     public function test_standard_user_cannot_sync_project_bucket_images(): void
     {
         Storage::fake('scaleway');

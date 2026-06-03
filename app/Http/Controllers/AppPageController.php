@@ -6,6 +6,7 @@ use App\Models\AuditLog;
 use App\Models\Client;
 use App\Models\DownloadJob;
 use App\Models\Image;
+use App\Models\Import;
 use App\Models\Project;
 use App\Models\ProjectAccessPeriod;
 use App\Models\User;
@@ -182,6 +183,35 @@ class AppPageController extends Controller
             'filters' => [
                 'clients' => $this->manageableClientOptions($manageableClientIds),
                 'projects' => $this->manageableProjectOptions($user, $manageableClientIds),
+            ],
+        ]);
+    }
+
+    public function imports(Request $request): Response
+    {
+        $user = $request->user();
+
+        abort_unless($this->canManageClientContent($user), 403);
+
+        $manageableClientIds = $this->manageableClientIds($user);
+        $query = Import::query()
+            ->with(['client:id,name', 'project:id,name', 'starter:id,name,email'])
+            ->where('source', 'folder_upload')
+            ->tap(fn ($query) => $this->applyImportManageableClientScope($query, $manageableClientIds));
+
+        $imports = (clone $query)
+            ->latest()
+            ->limit(40)
+            ->get()
+            ->map(fn (Import $import) => $this->importSummary($import));
+
+        return Inertia::render('Imports/Index', [
+            'imports' => $imports,
+            'stats' => [
+                'total' => (clone $query)->count(),
+                'active' => (clone $query)->whereIn('status', ['pending', 'processing'])->count(),
+                'failed' => (clone $query)->where('status', 'failed')->count(),
+                'completed' => (clone $query)->where('status', 'completed')->count(),
             ],
         ]);
     }
@@ -458,5 +488,55 @@ class AppPageController extends Controller
         }
 
         $query->whereIn('client_id', $manageableClientIds);
+    }
+
+    private function applyImportManageableClientScope($query, ?array $manageableClientIds): void
+    {
+        if ($manageableClientIds === null) {
+            return;
+        }
+
+        $query->whereIn('client_id', $manageableClientIds);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function importSummary(Import $import): array
+    {
+        $items = $import->items()
+            ->with('image:id,title')
+            ->latest()
+            ->limit(30)
+            ->get();
+
+        return [
+            'id' => $import->id,
+            'status' => $import->status,
+            'clientName' => $import->client?->name,
+            'projectName' => $import->project?->name,
+            'startedBy' => $import->starter?->name ?: $import->starter?->email,
+            'totalItems' => $import->total_items,
+            'uploadedItems' => $import->uploaded_items,
+            'processedItems' => $import->processed_items,
+            'failedItems' => $import->failed_items,
+            'duplicateItems' => $import->duplicate_items,
+            'totalBytes' => $import->total_bytes,
+            'startedAt' => $import->started_at?->toIso8601String(),
+            'finishedAt' => $import->finished_at?->toIso8601String(),
+            'items' => $items->map(fn ($item) => [
+                'id' => $item->id,
+                'imageId' => $item->image_id,
+                'imageTitle' => $item->image?->title,
+                'filename' => $item->original_filename ?: $item->source_identifier,
+                'relativePath' => $item->relative_path,
+                'status' => $item->status,
+                'sizeBytes' => $item->size_bytes,
+                'attempts' => $item->attempts,
+                'error' => $item->error_details,
+                'objectKeyOriginal' => $item->object_key_original,
+                'processedAt' => $item->processed_at?->toIso8601String(),
+            ]),
+        ];
     }
 }

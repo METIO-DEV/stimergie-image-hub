@@ -30,7 +30,7 @@ import {
 } from "@/Components/Legacy/LegacyDesign";
 import { ImageEditModal } from "@/Components/Legacy/LegacyModals";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import { Head, router } from "@inertiajs/react";
+import { Head, Link, router } from "@inertiajs/react";
 import { FolderUp, Pencil, Plus, RotateCcw, Upload } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
@@ -67,14 +67,6 @@ type ImportSummary = {
         status: string;
         error?: string | null;
     }>;
-};
-
-type BucketSyncSummary = {
-    prefix: string;
-    total: number;
-    created: number;
-    updated: number;
-    skipped: number;
 };
 
 const PAGE_SIZE = 20;
@@ -287,10 +279,7 @@ function FolderImportModal({
     const [files, setFiles] = useState<File[]>([]);
     const [summary, setSummary] = useState<ImportSummary | null>(null);
     const [uploading, setUploading] = useState(false);
-    const [syncingBucket, setSyncingBucket] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [bucketSyncResult, setBucketSyncResult] =
-        useState<BucketSyncSummary | null>(null);
 
     const imageFiles = useMemo(
         () => files.filter((file) => file.type.startsWith("image/")),
@@ -336,8 +325,6 @@ function FolderImportModal({
         setSummary(null);
         setError(null);
         setUploading(false);
-        setSyncingBucket(false);
-        setBucketSyncResult(null);
     }, [open]);
 
     const submit = async (event: FormEvent) => {
@@ -350,7 +337,6 @@ function FolderImportModal({
 
         setUploading(true);
         setError(null);
-        setBucketSyncResult(null);
 
         try {
             const batchResponse = await window.axios.post<ImportSummary>(
@@ -397,7 +383,6 @@ function FolderImportModal({
 
         setUploading(true);
         setError(null);
-        setBucketSyncResult(null);
 
         try {
             const response = await window.axios.post<ImportSummary>(
@@ -411,31 +396,17 @@ function FolderImportModal({
         }
     };
 
-    const syncBucket = async () => {
-        if (!projectId) {
-            setError("Sélectionnez un projet à synchroniser.");
-            return;
-        }
-
-        setSyncingBucket(true);
-        setError(null);
-        setBucketSyncResult(null);
-
-        try {
-            const response = await window.axios.post<BucketSyncSummary>(
-                projectBucketSyncUrl(Number(projectId)),
-            );
-            setBucketSyncResult(response.data);
-            router.reload({ only: ["images"] });
-        } catch (exception) {
-            setError(errorMessage(exception));
-        } finally {
-            setSyncingBucket(false);
-        }
-    };
-
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog
+            open={open}
+            onOpenChange={(nextOpen) => {
+                if (!nextOpen && uploading) {
+                    return;
+                }
+
+                onOpenChange(nextOpen);
+            }}
+        >
             <DialogContent className="max-h-[90vh] max-w-2xl overflow-hidden">
                 <DialogHeader>
                     <DialogTitle>Importer un dossier d'images</DialogTitle>
@@ -456,11 +427,7 @@ function FolderImportModal({
                                     setProjectId(event.target.value)
                                 }
                                 className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                disabled={
-                                    uploading ||
-                                    syncingBucket ||
-                                    Boolean(summary)
-                                }
+                                disabled={uploading || Boolean(summary)}
                             >
                                 <option value="">Sélectionner un projet</option>
                                 {projects.map((project) => (
@@ -486,11 +453,7 @@ function FolderImportModal({
                                 accept="image/*"
                                 multiple
                                 className="hidden"
-                                disabled={
-                                    uploading ||
-                                    syncingBucket ||
-                                    Boolean(summary)
-                                }
+                                disabled={uploading || Boolean(summary)}
                                 onChange={(event) =>
                                     setFiles(
                                         Array.from(event.target.files ?? []),
@@ -581,21 +544,6 @@ function FolderImportModal({
                             </div>
                         )}
 
-                        {bucketSyncResult && (
-                            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                                {bucketSyncResult.created} image
-                                {bucketSyncResult.created > 1 ? "s" : ""} ajoutée
-                                {bucketSyncResult.created > 1 ? "s" : ""}
-                                {bucketSyncResult.updated > 0
-                                    ? `, ${bucketSyncResult.updated} mise${bucketSyncResult.updated > 1 ? "s" : ""} à jour`
-                                    : ""}
-                                {bucketSyncResult.skipped > 0
-                                    ? `, ${bucketSyncResult.skipped} déjà connue${bucketSyncResult.skipped > 1 ? "s" : ""}`
-                                    : ""}
-                                . Dossier synchronisé : {bucketSyncResult.prefix}.
-                            </div>
-                        )}
-
                         {error && (
                             <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
                                 {error}
@@ -619,26 +567,21 @@ function FolderImportModal({
                             type="button"
                             variant="outline"
                             onClick={() => onOpenChange(false)}
+                            disabled={uploading}
                         >
                             Fermer
                         </Button>
-                        {!summary && (
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={syncBucket}
-                                disabled={syncingBucket || uploading || !projectId}
-                            >
-                                <RotateCcw className="mr-2 h-4 w-4" />
-                                {syncingBucket
-                                    ? "Synchronisation..."
-                                    : "Synchroniser le bucket"}
+                        {summary && (
+                            <Button type="button" variant="outline" asChild>
+                                <Link href={route("imports.index")}>
+                                    Voir le suivi
+                                </Link>
                             </Button>
                         )}
                         {!summary && (
                             <Button
                                 type="submit"
-                                disabled={uploading || syncingBucket}
+                                disabled={uploading}
                             >
                                 {uploading
                                     ? "Import en cours..."
@@ -685,10 +628,6 @@ function imageImportItemUrl(importId: number): string {
 
 function imageImportRetryUrl(importId: number): string {
     return `/image-imports/${importId}/retry-failed`;
-}
-
-function projectBucketSyncUrl(projectId: number): string {
-    return `/projects/${projectId}/sync-bucket-images`;
 }
 
 function formatBytes(bytes: number): string {

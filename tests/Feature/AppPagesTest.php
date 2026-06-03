@@ -30,6 +30,7 @@ class AppPagesTest extends TestCase
             'contact.index',
             'downloads.index',
             'images.index',
+            'imports.index',
             'projects.index',
             'users.index',
             'access-periods.index',

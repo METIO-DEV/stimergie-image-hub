@@ -32,7 +32,8 @@ use Illuminate\Support\Str;
     {--with-assets : Telecharge les images/logos et les pousse vers le disque scaleway}
     {--asset-limit= : Limite le nombre d assets uploades}
     {--asset-concurrency=8 : Nombre de telechargements paralleles par lot}
-    {--skip-existing-assets : Ignore les objets deja presents dans le bucket}')]
+    {--skip-existing-assets : Ignore les objets deja presents dans le bucket}
+    {--skip-tags : Ignore les tags image pour accelerer une restauration locale}')]
 #[Description('Importe le dump Supabase public vers le schema Laravel/Inertia')]
 class ImportLegacyDump extends Command
 {
@@ -44,9 +45,15 @@ class ImportLegacyDump extends Command
 
     private array $projects = [];
 
+    private array $projectClientIds = [];
+
     private array $images = [];
 
     private array $albums = [];
+
+    private array $tagIdsBySlug = [];
+
+    private array $imageTagRows = [];
 
     private int $uploadedAssets = 0;
 
@@ -90,6 +97,7 @@ class ImportLegacyDump extends Command
             $this->importProjects();
             $this->importAccessPeriods();
             $this->importImages();
+            $this->flushImageTagRows();
             $this->importImageShares();
             $this->importAlbums();
             $this->importBlogPosts();
@@ -227,6 +235,7 @@ class ImportLegacyDump extends Command
             );
 
             $this->projects[$row['id']] = $project->id;
+            $this->projectClientIds[$row['id']] = $project->client_id;
         }
     }
 
@@ -260,17 +269,11 @@ class ImportLegacyDump extends Command
                 continue;
             }
 
-            $project = Project::find($this->projects[$row['id_projet']]);
-
-            if (! $project) {
-                continue;
-            }
-
             $image = Image::updateOrCreate(
                 ['legacy_id' => (string) $row['id']],
                 [
-                    'client_id' => $project->client_id,
-                    'project_id' => $project->id,
+                    'client_id' => $this->projectClientIds[$row['id_projet']],
+                    'project_id' => $this->projects[$row['id_projet']],
                     'created_by' => $this->users[$row['created_by'] ?? null] ?? null,
                     'title' => $row['title'],
                     'description' => $row['description'] ?? null,
@@ -290,7 +293,10 @@ class ImportLegacyDump extends Command
             );
 
             $this->images[(string) $row['id']] = $image->id;
-            $this->syncTags($image, $row['tags'] ?? '');
+
+            if (! $this->option('skip-tags')) {
+                $this->syncTags($image, $row['tags'] ?? '');
+            }
         }
     }
 
@@ -625,15 +631,40 @@ class ImportLegacyDump extends Command
             ->map(fn (string $tag) => trim($tag))
             ->filter()
             ->unique(fn (string $tag) => Str::slug($tag))
-            ->map(function (string $tag): int {
-                return Tag::firstOrCreate(
-                    ['slug' => Str::slug($tag)],
-                    ['name' => $tag],
-                )->id;
-            })
+            ->map(fn (string $tag): int => $this->tagId($tag))
             ->all();
 
-        $image->tags()->sync($ids);
+        DB::table('image_tag')->where('image_id', $image->id)->delete();
+
+        foreach ($ids as $id) {
+            $this->imageTagRows[] = [
+                'image_id' => $image->id,
+                'tag_id' => $id,
+            ];
+        }
+    }
+
+    private function flushImageTagRows(): void
+    {
+        foreach (array_chunk($this->imageTagRows, 1000) as $rows) {
+            DB::table('image_tag')->insertOrIgnore($rows);
+        }
+
+        $this->imageTagRows = [];
+    }
+
+    private function tagId(string $tag): int
+    {
+        $slug = Str::slug($tag);
+
+        if (! isset($this->tagIdsBySlug[$slug])) {
+            $this->tagIdsBySlug[$slug] = Tag::firstOrCreate(
+                ['slug' => $slug],
+                ['name' => $tag],
+            )->id;
+        }
+
+        return $this->tagIdsBySlug[$slug];
     }
 
     private function profileClientIds(array $profile): array

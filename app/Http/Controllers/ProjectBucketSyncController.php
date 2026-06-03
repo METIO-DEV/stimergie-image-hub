@@ -114,9 +114,8 @@ class ProjectBucketSyncController extends Controller
     private function bucketPairs(array $files, string $prefix): array
     {
         $prefix = trim($prefix, '/');
-        $webPrefix = "{$prefix}/JPG/";
         $originals = [];
-        $webByBasename = [];
+        $webByIndex = [];
 
         foreach ($files as $file) {
             $key = trim($file, '/');
@@ -125,13 +124,15 @@ class ProjectBucketSyncController extends Controller
                 continue;
             }
 
-            if (Str::startsWith($key, $webPrefix)) {
-                $webByBasename[$this->basenameIndex($key)] = $key;
+            $index = $this->pairIndex($key, $prefix);
+
+            if ($this->isWebVariantObject($key, $prefix)) {
+                $webByIndex[$index] = $key;
 
                 continue;
             }
 
-            $originals[$this->basenameIndex($key)] = $key;
+            $originals[$index] = $key;
         }
 
         $pairs = [];
@@ -139,13 +140,13 @@ class ProjectBucketSyncController extends Controller
         foreach ($originals as $index => $original) {
             $pairs[] = [
                 'original' => $original,
-                'web' => $webByBasename[$index] ?? null,
+                'web' => $webByIndex[$index] ?? null,
             ];
 
-            unset($webByBasename[$index]);
+            unset($webByIndex[$index]);
         }
 
-        foreach ($webByBasename as $web) {
+        foreach ($webByIndex as $web) {
             $pairs[] = [
                 'original' => $web,
                 'web' => $web,
@@ -166,9 +167,39 @@ class ProjectBucketSyncController extends Controller
         return in_array(Str::lower(pathinfo($key, PATHINFO_EXTENSION)), ['jpg', 'jpeg', 'png', 'webp'], true);
     }
 
-    private function basenameIndex(string $key): string
+    private function pairIndex(string $key, string $prefix): string
     {
-        return Str::lower(pathinfo($key, PATHINFO_FILENAME));
+        $segments = explode('/', $this->relativePath($key, $prefix));
+        $filename = array_pop($segments) ?: '';
+        $segments = array_values(array_filter(
+            $segments,
+            fn (string $segment) => Str::lower($segment) !== 'jpg',
+        ));
+        $path = trim(implode('/', [...$segments, pathinfo($filename, PATHINFO_FILENAME)]), '/');
+
+        return Str::lower($path);
+    }
+
+    private function isWebVariantObject(string $key, string $prefix): bool
+    {
+        foreach (explode('/', $this->relativePath($key, $prefix)) as $segment) {
+            if (Str::lower($segment) === 'jpg') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function relativePath(string $key, string $prefix): string
+    {
+        $prefix = trim($prefix, '/');
+
+        if ($prefix !== '' && Str::startsWith($key, "{$prefix}/")) {
+            return Str::after($key, "{$prefix}/");
+        }
+
+        return $key;
     }
 
     private function existingImage(Project $project, string $original, ?string $web): ?Image
