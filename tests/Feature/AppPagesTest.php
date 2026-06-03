@@ -387,6 +387,33 @@ class AppPagesTest extends TestCase
                 ->etc());
     }
 
+    public function test_client_logos_fall_back_to_existing_legacy_bucket_object_by_slug(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        Client::create([
+            'name' => 'Client Logo',
+            'slug' => 'client-logo',
+            'status' => 'active',
+            'logo_object_key' => null,
+            'legacy_logo_url' => 'https://legacy.example/logo.png',
+        ]);
+
+        Storage::disk('scaleway')->put('clients/42/logo-legacy-client-logo.png', 'logo');
+
+        $this->actingAs($admin)
+            ->get(route('clients.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Clients/Index')
+                ->where('clients.0.logo', '/storage/clients/42/logo-legacy-client-logo.png')
+                ->etc());
+    }
+
     public function test_image_download_route_serves_attachment_from_scaleway_object(): void
     {
         Storage::fake('scaleway');
