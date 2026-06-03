@@ -105,6 +105,34 @@ class ProjectManagementTest extends TestCase
         ]);
     }
 
+    public function test_project_creation_generates_source_folder_from_client_and_project_names(): void
+    {
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $client = Client::create([
+            'name' => 'Sti Mergie & Compagnie',
+            'slug' => 'sti-mergie-compagnie',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)->post(route('projects.store'), [
+            'name' => 'Campagne Été 2026',
+            'client_id' => $client->id,
+            'type' => '',
+            'source_folder' => '',
+            'status' => 'active',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('projects', [
+            'client_id' => $client->id,
+            'name' => 'Campagne Été 2026',
+            'slug' => 'campagne-ete-2026',
+            'source_folder' => 'sti-mergie-compagnie/campagne-ete-2026',
+        ]);
+    }
+
     public function test_manager_can_delete_project_with_images_and_imports(): void
     {
         Storage::fake('scaleway');

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreProjectRequest;
 use App\Http\Requests\UpdateProjectRequest;
+use App\Models\Client;
 use App\Models\Import;
 use App\Models\Project;
 use App\Support\StoredImageObjectCleaner;
@@ -21,13 +22,16 @@ class ProjectController extends Controller
     public function store(StoreProjectRequest $request): RedirectResponse
     {
         $data = $request->validated();
+        $client = Client::findOrFail($data['client_id']);
+        $slug = $this->uniqueSlug($client->id, $data['name']);
 
         Project::create([
-            'client_id' => $data['client_id'],
+            'client_id' => $client->id,
             'name' => $data['name'],
-            'slug' => $this->uniqueSlug($data['client_id'], $data['name']),
+            'slug' => $slug,
             'type' => $data['type'] ?: null,
-            'source_folder' => $data['source_folder'] ?: null,
+            'source_folder' => $this->normalizedSourceFolder($data['source_folder'] ?? null)
+                ?: $this->generatedSourceFolder($client, $slug),
             'status' => $data['status'],
         ]);
 
@@ -85,5 +89,19 @@ class ProjectController extends Controller
         }
 
         return $slug;
+    }
+
+    private function generatedSourceFolder(Client $client, string $projectSlug): string
+    {
+        $clientSegment = Str::slug($client->slug ?: $client->name) ?: "entreprise-{$client->id}";
+
+        return "{$clientSegment}/{$projectSlug}";
+    }
+
+    private function normalizedSourceFolder(?string $sourceFolder): ?string
+    {
+        $sourceFolder = trim((string) $sourceFolder);
+
+        return $sourceFolder !== '' ? $sourceFolder : null;
     }
 }

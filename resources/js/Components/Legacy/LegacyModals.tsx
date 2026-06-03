@@ -36,6 +36,20 @@ type UserForEdit = {
     clients: Array<{ clientName: string | null }>;
 };
 
+const folderSegment = (value: string, fallback: string) => {
+    const normalized = value
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+
+    return normalized || fallback;
+};
+
+const generatedProjectFolder = (clientName: string, projectName: string) =>
+    `${folderSegment(clientName, "entreprise")}/${folderSegment(projectName, "projet")}`;
+
 export function ContactModal({
     open,
     onOpenChange,
@@ -196,6 +210,7 @@ export function ProjectEditModal({
         source_folder: "",
         status: "active",
     });
+    const [sourceFolderTouched, setSourceFolderTouched] = useState(false);
 
     useEffect(() => {
         if (!open) {
@@ -209,7 +224,31 @@ export function ProjectEditModal({
             source_folder: project?.sourceFolder || "",
             status: project?.status || "active",
         });
+        setSourceFolderTouched(false);
     }, [open, project, setData]);
+
+    useEffect(() => {
+        if (project || sourceFolderTouched || !data.client_id) {
+            return;
+        }
+
+        const client = clients.find(
+            (candidate) => candidate.id === Number(data.client_id),
+        );
+
+        if (!client) {
+            return;
+        }
+
+        setData("source_folder", generatedProjectFolder(client.name, data.name));
+    }, [
+        clients,
+        data.client_id,
+        data.name,
+        project,
+        setData,
+        sourceFolderTouched,
+    ]);
 
     useEffect(() => {
         if (recentlySuccessful) {
@@ -294,9 +333,10 @@ export function ProjectEditModal({
                             <Input
                                 id="project-folder"
                                 value={data.source_folder}
-                                onChange={(event) =>
-                                    setData("source_folder", event.target.value)
-                                }
+                                onChange={(event) => {
+                                    setSourceFolderTouched(true);
+                                    setData("source_folder", event.target.value);
+                                }}
                             />
                             <InputError message={errors.source_folder} />
                         </div>
