@@ -39,6 +39,7 @@ type FilterOption = {
     name: string;
     clientId?: number;
     clientName?: string;
+    sourceFolder?: string | null;
 };
 
 type Props = {
@@ -69,7 +70,23 @@ type ImportSummary = {
     }>;
 };
 
+type ImportProjectMode = "existing" | "new";
+
 const PAGE_SIZE = 20;
+
+const folderSegment = (value: string, fallback: string) => {
+    const normalized = value
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+
+    return normalized || fallback;
+};
+
+const generatedProjectFolder = (clientName: string, projectName: string) =>
+    `${folderSegment(clientName, "entreprise")}_${folderSegment(projectName, "projet")}`;
 
 export default function ImagesIndex({
     images,
@@ -247,6 +264,7 @@ export default function ImagesIndex({
             />
             <FolderImportModal
                 open={importModalOpen}
+                clients={filters.clients}
                 projects={filters.projects}
                 onOpenChange={setImportModalOpen}
             />
@@ -268,14 +286,25 @@ export default function ImagesIndex({
 
 function FolderImportModal({
     open,
+    clients,
     projects,
     onOpenChange,
 }: {
     open: boolean;
+    clients: FilterOption[];
     projects: FilterOption[];
     onOpenChange: (open: boolean) => void;
 }) {
+    const [projectMode, setProjectMode] =
+        useState<ImportProjectMode>("existing");
     const [projectId, setProjectId] = useState("");
+    const [newProject, setNewProject] = useState({
+        client_id: "",
+        name: "",
+        type: "",
+        source_folder: "",
+    });
+    const [sourceFolderTouched, setSourceFolderTouched] = useState(false);
     const [files, setFiles] = useState<File[]>([]);
     const [summary, setSummary] = useState<ImportSummary | null>(null);
     const [uploading, setUploading] = useState(false);
@@ -295,6 +324,12 @@ function FolderImportModal({
     const progressDone =
         (summary?.processedItems || 0) + (summary?.failedItems || 0);
     const progress = Math.min(100, Math.round((progressDone / progressTotal) * 100));
+    const selectedProject = projects.find(
+        (project) => String(project.id) === projectId,
+    );
+    const selectedClient = clients.find(
+        (client) => String(client.id) === newProject.client_id,
+    );
 
     useEffect(() => {
         if (!open || !summary || terminal) {
@@ -321,17 +356,63 @@ function FolderImportModal({
         }
 
         setProjectId("");
+        setProjectMode("existing");
+        setNewProject({
+            client_id: "",
+            name: "",
+            type: "",
+            source_folder: "",
+        });
+        setSourceFolderTouched(false);
         setFiles([]);
         setSummary(null);
         setError(null);
         setUploading(false);
     }, [open]);
 
+    useEffect(() => {
+        if (
+            projectMode !== "new" ||
+            sourceFolderTouched ||
+            !selectedClient
+        ) {
+            return;
+        }
+
+        setNewProject((current) => ({
+            ...current,
+            source_folder: generatedProjectFolder(
+                selectedClient.name,
+                current.name,
+            ),
+        }));
+    }, [projectMode, selectedClient, sourceFolderTouched, newProject.name]);
+
+    const updateNewProject = (
+        field: keyof typeof newProject,
+        value: string,
+    ) => {
+        setNewProject((current) => ({ ...current, [field]: value }));
+    };
+
     const submit = async (event: FormEvent) => {
         event.preventDefault();
 
-        if (!projectId || imageFiles.length === 0) {
-            setError("Sélectionnez un projet et au moins une image.");
+        if (imageFiles.length === 0) {
+            setError("Sélectionnez au moins une image.");
+            return;
+        }
+
+        if (projectMode === "existing" && !projectId) {
+            setError("Sélectionnez un projet existant.");
+            return;
+        }
+
+        if (
+            projectMode === "new" &&
+            (!newProject.client_id || !newProject.name.trim())
+        ) {
+            setError("Renseignez l'entreprise et le nom du nouveau projet.");
             return;
         }
 
@@ -342,7 +423,16 @@ function FolderImportModal({
             const batchResponse = await window.axios.post<ImportSummary>(
                 imageImportUrl(),
                 {
-                    project_id: Number(projectId),
+                    ...(projectMode === "existing"
+                        ? { project_id: Number(projectId) }
+                        : {
+                              new_project: {
+                                  client_id: Number(newProject.client_id),
+                                  name: newProject.name,
+                                  type: newProject.type,
+                                  source_folder: newProject.source_folder,
+                              },
+                          }),
                     total_items: imageFiles.length,
                     total_bytes: totalBytes,
                 },
@@ -418,26 +508,167 @@ function FolderImportModal({
 
                 <form onSubmit={submit}>
                     <div className="max-h-[calc(90vh-210px)] space-y-5 overflow-y-auto pr-2">
-                        <div className="space-y-2">
-                            <Label htmlFor="folder-import-project">Projet</Label>
-                            <select
-                                id="folder-import-project"
-                                value={projectId}
-                                onChange={(event) =>
-                                    setProjectId(event.target.value)
-                                }
-                                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        <div className="grid grid-cols-2 gap-2 rounded-md bg-muted p-1">
+                            <button
+                                type="button"
+                                className={`rounded px-3 py-2 text-sm font-semibold transition ${
+                                    projectMode === "existing"
+                                        ? "bg-background text-foreground shadow-sm"
+                                        : "text-muted-foreground hover:text-foreground"
+                                }`}
                                 disabled={uploading || Boolean(summary)}
+                                onClick={() => {
+                                    setProjectMode("existing");
+                                    setError(null);
+                                }}
                             >
-                                <option value="">Sélectionner un projet</option>
-                                {projects.map((project) => (
-                                    <option key={project.id} value={project.id}>
-                                        {project.clientName
-                                            ? `${project.clientName} - ${project.name}`
-                                            : project.name}
-                                    </option>
-                                ))}
-                            </select>
+                                Projet existant
+                            </button>
+                            <button
+                                type="button"
+                                className={`rounded px-3 py-2 text-sm font-semibold transition ${
+                                    projectMode === "new"
+                                        ? "bg-background text-foreground shadow-sm"
+                                        : "text-muted-foreground hover:text-foreground"
+                                }`}
+                                disabled={uploading || Boolean(summary)}
+                                onClick={() => {
+                                    setProjectMode("new");
+                                    setError(null);
+                                }}
+                            >
+                                Nouveau projet
+                            </button>
+                        </div>
+
+                        <div className="space-y-2">
+                            {projectMode === "existing" ? (
+                                <>
+                                    <Label htmlFor="folder-import-project">
+                                        Projet
+                                    </Label>
+                                    <select
+                                        id="folder-import-project"
+                                        value={projectId}
+                                        onChange={(event) =>
+                                            setProjectId(event.target.value)
+                                        }
+                                        className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                        disabled={uploading || Boolean(summary)}
+                                    >
+                                        <option value="">
+                                            Sélectionner un projet
+                                        </option>
+                                        {projects.map((project) => (
+                                            <option
+                                                key={project.id}
+                                                value={project.id}
+                                            >
+                                                {project.clientName
+                                                    ? `${project.clientName} - ${project.name}`
+                                                    : project.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <p className="text-xs text-muted-foreground">
+                                        Les images seront ajoutées au dossier du
+                                        projet sélectionné
+                                        {selectedProject?.sourceFolder
+                                            ? ` : ${selectedProject.sourceFolder}`
+                                            : "."}
+                                    </p>
+                                </>
+                            ) : (
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="folder-import-client">
+                                            Entreprise
+                                        </Label>
+                                        <select
+                                            id="folder-import-client"
+                                            value={newProject.client_id}
+                                            onChange={(event) => {
+                                                updateNewProject(
+                                                    "client_id",
+                                                    event.target.value,
+                                                );
+                                                setSourceFolderTouched(false);
+                                            }}
+                                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                            disabled={
+                                                uploading || Boolean(summary)
+                                            }
+                                        >
+                                            <option value="">
+                                                Sélectionner une entreprise
+                                            </option>
+                                            {clients.map((client) => (
+                                                <option
+                                                    key={client.id}
+                                                    value={client.id}
+                                                >
+                                                    {client.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="folder-import-project-name">
+                                            Nom du projet
+                                        </Label>
+                                        <Input
+                                            id="folder-import-project-name"
+                                            value={newProject.name}
+                                            disabled={
+                                                uploading || Boolean(summary)
+                                            }
+                                            onChange={(event) =>
+                                                updateNewProject(
+                                                    "name",
+                                                    event.target.value,
+                                                )
+                                            }
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="folder-import-project-type">
+                                            Type de projet
+                                        </Label>
+                                        <Input
+                                            id="folder-import-project-type"
+                                            value={newProject.type}
+                                            disabled={
+                                                uploading || Boolean(summary)
+                                            }
+                                            onChange={(event) =>
+                                                updateNewProject(
+                                                    "type",
+                                                    event.target.value,
+                                                )
+                                            }
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="folder-import-source-folder">
+                                            Nom du dossier
+                                        </Label>
+                                        <Input
+                                            id="folder-import-source-folder"
+                                            value={newProject.source_folder}
+                                            disabled={
+                                                uploading || Boolean(summary)
+                                            }
+                                            onChange={(event) => {
+                                                setSourceFolderTouched(true);
+                                                updateNewProject(
+                                                    "source_folder",
+                                                    event.target.value,
+                                                );
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <label className="flex cursor-pointer flex-col items-center rounded-lg border-2 border-dashed p-10 text-center transition-colors hover:bg-muted/50">

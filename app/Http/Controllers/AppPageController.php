@@ -391,12 +391,13 @@ class AppPageController extends Controller
             ->with('client:id,name')
             ->when(! $user->isSuperAdmin(), fn ($query) => $query->whereIn('client_id', $manageableClientIds ?? []))
             ->orderBy('name')
-            ->get(['id', 'client_id', 'name'])
+            ->get(['id', 'client_id', 'name', 'source_folder'])
             ->map(fn (Project $project) => [
                 'id' => $project->id,
                 'clientId' => $project->client_id,
                 'name' => $project->name,
                 'clientName' => $project->client?->name,
+                'sourceFolder' => $project->source_folder,
             ]);
     }
 

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\ProcessImageImportItem;
+use App\Models\Client;
 use App\Models\Import;
 use App\Models\ImportItem;
 use App\Models\Project;
@@ -23,13 +24,23 @@ class ImageImportController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'project_id' => ['required', 'integer', Rule::exists('projects', 'id')],
+            'project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')],
+            'new_project' => ['nullable', 'array'],
+            'new_project.client_id' => ['required_without:project_id', 'nullable', 'integer', Rule::exists('clients', 'id')],
+            'new_project.name' => ['required_without:project_id', 'nullable', 'string', 'max:255'],
+            'new_project.type' => ['nullable', 'string', 'max:255'],
+            'new_project.source_folder' => ['nullable', 'string', 'max:255'],
             'total_items' => ['required', 'integer', 'min:1', 'max:500'],
             'total_bytes' => ['nullable', 'integer', 'min:0', 'max:2147483648'],
         ]);
 
-        $project = Project::with('client')->findOrFail($data['project_id']);
-        $this->authorizeProjectImport($request, $project);
+        $project = isset($data['project_id'])
+            ? Project::with('client')->findOrFail($data['project_id'])
+            : $this->createProjectForImport($request, $data['new_project'] ?? []);
+
+        if (isset($data['project_id'])) {
+            $this->authorizeProjectImport($request, $project);
+        }
 
         $import = Import::create([
             'client_id' => $project->client_id,
@@ -154,6 +165,67 @@ class ImageImportController extends Controller
 
         abort_unless($user?->isSuperAdmin()
             || ($project->client && $user?->hasClientRole($project->client, ['owner', 'manager'])), 403);
+    }
+
+    /**
+     * @param  array<string, mixed>  $projectData
+     */
+    private function createProjectForImport(Request $request, array $projectData): Project
+    {
+        $client = Client::findOrFail((int) $projectData['client_id']);
+
+        abort_unless($request->user()?->can('update', $client), 403);
+
+        $name = (string) $projectData['name'];
+        $slug = $this->uniqueSlug($client->id, $name);
+
+        return Project::create([
+            'client_id' => $client->id,
+            'name' => $name,
+            'slug' => $slug,
+            'type' => $this->nullableString($projectData['type'] ?? null),
+            'source_folder' => $this->normalizedSourceFolder($projectData['source_folder'] ?? null)
+                ?: $this->generatedSourceFolder($client, $slug),
+            'status' => 'active',
+        ])->load('client');
+    }
+
+    private function uniqueSlug(int $clientId, string $name): string
+    {
+        $base = Str::slug($name) ?: 'projet';
+        $slug = $base;
+        $suffix = 2;
+
+        while (Project::query()
+            ->where('client_id', $clientId)
+            ->where('slug', $slug)
+            ->exists()) {
+            $slug = "{$base}-{$suffix}";
+            $suffix++;
+        }
+
+        return $slug;
+    }
+
+    private function generatedSourceFolder(Client $client, string $projectSlug): string
+    {
+        $clientSegment = Str::slug($client->slug ?: $client->name) ?: "entreprise-{$client->id}";
+
+        return "{$clientSegment}_{$projectSlug}";
+    }
+
+    private function normalizedSourceFolder(mixed $sourceFolder): ?string
+    {
+        $sourceFolder = trim((string) $sourceFolder);
+
+        return $sourceFolder !== '' ? $sourceFolder : null;
+    }
+
+    private function nullableString(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value !== '' ? $value : null;
     }
 
     /**

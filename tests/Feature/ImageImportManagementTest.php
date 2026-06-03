@@ -50,6 +50,51 @@ class ImageImportManagementTest extends TestCase
         ]);
     }
 
+    public function test_super_admin_can_create_folder_import_batch_with_new_project(): void
+    {
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $client = Client::create([
+            'name' => 'Client Import',
+            'slug' => 'client-import',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson(route('image-imports.store'), [
+                'new_project' => [
+                    'client_id' => $client->id,
+                    'name' => 'Campagne Bonus',
+                    'type' => 'social',
+                    'source_folder' => '',
+                ],
+                'total_items' => 2,
+                'total_bytes' => 8000,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('status', 'pending')
+            ->assertJsonPath('projectName', 'Campagne Bonus')
+            ->assertJsonPath('clientName', $client->name);
+
+        $project = Project::query()
+            ->where('client_id', $client->id)
+            ->where('name', 'Campagne Bonus')
+            ->firstOrFail();
+
+        $this->assertSame('campagne-bonus', $project->slug);
+        $this->assertSame('client-import_campagne-bonus', $project->source_folder);
+
+        $this->assertDatabaseHas('imports', [
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'source' => 'folder_upload',
+            'status' => 'pending',
+            'total_items' => 2,
+        ]);
+    }
+
     public function test_standard_user_cannot_create_folder_import_batch(): void
     {
         $user = User::factory()->create([
