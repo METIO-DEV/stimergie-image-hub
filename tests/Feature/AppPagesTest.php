@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Client;
 use App\Models\ClientMembership;
 use App\Models\Image;
+use App\Models\LegalPage;
 use App\Models\Project;
 use App\Models\ProjectAccessPeriod;
 use App\Models\User;
@@ -233,13 +234,78 @@ class AppPagesTest extends TestCase
 
     public function test_legal_pages_are_publicly_reachable(): void
     {
-        foreach (['legal-notice', 'terms', 'privacy'] as $routeName) {
+        foreach (['legal-notice', 'about', 'terms', 'terms.legacy', 'privacy', 'privacy.legacy', 'licenses'] as $routeName) {
             $this->get(route($routeName))
                 ->assertOk()
                 ->assertInertia(fn (Assert $page) => $page
                     ->component('Legal/Show')
+                    ->has('page.title')
+                    ->has('page.content')
                     ->etc());
         }
+    }
+
+    public function test_legal_pages_use_legacy_editable_content(): void
+    {
+        $this->get(route('about'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Legal/Show')
+                ->where('page.title', 'À propos')
+                ->where('canEdit', false)
+                ->where('page.content', fn (string $content) => str_contains($content, 'Stimergie est une plateforme française'))
+                ->etc());
+
+        $this->get(route('licenses'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Legal/Show')
+                ->where('page.title', 'Licences')
+                ->where('page.content', fn (string $content) => str_contains($content, 'Licence standard'))
+                ->etc());
+    }
+
+    public function test_super_admin_can_update_legal_page_content(): void
+    {
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $page = LegalPage::query()
+            ->where('page_type', 'about')
+            ->firstOrFail();
+
+        $this->actingAs($admin)
+            ->patch(route('legal-pages.update', $page), [
+                'title' => 'À propos de Stimergie',
+                'content' => '<h2>Contenu modifié</h2><p>Texte administrable.</p>',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('legal_pages', [
+            'id' => $page->id,
+            'title' => 'À propos de Stimergie',
+            'content' => '<h2>Contenu modifié</h2><p>Texte administrable.</p>',
+            'updated_by' => $admin->id,
+        ]);
+    }
+
+    public function test_standard_user_cannot_update_legal_page_content(): void
+    {
+        $user = User::factory()->create([
+            'platform_role' => 'user',
+            'status' => 'active',
+        ]);
+        $page = LegalPage::query()
+            ->where('page_type', 'about')
+            ->firstOrFail();
+
+        $this->actingAs($user)
+            ->patch(route('legal-pages.update', $page), [
+                'title' => 'Modification refusée',
+                'content' => '<p>Refusé</p>',
+            ])
+            ->assertForbidden();
     }
 
     public function test_gallery_resolves_image_urls_from_scaleway_object_keys(): void

@@ -456,6 +456,7 @@ export default function Authenticated({
                                 href: route("gallery.index"),
                             },
                             { label: "Projets", href: route("projects.index") },
+                            { label: "À propos", href: route("about") },
                             { label: "Contact", href: route("contact.index") },
                         ]}
                     />
@@ -463,16 +464,16 @@ export default function Authenticated({
                         title="LÉGAL"
                         items={[
                             {
-                                label: "Mentions légales",
-                                href: route("legal-notice"),
-                            },
-                            {
                                 label: "Conditions d'utilisation",
                                 href: route("terms"),
                             },
                             {
                                 label: "Politique de confidentialité",
                                 href: route("privacy"),
+                            },
+                            {
+                                label: "Licences",
+                                href: route("licenses"),
                             },
                         ]}
                     />

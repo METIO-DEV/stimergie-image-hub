@@ -23,9 +23,14 @@ use Inertia\Inertia;
 
 Route::redirect('/', '/gallery');
 
-Route::get('/mentions-legales', [LegalPageController::class, 'legalNotice'])->name('legal-notice');
+Route::get('/about', [LegalPageController::class, 'about'])->name('about');
+Route::get('/a-propos', [LegalPageController::class, 'about'])->name('about.fr');
+Route::get('/mentions-legales', [LegalPageController::class, 'about'])->name('legal-notice');
+Route::get('/terms-of-service', [LegalPageController::class, 'terms'])->name('terms.legacy');
 Route::get('/conditions-utilisation', [LegalPageController::class, 'terms'])->name('terms');
+Route::get('/privacy-policy', [LegalPageController::class, 'privacy'])->name('privacy.legacy');
 Route::get('/confidentialite', [LegalPageController::class, 'privacy'])->name('privacy');
+Route::get('/licenses', [LegalPageController::class, 'licenses'])->name('licenses');
 Route::get('/shared-albums/{shareKey}', [SharedAlbumController::class, 'show'])->name('shared-albums.show');
 Route::get('/shared-albums/{shareKey}/download', [SharedAlbumController::class, 'download'])->name('shared-albums.download');
 
@@ -96,6 +101,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/access-periods', [ProjectAccessPeriodController::class, 'store'])->name('access-periods.store');
     Route::patch('/access-periods/{accessPeriod}', [ProjectAccessPeriodController::class, 'update'])->name('access-periods.update');
     Route::delete('/access-periods/{accessPeriod}', [ProjectAccessPeriodController::class, 'destroy'])->name('access-periods.destroy');
+    Route::patch('/legal-pages/{legalPage}', [LegalPageController::class, 'update'])->name('legal-pages.update');
 
     Route::resource('clients', ClientController::class);
     Route::post('/clients/{client}/members', [ClientMemberController::class, 'store'])->name('clients.members.store');
