@@ -95,7 +95,7 @@ class ProjectController extends Controller
     {
         $clientSegment = Str::slug($client->slug ?: $client->name) ?: "entreprise-{$client->id}";
 
-        return "{$clientSegment}/{$projectSlug}";
+        return "{$clientSegment}_{$projectSlug}";
     }
 
     private function normalizedSourceFolder(?string $sourceFolder): ?string

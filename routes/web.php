@@ -6,9 +6,12 @@ use App\Http\Controllers\ClientMemberController;
 use App\Http\Controllers\DownloadController;
 use App\Http\Controllers\ImageController;
 use App\Http\Controllers\ImageImportController;
+use App\Http\Controllers\LegalPageController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ProjectAccessPeriodController;
 use App\Http\Controllers\ProjectBucketSyncController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\SharedAlbumController;
 use App\Http\Controllers\UserController;
 use App\Models\Client;
 use App\Models\Image;
@@ -19,6 +22,12 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::redirect('/', '/gallery');
+
+Route::get('/mentions-legales', [LegalPageController::class, 'legalNotice'])->name('legal-notice');
+Route::get('/conditions-utilisation', [LegalPageController::class, 'terms'])->name('terms');
+Route::get('/confidentialite', [LegalPageController::class, 'privacy'])->name('privacy');
+Route::get('/shared-albums/{shareKey}', [SharedAlbumController::class, 'show'])->name('shared-albums.show');
+Route::get('/shared-albums/{shareKey}/download', [SharedAlbumController::class, 'download'])->name('shared-albums.download');
 
 Route::get('/dashboard', function (Request $request) {
     abort_unless($request->user()->isSuperAdmin(), 403);
@@ -73,6 +82,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/image-imports/{import}', [ImageImportController::class, 'show'])->name('image-imports.show');
     Route::post('/image-imports/{import}/items', [ImageImportController::class, 'item'])->name('image-imports.items.store');
     Route::post('/image-imports/{import}/retry-failed', [ImageImportController::class, 'retryFailed'])->name('image-imports.retry-failed');
+    Route::post('/shared-albums', [SharedAlbumController::class, 'store'])->name('shared-albums.store');
     Route::get('/projects', [AppPageController::class, 'projects'])->name('projects.index');
     Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
     Route::post('/projects/{project}/sync-bucket-images', [ProjectBucketSyncController::class, 'store'])->name('projects.sync-bucket-images');
@@ -83,6 +93,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/users', [UserController::class, 'store'])->name('users.store');
     Route::patch('/users/{user}', [UserController::class, 'update'])->name('users.update');
     Route::get('/access-periods', [AppPageController::class, 'accessPeriods'])->name('access-periods.index');
+    Route::post('/access-periods', [ProjectAccessPeriodController::class, 'store'])->name('access-periods.store');
+    Route::patch('/access-periods/{accessPeriod}', [ProjectAccessPeriodController::class, 'update'])->name('access-periods.update');
+    Route::delete('/access-periods/{accessPeriod}', [ProjectAccessPeriodController::class, 'destroy'])->name('access-periods.destroy');
 
     Route::resource('clients', ClientController::class);
     Route::post('/clients/{client}/members', [ClientMemberController::class, 'store'])->name('clients.members.store');

@@ -29,7 +29,15 @@ import {
     UserRound,
     Users,
 } from "lucide-react";
-import { ReactNode, memo, useEffect, useMemo, useRef, useState } from "react";
+import {
+    ReactNode,
+    memo,
+    useEffect,
+    useId,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
 
 export type ViewMode = "card" | "list";
 
@@ -146,13 +154,17 @@ export function LegacySearch({
     value,
     onChange,
     placeholder = "Recherchez des images...",
+    suggestions = [],
     className,
 }: {
     value: string;
     onChange: (value: string) => void;
     placeholder?: string;
+    suggestions?: string[];
     className?: string;
 }) {
+    const suggestionsId = useId();
+
     return (
         <div className={cn("relative w-full", className)}>
             <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -160,8 +172,16 @@ export function LegacySearch({
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
                 placeholder={placeholder}
+                list={suggestions.length > 0 ? suggestionsId : undefined}
                 className="h-11 w-full rounded-full border border-border bg-muted px-11 text-sm outline-none focus:ring-2 focus:ring-primary/30"
             />
+            {suggestions.length > 0 && (
+                <datalist id={suggestionsId}>
+                    {suggestions.map((suggestion) => (
+                        <option key={suggestion} value={suggestion} />
+                    ))}
+                </datalist>
+            )}
             <Button
                 type="button"
                 size="icon"

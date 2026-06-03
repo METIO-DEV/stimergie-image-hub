@@ -450,15 +450,30 @@ export default function Authenticated({
                     </div>
                     <FooterColumn
                         title="NAVIGATION"
-                        items={["Accueil", "Banque d'images", "À propos"]}
+                        items={[
+                            {
+                                label: "Banque d'images",
+                                href: route("gallery.index"),
+                            },
+                            { label: "Projets", href: route("projects.index") },
+                            { label: "Contact", href: route("contact.index") },
+                        ]}
                     />
                     <FooterColumn
                         title="LÉGAL"
                         items={[
-                            "Conditions d'utilisation",
-                            "Politique de confidentialité",
-                            "Licences",
-                            "Contact",
+                            {
+                                label: "Mentions légales",
+                                href: route("legal-notice"),
+                            },
+                            {
+                                label: "Conditions d'utilisation",
+                                href: route("terms"),
+                            },
+                            {
+                                label: "Politique de confidentialité",
+                                href: route("privacy"),
+                            },
                         ]}
                     />
                 </div>
@@ -566,7 +581,13 @@ function UserMenuItem({ item }: { item: MenuItem }) {
     );
 }
 
-function FooterColumn({ title, items }: { title: string; items: string[] }) {
+function FooterColumn({
+    title,
+    items,
+}: {
+    title: string;
+    items: Array<{ label: string; href?: string }>;
+}) {
     return (
         <div>
             <h3 className="text-sm font-bold tracking-wide text-muted-foreground">
@@ -574,8 +595,17 @@ function FooterColumn({ title, items }: { title: string; items: string[] }) {
             </h3>
             <div className="mt-7 space-y-5">
                 {items.map((item) => (
-                    <div key={item} className="text-lg text-foreground">
-                        {item}
+                    <div key={item.label} className="text-lg text-foreground">
+                        {item.href ? (
+                            <Link
+                                href={item.href}
+                                className="transition-colors hover:text-primary"
+                            >
+                                {item.label}
+                            </Link>
+                        ) : (
+                            item.label
+                        )}
                     </div>
                 ))}
             </div>

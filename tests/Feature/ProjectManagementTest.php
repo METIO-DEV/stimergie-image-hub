@@ -129,7 +129,7 @@ class ProjectManagementTest extends TestCase
             'client_id' => $client->id,
             'name' => 'Campagne Été 2026',
             'slug' => 'campagne-ete-2026',
-            'source_folder' => 'sti-mergie-compagnie/campagne-ete-2026',
+            'source_folder' => 'sti-mergie-compagnie_campagne-ete-2026',
         ]);
     }
 

@@ -9,6 +9,7 @@ use App\Models\Image;
 use App\Models\Import;
 use App\Models\Project;
 use App\Models\ProjectAccessPeriod;
+use App\Models\Tag;
 use App\Models\User;
 use App\Support\ClientLogoUrlResolver;
 use App\Support\ImageUrlResolver;
@@ -76,6 +77,7 @@ class AppPageController extends Controller
             ],
             'bulkProjects' => $this->manageableProjectOptions($user, $manageableClientIds),
             'canBulkAssignImages' => $this->canManageClientContent($user),
+            'canCreateSharedAlbums' => $this->canManageClientContent($user),
             'pagination' => [
                 'currentPage' => $page,
                 'perPage' => $perPage,
@@ -305,7 +307,9 @@ class AppPageController extends Controller
 
     public function accessPeriods(Request $request): Response
     {
-        $clientIds = $this->projectAccess->accessibleClientIds($request->user());
+        $user = $request->user();
+        $clientIds = $this->projectAccess->accessibleClientIds($user);
+        $manageableClientIds = $this->manageableClientIds($user);
 
         $periods = ProjectAccessPeriod::query()
             ->with(['client:id,name', 'project:id,name'])
@@ -314,21 +318,28 @@ class AppPageController extends Controller
             ->get()
             ->map(fn (ProjectAccessPeriod $period) => [
                 'id' => $period->id,
+                'clientId' => $period->client_id,
                 'clientName' => $period->client->name,
+                'projectId' => $period->project_id,
                 'projectName' => $period->project->name,
                 'isActive' => $period->is_active,
                 'startsAt' => $period->starts_at?->toDateString(),
                 'endsAt' => $period->ends_at?->toDateString(),
+                'status' => $this->accessPeriodStatus($period),
+                'canUpdate' => $request->user()->can('update', $period),
+                'canDelete' => $request->user()->can('delete', $period),
             ]);
 
         return Inertia::render('AccessPeriods/Index', [
             'periods' => $periods,
-            'canManageAccessPeriods' => false,
+            'clients' => $this->manageableClientOptions($manageableClientIds),
+            'projects' => $this->manageableProjectOptions($user, $manageableClientIds),
+            'canManageAccessPeriods' => $request->user()->can('viewAny', ProjectAccessPeriod::class),
         ]);
     }
 
     /**
-     * @return array{clients: mixed, projects: mixed}
+     * @return array{clients: mixed, projects: mixed, tags: mixed}
      */
     private function filterOptions(User $user, ?array $clientIds): array
     {
@@ -344,6 +355,15 @@ class AppPageController extends Controller
                     'clientId' => $project->client_id,
                     'name' => $project->name,
                     'clientName' => $project->client?->name,
+                ]),
+            'tags' => Tag::query()
+                ->whereHas('images', fn ($query) => $this->projectAccess->applyImageVisibility($query, $user))
+                ->orderBy('name')
+                ->limit(100)
+                ->get(['id', 'name'])
+                ->map(fn (Tag $tag) => [
+                    'id' => $tag->id,
+                    'name' => $tag->name,
                 ]),
         ];
     }
@@ -497,6 +517,23 @@ class AppPageController extends Controller
         }
 
         $query->whereIn('client_id', $manageableClientIds);
+    }
+
+    private function accessPeriodStatus(ProjectAccessPeriod $period): string
+    {
+        if (! $period->is_active) {
+            return 'inactive';
+        }
+
+        if ($period->starts_at && $period->starts_at->isFuture()) {
+            return 'upcoming';
+        }
+
+        if ($period->ends_at && $period->ends_at->isPast()) {
+            return 'expired';
+        }
+
+        return 'active';
     }
 
     /**

@@ -16,7 +16,7 @@ import {
 } from "@/Components/Legacy/LegacyDesign";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, router, usePage } from "@inertiajs/react";
-import { Download, FolderInput, Infinity, SquareCheck } from "lucide-react";
+import { Download, FolderInput, Infinity, Share2, SquareCheck } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type FilterOption = {
@@ -36,6 +36,7 @@ type Props = {
     filters: {
         clients: FilterOption[];
         projects: FilterOption[];
+        tags: FilterOption[];
     };
     activeFilters: {
         search: string;
@@ -45,6 +46,7 @@ type Props = {
     };
     bulkProjects: FilterOption[];
     canBulkAssignImages: boolean;
+    canCreateSharedAlbums: boolean;
     pagination: {
         currentPage: number;
         perPage: number;
@@ -60,6 +62,7 @@ export default function GalleryIndex({
     activeFilters,
     bulkProjects,
     canBulkAssignImages,
+    canCreateSharedAlbums,
     pagination,
 }: Props) {
     const user = usePage().props.auth.user;
@@ -76,6 +79,13 @@ export default function GalleryIndex({
     const [detailImage, setDetailImage] = useState<LegacyImage | null>(null);
     const [bulkProjectOpen, setBulkProjectOpen] = useState(false);
     const [bulkProjectId, setBulkProjectId] = useState("");
+    const [shareOpen, setShareOpen] = useState(false);
+    const [shareName, setShareName] = useState("");
+    const [shareDescription, setShareDescription] = useState("");
+    const [shareRecipients, setShareRecipients] = useState("");
+    const [shareMessage, setShareMessage] = useState("");
+    const [shareStartsAt, setShareStartsAt] = useState("");
+    const [shareExpiresAt, setShareExpiresAt] = useState("");
 
     const projects = useMemo(
         () =>
@@ -95,6 +105,28 @@ export default function GalleryIndex({
         selectedImageItems.length === selectedImages.length &&
         selectedImageItems.every((image) => image.canManage);
     const paginatedImages = images;
+    const searchSuggestions = useMemo(
+        () =>
+            [
+                ...filters.clients.map((client) => client.name),
+                ...filters.projects.map((project) => project.name),
+                ...filters.tags.map((tag) => tag.name),
+                ...images.flatMap((image) => [
+                    image.title,
+                    ...(image.tags || []),
+                ]),
+            ]
+                .filter(Boolean)
+                .filter(
+                    (value, index, values) =>
+                        values.findIndex(
+                            (candidate) =>
+                                candidate.toLowerCase() === value.toLowerCase(),
+                        ) === index,
+                )
+                .slice(0, 120),
+        [filters.clients, filters.projects, filters.tags, images],
+    );
 
     const filterParams = (
         nextPage = 1,
@@ -189,6 +221,34 @@ export default function GalleryIndex({
         );
     };
 
+    const createSharedAlbum = () => {
+        router.post(
+            route("shared-albums.store"),
+            {
+                name: shareName,
+                description: shareDescription,
+                recipients: shareRecipients,
+                message: shareMessage,
+                starts_at: shareStartsAt || null,
+                expires_at: shareExpiresAt || null,
+                image_ids: selectedImages.map((id) => Number(id)),
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setSelectedImages([]);
+                    setShareOpen(false);
+                    setShareName("");
+                    setShareDescription("");
+                    setShareRecipients("");
+                    setShareMessage("");
+                    setShareStartsAt("");
+                    setShareExpiresAt("");
+                },
+            },
+        );
+    };
+
     return (
         <AuthenticatedLayout>
             <Head title="Banque d'images" />
@@ -215,6 +275,7 @@ export default function GalleryIndex({
                                     setSearch(value);
                                     setCurrentPage(1);
                                 }}
+                                suggestions={searchSuggestions}
                                 className="md:max-w-sm"
                             />
                             <div className="flex w-full flex-col gap-4 md:ml-auto md:flex-row">
@@ -332,6 +393,24 @@ export default function GalleryIndex({
                                         Lier à un projet
                                     </Button>
                                 )}
+                                {canCreateSharedAlbums && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="gap-2"
+                                        onClick={() => {
+                                            setShareName(
+                                                selectedImageItems.length === 1
+                                                    ? selectedImageItems[0].title
+                                                    : `Sélection de ${selectedImages.length} images`,
+                                            );
+                                            setShareOpen(true);
+                                        }}
+                                    >
+                                        <Share2 className="h-4 w-4" />
+                                        Partager
+                                    </Button>
+                                )}
                                 <Button
                                     variant="ghost"
                                     size="sm"
@@ -399,6 +478,111 @@ export default function GalleryIndex({
                             onClick={assignSelectionToProject}
                         >
                             Lier au projet
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+                <DialogContent className="max-w-xl">
+                    <DialogHeader>
+                        <DialogTitle>Créer un album partagé</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div className="text-sm text-muted-foreground">
+                            {selectedImages.length} image
+                            {selectedImages.length > 1 ? "s" : ""} dans
+                            l'album.
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">
+                                Nom de l'album
+                            </label>
+                            <input
+                                value={shareName}
+                                onChange={(event) =>
+                                    setShareName(event.target.value)
+                                }
+                                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">
+                                Description
+                            </label>
+                            <textarea
+                                value={shareDescription}
+                                onChange={(event) =>
+                                    setShareDescription(event.target.value)
+                                }
+                                className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">
+                                Destinataires
+                            </label>
+                            <input
+                                value={shareRecipients}
+                                onChange={(event) =>
+                                    setShareRecipients(event.target.value)
+                                }
+                                placeholder="email@exemple.fr, autre@exemple.fr"
+                                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                            />
+                        </div>
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">
+                                    Début
+                                </label>
+                                <input
+                                    type="date"
+                                    value={shareStartsAt}
+                                    onChange={(event) =>
+                                        setShareStartsAt(event.target.value)
+                                    }
+                                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">
+                                    Expiration
+                                </label>
+                                <input
+                                    type="date"
+                                    value={shareExpiresAt}
+                                    onChange={(event) =>
+                                        setShareExpiresAt(event.target.value)
+                                    }
+                                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">
+                                Message
+                            </label>
+                            <textarea
+                                value={shareMessage}
+                                onChange={(event) =>
+                                    setShareMessage(event.target.value)
+                                }
+                                className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setShareOpen(false)}
+                        >
+                            Annuler
+                        </Button>
+                        <Button
+                            disabled={!shareName.trim()}
+                            onClick={createSharedAlbum}
+                        >
+                            Créer le partage
                         </Button>
                     </DialogFooter>
                 </DialogContent>

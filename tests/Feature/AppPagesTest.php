@@ -215,7 +215,7 @@ class AppPagesTest extends TestCase
                 ->etc());
     }
 
-    public function test_access_periods_page_hides_unimplemented_management_action(): void
+    public function test_access_periods_page_exposes_management_action_for_admins(): void
     {
         $admin = User::factory()->create([
             'platform_role' => 'super_admin',
@@ -227,8 +227,19 @@ class AppPagesTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('AccessPeriods/Index')
-                ->where('canManageAccessPeriods', false)
+                ->where('canManageAccessPeriods', true)
                 ->etc());
+    }
+
+    public function test_legal_pages_are_publicly_reachable(): void
+    {
+        foreach (['legal-notice', 'terms', 'privacy'] as $routeName) {
+            $this->get(route($routeName))
+                ->assertOk()
+                ->assertInertia(fn (Assert $page) => $page
+                    ->component('Legal/Show')
+                    ->etc());
+        }
     }
 
     public function test_gallery_resolves_image_urls_from_scaleway_object_keys(): void

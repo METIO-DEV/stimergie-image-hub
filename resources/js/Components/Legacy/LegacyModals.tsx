@@ -48,7 +48,7 @@ const folderSegment = (value: string, fallback: string) => {
 };
 
 const generatedProjectFolder = (clientName: string, projectName: string) =>
-    `${folderSegment(clientName, "entreprise")}/${folderSegment(projectName, "projet")}`;
+    `${folderSegment(clientName, "entreprise")}_${folderSegment(projectName, "projet")}`;
 
 export function ContactModal({
     open,

@@ -95,6 +95,25 @@ export default function ProjectsIndex({
                 ),
             );
     }, [clientFilter, filters.clients, projects, search]);
+    const searchSuggestions = useMemo(
+        () =>
+            [
+                ...projects.map((project) => project.name),
+                ...projects.map((project) => project.clientName),
+                ...projects
+                    .map((project) => project.sourceFolder || project.slug)
+                    .filter(Boolean),
+            ]
+                .filter(
+                    (value, index, values) =>
+                        values.findIndex(
+                            (candidate) =>
+                                candidate.toLowerCase() === value.toLowerCase(),
+                        ) === index,
+                )
+                .slice(0, 120),
+        [projects],
+    );
 
     return (
         <AuthenticatedLayout>
@@ -135,8 +154,14 @@ export default function ProjectsIndex({
                     <Input
                         value={search}
                         onChange={(event) => setSearch(event.target.value)}
+                        list="project-search-suggestions"
                         placeholder="Rechercher un projet..."
                     />
+                    <datalist id="project-search-suggestions">
+                        {searchSuggestions.map((suggestion) => (
+                            <option key={suggestion} value={suggestion} />
+                        ))}
+                    </datalist>
                 </div>
 
                 {viewMode === "card" ? (
