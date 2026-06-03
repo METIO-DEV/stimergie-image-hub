@@ -1,3 +1,4 @@
+import AppFooter from "@/Components/AppFooter";
 import InputError from "@/Components/InputError";
 import { Button } from "@/Components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/Components/ui/card";
@@ -55,7 +56,7 @@ export default function LegalShow({
     };
 
     return (
-        <div className="min-h-screen bg-background text-foreground">
+        <div className="flex min-h-screen flex-col bg-background text-foreground">
             <Head title={page.title} />
             <header className="border-b border-border/80 bg-[#F2F0F0]">
                 <div className="container flex h-16 items-center justify-between">
@@ -74,7 +75,7 @@ export default function LegalShow({
                     </Link>
                 </div>
             </header>
-            <main className="container py-14">
+            <main className="container flex-1 py-14">
                 <Card className="mx-auto max-w-4xl">
                     <CardHeader>
                         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -174,6 +175,7 @@ export default function LegalShow({
                     </CardContent>
                 </Card>
             </main>
+            <AppFooter />
         </div>
     );
 }

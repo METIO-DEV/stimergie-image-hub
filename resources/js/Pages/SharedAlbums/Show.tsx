@@ -1,3 +1,4 @@
+import AppFooter from "@/Components/AppFooter";
 import { Badge } from "@/Components/ui/badge";
 import { Button } from "@/Components/ui/button";
 import { Card, CardContent } from "@/Components/ui/card";
@@ -28,7 +29,7 @@ export default function SharedAlbumShow({
     };
 }) {
     return (
-        <div className="min-h-screen bg-background text-foreground">
+        <div className="flex min-h-screen flex-col bg-background text-foreground">
             <Head title={album.name} />
             <header className="border-b border-border/80 bg-[#F2F0F0]">
                 <div className="container flex h-16 items-center justify-between">
@@ -45,7 +46,7 @@ export default function SharedAlbumShow({
                     </Button>
                 </div>
             </header>
-            <main className="container py-10">
+            <main className="container flex-1 py-10">
                 <div className="mb-8 max-w-3xl">
                     <h1 className="text-3xl font-bold">{album.name}</h1>
                     {album.description && (
@@ -101,6 +102,7 @@ export default function SharedAlbumShow({
                     ))}
                 </div>
             </main>
+            <AppFooter />
         </div>
     );
 }
