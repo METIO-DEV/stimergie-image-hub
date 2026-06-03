@@ -216,6 +216,28 @@ class ClientManagementTest extends TestCase
         Storage::disk('scaleway')->assertExists($client->logo_object_key);
     }
 
+    public function test_client_update_accepts_multipart_method_spoofing(): void
+    {
+        Storage::fake('scaleway');
+
+        [$client, $owner] = $this->createClientWithOwner();
+
+        $this->actingAs($owner)->post(route('clients.update', $client), [
+            '_method' => 'patch',
+            'name' => 'Client Modifie',
+            'slug' => 'client-modifie',
+            'status' => 'paused',
+            'logo' => UploadedFile::fake()->image('logo.png', 120, 80),
+        ])->assertRedirect(route('clients.show', $client));
+
+        $client->refresh();
+
+        $this->assertSame('Client Modifie', $client->name);
+        $this->assertSame('client-modifie', $client->slug);
+        $this->assertSame('paused', $client->status);
+        $this->assertNotNull($client->logo_object_key);
+    }
+
     public function test_client_logo_reconciliation_uploads_remote_asset_to_scaleway(): void
     {
         Storage::fake('scaleway');

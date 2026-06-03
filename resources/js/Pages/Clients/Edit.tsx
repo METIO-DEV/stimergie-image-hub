@@ -20,7 +20,7 @@ type Props = {
 };
 
 export default function ClientsEdit({ client, statuses }: Props) {
-    const { data, setData, patch, processing, errors } =
+    const { data, setData, post, processing, errors, transform } =
         useForm<ClientFormData>({
             name: client.name,
             slug: client.slug,
@@ -30,7 +30,11 @@ export default function ClientsEdit({ client, statuses }: Props) {
 
     const submit: FormEventHandler = (event) => {
         event.preventDefault();
-        patch(route("clients.update", client.id), { forceFormData: true });
+        transform((formData) => ({
+            ...formData,
+            _method: "patch",
+        }));
+        post(route("clients.update", client.id), { forceFormData: true });
     };
 
     return (
