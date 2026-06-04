@@ -96,6 +96,21 @@ class ImageTagAnalysisRunManagementTest extends TestCase
         $this->assertSame('completed', $image->metadata['ai_tag_analysis_status']);
     }
 
+    public function test_manager_cannot_regenerate_all_image_tags_at_once(): void
+    {
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson(route('image-tag-analysis-runs.store'), [
+                'mode' => 'all',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'La régénération globale des tags n est pas autorisée.');
+    }
+
     public function test_manager_can_stop_active_analysis_run(): void
     {
         $admin = User::factory()->create([

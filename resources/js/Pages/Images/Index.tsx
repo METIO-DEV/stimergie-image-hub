@@ -1,7 +1,6 @@
 import { Badge } from "@/Components/ui/badge";
 import { Button } from "@/Components/ui/button";
 import { Input } from "@/Components/ui/input";
-import { Label } from "@/Components/ui/label";
 import {
     Table,
     TableBody,
@@ -28,16 +27,18 @@ import {
 } from "@/Components/Legacy/LegacyDesign";
 import { ImageEditModal } from "@/Components/Legacy/LegacyModals";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import { Head, Link, router } from "@inertiajs/react";
+import { Head, router } from "@inertiajs/react";
 import {
+    AlertTriangle,
+    CheckCircle2,
+    Clock,
     Pencil,
     Plus,
     RotateCcw,
     Sparkles,
     Square,
-    Upload,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type FilterOption = {
     id: number;
@@ -49,6 +50,8 @@ type FilterOption = {
 
 type Props = {
     images: LegacyImage[];
+    imports: ImportBatch[];
+    stats: ImportStats;
     canManageImages: boolean;
     filters: {
         clients: FilterOption[];
@@ -56,26 +59,44 @@ type Props = {
     };
 };
 
-type ImportSummary = {
+type ImportItem = {
+    id: number;
+    imageId?: number | null;
+    imageTitle?: string | null;
+    filename: string;
+    relativePath?: string | null;
+    status: string;
+    sizeBytes?: number | null;
+    attempts: number;
+    error?: string | null;
+    objectKeyOriginal?: string | null;
+    processedAt?: string | null;
+};
+
+type ImportBatch = {
     id: number;
     status: string;
-    projectName?: string | null;
     clientName?: string | null;
+    projectName?: string | null;
+    startedBy?: string | null;
     totalItems: number;
     uploadedItems: number;
     processedItems: number;
     failedItems: number;
     duplicateItems: number;
-    items: Array<{
-        id: number;
-        filename: string;
-        relativePath?: string | null;
-        status: string;
-        error?: string | null;
-    }>;
+    totalBytes: number;
+    startedAt?: string | null;
+    finishedAt?: string | null;
+    items: ImportItem[];
 };
 
-type ImportProjectMode = "existing" | "new";
+type ImportStats = {
+    total: number;
+    active: number;
+    failed: number;
+    completed: number;
+};
+
 type ImagesTab = "library" | "imports" | "ai-tags";
 
 type TagAnalysisDashboard = {
@@ -83,7 +104,6 @@ type TagAnalysisDashboard = {
         total: number;
         withTags: number;
         withoutTags: number;
-        aiTagged: number;
     };
     run: TagAnalysisRun | null;
 };
@@ -105,22 +125,10 @@ type TagAnalysisRun = {
 
 const PAGE_SIZE = 20;
 
-const folderSegment = (value: string, fallback: string) => {
-    const normalized = value
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "");
-
-    return normalized || fallback;
-};
-
-const generatedProjectFolder = (clientName: string, projectName: string) =>
-    `${folderSegment(clientName, "entreprise")}_${folderSegment(projectName, "projet")}`;
-
 export default function ImagesIndex({
     images,
+    imports,
+    stats,
     canManageImages,
     filters,
 }: Props) {
@@ -131,6 +139,9 @@ export default function ImagesIndex({
     const [tag, setTag] = useState("");
     const [activeTab, setActiveTab] = useState<ImagesTab>("library");
     const [currentPage, setCurrentPage] = useState(1);
+    const [selectedImportId, setSelectedImportId] = useState<number | null>(
+        imports[0]?.id ?? null,
+    );
     const [editingImage, setEditingImage] = useState<LegacyImage | null>(null);
     const [imageModalOpen, setImageModalOpen] = useState(false);
     const [tagAnalysis, setTagAnalysis] =
@@ -175,6 +186,17 @@ export default function ImagesIndex({
     const tagAnalysisRunActive =
         tagAnalysis?.run?.status === "pending" ||
         tagAnalysis?.run?.status === "processing";
+    const activeImports = useMemo(
+        () =>
+            imports.filter((importBatch) =>
+                ["pending", "processing"].includes(importBatch.status),
+            ),
+        [imports],
+    );
+    const selectedImport =
+        imports.find((importBatch) => importBatch.id === selectedImportId) ||
+        imports[0] ||
+        null;
 
     const refreshTagAnalysis = async () => {
         const response = await window.axios.get<TagAnalysisDashboard>(
@@ -221,6 +243,18 @@ export default function ImagesIndex({
 
         return () => window.clearInterval(interval);
     }, [tagAnalysisRunActive]);
+
+    useEffect(() => {
+        if (activeTab !== "imports" || activeImports.length === 0) {
+            return;
+        }
+
+        const interval = window.setInterval(() => {
+            router.reload({ only: ["imports", "stats"] });
+        }, 5000);
+
+        return () => window.clearInterval(interval);
+    }, [activeImports.length, activeTab]);
 
     const startTagAnalysis = async (payload: {
         mode?: "missing" | "all";
@@ -304,7 +338,9 @@ export default function ImagesIndex({
                 >
                     <TabsList>
                         <TabsTrigger value="library">Bibliothèque</TabsTrigger>
-                        <TabsTrigger value="imports">Import dossier</TabsTrigger>
+                        <TabsTrigger value="imports">
+                            Suivi des imports
+                        </TabsTrigger>
                         <TabsTrigger value="ai-tags">Tags IA</TabsTrigger>
                     </TabsList>
 
@@ -316,9 +352,6 @@ export default function ImagesIndex({
                             error={tagAnalysisError}
                             onAnalyzeMissing={() =>
                                 startTagAnalysis({ mode: "missing" })
-                            }
-                            onAnalyzeAll={() =>
-                                startTagAnalysis({ mode: "all" })
                             }
                             onAnalyzeImage={(image) =>
                                 startTagAnalysis({
@@ -343,10 +376,12 @@ export default function ImagesIndex({
                     </TabsContent>
 
                     <TabsContent value="imports">
-                        <FolderImportPanel
-                            active={activeTab === "imports"}
-                            clients={filters.clients}
-                            projects={filters.projects}
+                        <ImportTrackingPanel
+                            imports={imports}
+                            stats={stats}
+                            activeImports={activeImports}
+                            selectedImport={selectedImport}
+                            onSelectImport={setSelectedImportId}
                         />
                     </TabsContent>
 
@@ -465,512 +500,6 @@ export default function ImagesIndex({
     );
 }
 
-function FolderImportPanel({
-    active,
-    clients,
-    projects,
-}: {
-    active: boolean;
-    clients: FilterOption[];
-    projects: FilterOption[];
-}) {
-    const [projectMode, setProjectMode] =
-        useState<ImportProjectMode>("existing");
-    const [projectId, setProjectId] = useState("");
-    const [newProject, setNewProject] = useState({
-        client_id: "",
-        name: "",
-        type: "",
-        source_folder: "",
-    });
-    const [sourceFolderTouched, setSourceFolderTouched] = useState(false);
-    const [files, setFiles] = useState<File[]>([]);
-    const [summary, setSummary] = useState<ImportSummary | null>(null);
-    const [uploading, setUploading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
-    const imageFiles = useMemo(
-        () => files.filter((file) => file.type.startsWith("image/")),
-        [files],
-    );
-    const ignoredCount = files.length - imageFiles.length;
-    const totalBytes = imageFiles.reduce((total, file) => total + file.size, 0);
-    const terminal =
-        summary?.status === "completed" ||
-        summary?.status === "failed" ||
-        summary?.status === "cancelled";
-    const progressTotal = summary?.totalItems || imageFiles.length || 1;
-    const progressDone =
-        (summary?.processedItems || 0) + (summary?.failedItems || 0);
-    const progress = Math.min(100, Math.round((progressDone / progressTotal) * 100));
-    const selectedProject = projects.find(
-        (project) => String(project.id) === projectId,
-    );
-    const selectedClient = clients.find(
-        (client) => String(client.id) === newProject.client_id,
-    );
-
-    useEffect(() => {
-        if (!active || !summary || terminal) {
-            return;
-        }
-
-        const interval = window.setInterval(async () => {
-            const response = await window.axios.get<ImportSummary>(
-                imageImportUrl(summary.id),
-            );
-            setSummary(response.data);
-
-            if (response.data.status === "completed") {
-                router.reload({ only: ["images"] });
-            }
-        }, 2500);
-
-        return () => window.clearInterval(interval);
-    }, [active, summary, terminal]);
-
-    useEffect(() => {
-        if (
-            projectMode !== "new" ||
-            sourceFolderTouched ||
-            !selectedClient
-        ) {
-            return;
-        }
-
-        setNewProject((current) => ({
-            ...current,
-            source_folder: generatedProjectFolder(
-                selectedClient.name,
-                current.name,
-            ),
-        }));
-    }, [projectMode, selectedClient, sourceFolderTouched, newProject.name]);
-
-    const updateNewProject = (
-        field: keyof typeof newProject,
-        value: string,
-    ) => {
-        setNewProject((current) => ({ ...current, [field]: value }));
-    };
-
-    const submit = async (event: FormEvent) => {
-        event.preventDefault();
-
-        if (imageFiles.length === 0) {
-            setError("Sélectionnez au moins une image.");
-            return;
-        }
-
-        if (projectMode === "existing" && !projectId) {
-            setError("Sélectionnez un projet existant.");
-            return;
-        }
-
-        if (
-            projectMode === "new" &&
-            (!newProject.client_id || !newProject.name.trim())
-        ) {
-            setError("Renseignez l'entreprise et le nom du nouveau projet.");
-            return;
-        }
-
-        setUploading(true);
-        setError(null);
-
-        try {
-            const batchResponse = await window.axios.post<ImportSummary>(
-                imageImportUrl(),
-                {
-                    ...(projectMode === "existing"
-                        ? { project_id: Number(projectId) }
-                        : {
-                              new_project: {
-                                  client_id: Number(newProject.client_id),
-                                  name: newProject.name,
-                                  type: newProject.type,
-                                  source_folder: newProject.source_folder,
-                              },
-                          }),
-                    total_items: imageFiles.length,
-                    total_bytes: totalBytes,
-                },
-            );
-
-            let latestSummary = batchResponse.data;
-            setSummary(latestSummary);
-
-            for (const file of imageFiles) {
-                const payload = new FormData();
-                payload.append("file", file);
-                payload.append("relative_path", relativePath(file));
-
-                const itemResponse = await window.axios.post<ImportSummary>(
-                    imageImportItemUrl(latestSummary.id),
-                    payload,
-                    {
-                        headers: {
-                            "Content-Type": "multipart/form-data",
-                        },
-                    },
-                );
-
-                latestSummary = itemResponse.data;
-                setSummary(latestSummary);
-            }
-        } catch (exception) {
-            setError(errorMessage(exception));
-        } finally {
-            setUploading(false);
-        }
-    };
-
-    const retryFailed = async () => {
-        if (!summary) {
-            return;
-        }
-
-        setUploading(true);
-        setError(null);
-
-        try {
-            const response = await window.axios.post<ImportSummary>(
-                imageImportRetryUrl(summary.id),
-            );
-            setSummary(response.data);
-        } catch (exception) {
-            setError(errorMessage(exception));
-        } finally {
-            setUploading(false);
-        }
-    };
-
-    return (
-        <section className="space-y-6">
-            <div>
-                <h2 className="text-lg font-semibold">
-                    Importer un dossier d'images
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                    Les images sont envoyées une par une puis traitées en
-                    arrière-plan pour éviter les surcharges.
-                </p>
-            </div>
-
-            <form
-                onSubmit={submit}
-                className="rounded-md border bg-background p-5"
-            >
-                <div className="space-y-5">
-                    <div className="grid grid-cols-2 gap-2 rounded-md bg-muted p-1">
-                        <button
-                            type="button"
-                            className={`rounded px-3 py-2 text-sm font-semibold transition ${
-                                projectMode === "existing"
-                                    ? "bg-background text-foreground shadow-sm"
-                                    : "text-muted-foreground hover:text-foreground"
-                            }`}
-                            disabled={uploading || Boolean(summary)}
-                            onClick={() => {
-                                setProjectMode("existing");
-                                setError(null);
-                            }}
-                        >
-                            Projet existant
-                        </button>
-                        <button
-                            type="button"
-                            className={`rounded px-3 py-2 text-sm font-semibold transition ${
-                                projectMode === "new"
-                                    ? "bg-background text-foreground shadow-sm"
-                                    : "text-muted-foreground hover:text-foreground"
-                            }`}
-                            disabled={uploading || Boolean(summary)}
-                            onClick={() => {
-                                setProjectMode("new");
-                                setError(null);
-                            }}
-                        >
-                            Nouveau projet
-                        </button>
-                    </div>
-
-                        <div className="space-y-2">
-                            {projectMode === "existing" ? (
-                                <>
-                                    <Label htmlFor="folder-import-project">
-                                        Projet
-                                    </Label>
-                                    <select
-                                        id="folder-import-project"
-                                        value={projectId}
-                                        onChange={(event) =>
-                                            setProjectId(event.target.value)
-                                        }
-                                        className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                        disabled={uploading || Boolean(summary)}
-                                    >
-                                        <option value="">
-                                            Sélectionner un projet
-                                        </option>
-                                        {projects.map((project) => (
-                                            <option
-                                                key={project.id}
-                                                value={project.id}
-                                            >
-                                                {project.clientName
-                                                    ? `${project.clientName} - ${project.name}`
-                                                    : project.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <p className="text-xs text-muted-foreground">
-                                        Les images seront ajoutées au dossier du
-                                        projet sélectionné
-                                        {selectedProject?.sourceFolder
-                                            ? ` : ${selectedProject.sourceFolder}`
-                                            : "."}
-                                    </p>
-                                </>
-                            ) : (
-                                <div className="grid gap-4 md:grid-cols-2">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="folder-import-client">
-                                            Entreprise
-                                        </Label>
-                                        <select
-                                            id="folder-import-client"
-                                            value={newProject.client_id}
-                                            onChange={(event) => {
-                                                updateNewProject(
-                                                    "client_id",
-                                                    event.target.value,
-                                                );
-                                                setSourceFolderTouched(false);
-                                            }}
-                                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                            disabled={
-                                                uploading || Boolean(summary)
-                                            }
-                                        >
-                                            <option value="">
-                                                Sélectionner une entreprise
-                                            </option>
-                                            {clients.map((client) => (
-                                                <option
-                                                    key={client.id}
-                                                    value={client.id}
-                                                >
-                                                    {client.name}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="folder-import-project-name">
-                                            Nom du projet
-                                        </Label>
-                                        <Input
-                                            id="folder-import-project-name"
-                                            value={newProject.name}
-                                            disabled={
-                                                uploading || Boolean(summary)
-                                            }
-                                            onChange={(event) =>
-                                                updateNewProject(
-                                                    "name",
-                                                    event.target.value,
-                                                )
-                                            }
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="folder-import-project-type">
-                                            Type de projet
-                                        </Label>
-                                        <Input
-                                            id="folder-import-project-type"
-                                            value={newProject.type}
-                                            disabled={
-                                                uploading || Boolean(summary)
-                                            }
-                                            onChange={(event) =>
-                                                updateNewProject(
-                                                    "type",
-                                                    event.target.value,
-                                                )
-                                            }
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="folder-import-source-folder">
-                                            Nom du dossier
-                                        </Label>
-                                        <Input
-                                            id="folder-import-source-folder"
-                                            value={newProject.source_folder}
-                                            disabled={
-                                                uploading || Boolean(summary)
-                                            }
-                                            onChange={(event) => {
-                                                setSourceFolderTouched(true);
-                                                updateNewProject(
-                                                    "source_folder",
-                                                    event.target.value,
-                                                );
-                                            }}
-                                        />
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        <label className="flex cursor-pointer flex-col items-center rounded-lg border-2 border-dashed p-10 text-center transition-colors hover:bg-muted/50">
-                            <Upload className="h-9 w-9 text-muted-foreground" />
-                            <span className="mt-3 text-sm font-medium">
-                                Choisir un dossier
-                            </span>
-                            <span className="mt-1 text-xs text-muted-foreground">
-                                JPEG, PNG ou WebP, 100 Mo maximum par image.
-                            </span>
-                            <input
-                                type="file"
-                                accept="image/*"
-                                multiple
-                                className="hidden"
-                                disabled={uploading || Boolean(summary)}
-                                onChange={(event) =>
-                                    setFiles(
-                                        Array.from(event.target.files ?? []),
-                                    )
-                                }
-                                {...folderInputAttributes()}
-                            />
-                        </label>
-
-                        {files.length > 0 && (
-                            <div className="rounded-md border p-4 text-sm">
-                                <div className="font-medium">
-                                    {imageFiles.length} image
-                                    {imageFiles.length > 1 ? "s" : ""} prête
-                                    {imageFiles.length > 1 ? "s" : ""} à importer
-                                </div>
-                                <div className="mt-1 text-muted-foreground">
-                                    {formatBytes(totalBytes)}
-                                    {ignoredCount > 0
-                                        ? ` · ${ignoredCount} fichier${ignoredCount > 1 ? "s" : ""} ignoré${ignoredCount > 1 ? "s" : ""}`
-                                        : ""}
-                                </div>
-                            </div>
-                        )}
-
-                        {summary && (
-                            <div className="space-y-4 rounded-md border p-4">
-                                <div className="flex flex-wrap items-center justify-between gap-3">
-                                    <div>
-                                        <div className="text-sm font-semibold">
-                                            Import #{summary.id}
-                                        </div>
-                                        <div className="text-xs text-muted-foreground">
-                                            {statusLabel(summary.status)}
-                                        </div>
-                                    </div>
-                                    <Badge>{progress}%</Badge>
-                                </div>
-                                <div className="h-2 overflow-hidden rounded-full bg-muted">
-                                    <div
-                                        className="h-full bg-primary transition-all"
-                                        style={{ width: `${progress}%` }}
-                                    />
-                                </div>
-                                <div className="grid gap-3 text-sm sm:grid-cols-4">
-                                    <ImportMetric
-                                        label="Envoyées"
-                                        value={summary.uploadedItems}
-                                    />
-                                    <ImportMetric
-                                        label="Traitées"
-                                        value={summary.processedItems}
-                                    />
-                                    <ImportMetric
-                                        label="Doublons"
-                                        value={summary.duplicateItems}
-                                    />
-                                    <ImportMetric
-                                        label="Erreurs"
-                                        value={summary.failedItems}
-                                    />
-                                </div>
-                                {summary.items.length > 0 && (
-                                    <div className="max-h-44 overflow-y-auto rounded border">
-                                        {summary.items.map((item) => (
-                                            <div
-                                                key={item.id}
-                                                className="flex items-start justify-between gap-3 border-b px-3 py-2 text-xs last:border-b-0"
-                                            >
-                                                <div className="min-w-0">
-                                                    <div className="truncate font-medium">
-                                                        {item.relativePath ||
-                                                            item.filename}
-                                                    </div>
-                                                    {item.error && (
-                                                        <div className="mt-1 text-destructive">
-                                                            {item.error}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <span className="shrink-0 text-muted-foreground">
-                                                    {statusLabel(item.status)}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {error && (
-                            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-                                {error}
-                            </div>
-                        )}
-                </div>
-
-                <div className="mt-5 flex flex-wrap justify-end gap-2 border-t pt-4">
-                        {summary?.failedItems ? (
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={retryFailed}
-                                disabled={uploading}
-                            >
-                                <RotateCcw className="mr-2 h-4 w-4" />
-                                Relancer les erreurs
-                            </Button>
-                        ) : null}
-                        {summary && (
-                            <Button type="button" variant="outline" asChild>
-                                <Link href={route("imports.index")}>
-                                    Voir le suivi
-                                </Link>
-                            </Button>
-                        )}
-                        {!summary && (
-                            <Button
-                                type="submit"
-                                disabled={uploading}
-                            >
-                                {uploading
-                                    ? "Import en cours..."
-                                    : "Lancer l'import"}
-                            </Button>
-                        )}
-                </div>
-            </form>
-        </section>
-    );
-}
-
 function ImportMetric({ label, value }: { label: string; value: number }) {
     return (
         <div className="rounded border px-3 py-2">
@@ -980,13 +509,307 @@ function ImportMetric({ label, value }: { label: string; value: number }) {
     );
 }
 
+function ImportTrackingPanel({
+    imports,
+    stats,
+    activeImports,
+    selectedImport,
+    onSelectImport,
+}: {
+    imports: ImportBatch[];
+    stats: ImportStats;
+    activeImports: ImportBatch[];
+    selectedImport: ImportBatch | null;
+    onSelectImport: (id: number) => void;
+}) {
+    return (
+        <section className="space-y-8">
+            <div className="grid gap-4 md:grid-cols-4">
+                <ImportMetric label="Imports actifs" value={stats.active} />
+                <ImportMetric label="Terminés" value={stats.completed} />
+                <ImportMetric label="Avec erreurs" value={stats.failed} />
+                <ImportMetric label="Total" value={stats.total} />
+            </div>
+
+            {activeImports.length > 0 && (
+                <section>
+                    <div className="mb-4 flex items-center gap-2">
+                        <Clock className="h-5 w-5 text-primary" />
+                        <h2 className="text-lg font-semibold">
+                            Imports en cours
+                        </h2>
+                    </div>
+                    <div className="grid gap-4 lg:grid-cols-2">
+                        {activeImports.map((importBatch) => (
+                            <ImportSummaryCard
+                                key={importBatch.id}
+                                importBatch={importBatch}
+                                selected={selectedImport?.id === importBatch.id}
+                                onSelect={() => onSelectImport(importBatch.id)}
+                            />
+                        ))}
+                    </div>
+                </section>
+            )}
+
+            <section className="grid gap-6 lg:grid-cols-[360px_1fr]">
+                <div>
+                    <h2 className="mb-4 text-lg font-semibold">
+                        Historique récent
+                    </h2>
+                    <div className="overflow-hidden rounded-md border bg-background">
+                        {imports.length === 0 ? (
+                            <div className="p-5 text-sm text-muted-foreground">
+                                Aucun import dossier enregistré.
+                            </div>
+                        ) : (
+                            imports.map((importBatch) => (
+                                <button
+                                    key={importBatch.id}
+                                    type="button"
+                                    onClick={() => onSelectImport(importBatch.id)}
+                                    className={`block w-full border-b p-4 text-left last:border-b-0 hover:bg-muted/40 ${
+                                        selectedImport?.id === importBatch.id
+                                            ? "bg-muted/50"
+                                            : ""
+                                    }`}
+                                >
+                                    <div className="flex items-center justify-between gap-3">
+                                        <span className="font-semibold">
+                                            Import #{importBatch.id}
+                                        </span>
+                                        <StatusBadge
+                                            status={importBatch.status}
+                                        />
+                                    </div>
+                                    <div className="mt-2 text-sm text-muted-foreground">
+                                        {importBatch.clientName ||
+                                            "Entreprise inconnue"}{" "}
+                                        ·{" "}
+                                        {importBatch.projectName ||
+                                            "Projet inconnu"}
+                                    </div>
+                                    <ProgressBar importBatch={importBatch} />
+                                </button>
+                            ))
+                        )}
+                    </div>
+                </div>
+
+                <div>
+                    <h2 className="mb-4 text-lg font-semibold">Détails</h2>
+                    {selectedImport ? (
+                        <ImportDetails importBatch={selectedImport} />
+                    ) : (
+                        <div className="rounded-md border bg-background p-6 text-sm text-muted-foreground">
+                            Sélectionnez un import pour voir le détail.
+                        </div>
+                    )}
+                </div>
+            </section>
+        </section>
+    );
+}
+
+function ImportSummaryCard({
+    importBatch,
+    selected,
+    onSelect,
+}: {
+    importBatch: ImportBatch;
+    selected: boolean;
+    onSelect: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onSelect}
+            className={`rounded-md border bg-background p-5 text-left transition-colors hover:bg-muted/30 ${
+                selected ? "border-primary" : ""
+            }`}
+        >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="font-semibold">Import #{importBatch.id}</span>
+                <StatusBadge status={importBatch.status} />
+            </div>
+            <div className="mt-3 text-sm text-muted-foreground">
+                {importBatch.clientName || "Entreprise inconnue"} ·{" "}
+                {importBatch.projectName || "Projet inconnu"}
+            </div>
+            <ProgressBar importBatch={importBatch} />
+            <div className="mt-4 grid grid-cols-4 gap-3 text-sm">
+                <ImportMetric label="Env." value={importBatch.uploadedItems} />
+                <ImportMetric
+                    label="Trait."
+                    value={importBatch.processedItems}
+                />
+                <ImportMetric
+                    label="Doub."
+                    value={importBatch.duplicateItems}
+                />
+                <ImportMetric label="Err." value={importBatch.failedItems} />
+            </div>
+        </button>
+    );
+}
+
+function ImportDetails({ importBatch }: { importBatch: ImportBatch }) {
+    return (
+        <div className="overflow-hidden rounded-md border bg-background">
+            <div className="border-b p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <div className="text-lg font-semibold">
+                            Import #{importBatch.id}
+                        </div>
+                        <div className="mt-1 text-sm text-muted-foreground">
+                            {importBatch.startedBy || "Utilisateur inconnu"} ·{" "}
+                            {formatDate(importBatch.startedAt)}
+                        </div>
+                    </div>
+                    <StatusBadge status={importBatch.status} />
+                </div>
+                <ProgressBar importBatch={importBatch} />
+                <div className="mt-5 grid gap-3 text-sm sm:grid-cols-5">
+                    <ImportMetric label="Total" value={importBatch.totalItems} />
+                    <ImportMetric
+                        label="Envoyées"
+                        value={importBatch.uploadedItems}
+                    />
+                    <ImportMetric
+                        label="Traitées"
+                        value={importBatch.processedItems}
+                    />
+                    <ImportMetric
+                        label="Doublons"
+                        value={importBatch.duplicateItems}
+                    />
+                    <ImportMetric
+                        label="Erreurs"
+                        value={importBatch.failedItems}
+                    />
+                </div>
+                {importBatch.failedItems > 0 && (
+                    <div className="mt-4 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                        Des fichiers sont en erreur. Ouvrez les lignes marquées
+                        pour lire le message retourné par le traitement.
+                    </div>
+                )}
+            </div>
+
+            <div className="overflow-x-auto">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Fichier</TableHead>
+                            <TableHead>Statut</TableHead>
+                            <TableHead>Essais</TableHead>
+                            <TableHead>Traitement</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {importBatch.items.length === 0 ? (
+                            <TableRow>
+                                <TableCell
+                                    colSpan={4}
+                                    className="py-8 text-center text-sm text-muted-foreground"
+                                >
+                                    Aucun fichier enregistré pour cet import.
+                                </TableCell>
+                            </TableRow>
+                        ) : (
+                            importBatch.items.map((item) => (
+                                <TableRow key={item.id}>
+                                    <TableCell className="min-w-[280px]">
+                                        <div className="font-medium">
+                                            {item.relativePath || item.filename}
+                                        </div>
+                                        {item.imageTitle && (
+                                            <div className="mt-1 text-xs text-muted-foreground">
+                                                Image créée : {item.imageTitle}
+                                            </div>
+                                        )}
+                                        {item.error && (
+                                            <div className="mt-2 max-w-xl text-xs text-destructive">
+                                                {item.error}
+                                            </div>
+                                        )}
+                                    </TableCell>
+                                    <TableCell>
+                                        <StatusBadge status={item.status} />
+                                    </TableCell>
+                                    <TableCell>{item.attempts}</TableCell>
+                                    <TableCell>
+                                        {formatDate(item.processedAt)}
+                                    </TableCell>
+                                </TableRow>
+                            ))
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
+        </div>
+    );
+}
+
+function ProgressBar({ importBatch }: { importBatch: ImportBatch }) {
+    const progress = importProgress(importBatch);
+
+    return (
+        <div className="mt-4">
+            <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+                <span>{progress}%</span>
+                <span>
+                    {importBatch.processedItems + importBatch.failedItems}/
+                    {importBatch.totalItems}
+                </span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-muted">
+                <div
+                    className="h-full bg-primary transition-all"
+                    style={{ width: `${progress}%` }}
+                />
+            </div>
+        </div>
+    );
+}
+
+function StatusBadge({ status }: { status: string }) {
+    const variant =
+        status === "failed"
+            ? "destructive"
+            : status === "completed" || status === "done"
+              ? "secondary"
+              : "default";
+
+    return (
+        <Badge variant={variant}>
+            {(status === "completed" || status === "done") && (
+                <CheckCircle2 className="mr-1 h-3 w-3" />
+            )}
+            {statusLabel(status)}
+        </Badge>
+    );
+}
+
+function importProgress(importBatch: ImportBatch): number {
+    if (["completed", "failed"].includes(importBatch.status)) {
+        return 100;
+    }
+
+    const total = importBatch.totalItems || 1;
+    const done = importBatch.processedItems + importBatch.failedItems;
+
+    return Math.min(100, Math.round((done / total) * 100));
+}
+
 function TagAnalysisPanel({
     dashboard,
     images,
     loading,
     error,
     onAnalyzeMissing,
-    onAnalyzeAll,
     onAnalyzeImage,
     onStop,
     onRefresh,
@@ -996,11 +819,11 @@ function TagAnalysisPanel({
     loading: boolean;
     error: string | null;
     onAnalyzeMissing: () => void;
-    onAnalyzeAll: () => void;
     onAnalyzeImage: (image: LegacyImage) => void;
     onStop: () => void;
     onRefresh: () => void;
 }) {
+    const [missingPage, setMissingPage] = useState(1);
     const run = dashboard?.run;
     const active = run?.status === "pending" || run?.status === "processing";
     const progress = run
@@ -1013,13 +836,28 @@ function TagAnalysisPanel({
               ),
           )
         : 0;
-    const priorityImages = images
-        .filter((image) => !image.tags || image.tags.length === 0)
-        .slice(0, 12);
+    const missingImages = images.filter(
+        (image) => !image.tags || image.tags.length === 0,
+    );
+    const missingPageSize = 10;
+    const missingPageCount = Math.max(
+        1,
+        Math.ceil(missingImages.length / missingPageSize),
+    );
+    const paginatedMissingImages = missingImages.slice(
+        (missingPage - 1) * missingPageSize,
+        missingPage * missingPageSize,
+    );
+
+    useEffect(() => {
+        if (missingPage > missingPageCount) {
+            setMissingPage(missingPageCount);
+        }
+    }, [missingPage, missingPageCount]);
 
     return (
         <section className="mb-8 space-y-6">
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-3">
                 <ImportMetric
                     label="Images gérées"
                     value={dashboard?.stats.total ?? images.length}
@@ -1039,10 +877,6 @@ function TagAnalysisPanel({
                             (image) => !image.tags || image.tags.length === 0,
                         ).length
                     }
-                />
-                <ImportMetric
-                    label="Taguées par IA"
-                    value={dashboard?.stats.aiTagged ?? 0}
                 />
             </div>
 
@@ -1075,27 +909,16 @@ function TagAnalysisPanel({
                                 Stopper
                             </Button>
                         ) : (
-                            <>
-                                <Button
-                                    variant="outline"
-                                    onClick={onAnalyzeAll}
-                                    disabled={loading}
-                                >
-                                    <Sparkles className="mr-2 h-4 w-4" />
-                                    Régénérer tout
-                                </Button>
-                                <Button
-                                    onClick={onAnalyzeMissing}
-                                    disabled={
-                                        loading ||
-                                        (dashboard?.stats.withoutTags ?? 0) ===
-                                            0
-                                    }
-                                >
-                                    <Sparkles className="mr-2 h-4 w-4" />
-                                    Analyser sans tags
-                                </Button>
-                            </>
+                            <Button
+                                onClick={onAnalyzeMissing}
+                                disabled={
+                                    loading ||
+                                    (dashboard?.stats.withoutTags ?? 0) === 0
+                                }
+                            >
+                                <Sparkles className="mr-2 h-4 w-4" />
+                                Générer les tags
+                            </Button>
                         )}
                     </div>
                 </div>
@@ -1158,7 +981,7 @@ function TagAnalysisPanel({
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {priorityImages.length === 0 ? (
+                        {paginatedMissingImages.length === 0 ? (
                             <TableRow>
                                 <TableCell
                                     colSpan={4}
@@ -1169,7 +992,7 @@ function TagAnalysisPanel({
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            priorityImages.map((image) => (
+                            paginatedMissingImages.map((image) => (
                                 <TableRow key={image.id}>
                                     <TableCell className="font-medium">
                                         {image.title}
@@ -1194,35 +1017,46 @@ function TagAnalysisPanel({
                         )}
                     </TableBody>
                 </Table>
+                {missingImages.length > missingPageSize && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm">
+                        <span className="text-muted-foreground">
+                            Page {missingPage} sur {missingPageCount} ·{" "}
+                            {missingImages.length} image
+                            {missingImages.length > 1 ? "s" : ""} sans tags
+                        </span>
+                        <div className="flex gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={missingPage === 1}
+                                onClick={() =>
+                                    setMissingPage((page) =>
+                                        Math.max(1, page - 1),
+                                    )
+                                }
+                            >
+                                Précédent
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={missingPage === missingPageCount}
+                                onClick={() =>
+                                    setMissingPage((page) =>
+                                        Math.min(missingPageCount, page + 1),
+                                    )
+                                }
+                            >
+                                Suivant
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </div>
         </section>
     );
-}
-
-function relativePath(file: File): string {
-    return (
-        (file as File & { webkitRelativePath?: string }).webkitRelativePath ||
-        file.name
-    );
-}
-
-function folderInputAttributes() {
-    return {
-        webkitdirectory: "",
-        directory: "",
-    } as Record<string, string>;
-}
-
-function imageImportUrl(importId?: number): string {
-    return importId ? `/image-imports/${importId}` : "/image-imports";
-}
-
-function imageImportItemUrl(importId: number): string {
-    return `/image-imports/${importId}/items`;
-}
-
-function imageImportRetryUrl(importId: number): string {
-    return `/image-imports/${importId}/retry-failed`;
 }
 
 function imageTagAnalysisUrl(): string {
@@ -1231,21 +1065,6 @@ function imageTagAnalysisUrl(): string {
 
 function imageTagAnalysisStopUrl(runId: number): string {
     return `/image-tag-analysis-runs/${runId}/stop`;
-}
-
-function formatBytes(bytes: number): string {
-    if (bytes === 0) {
-        return "0 octet";
-    }
-
-    const units = ["octets", "Ko", "Mo", "Go"];
-    const exponent = Math.min(
-        Math.floor(Math.log(bytes) / Math.log(1024)),
-        units.length - 1,
-    );
-    const value = bytes / 1024 ** exponent;
-
-    return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 }
 
 function statusLabel(status: string): string {
@@ -1491,7 +1310,7 @@ function labelOrientation(orientation?: string | null) {
     return orientation || "-";
 }
 
-function formatDate(value?: string) {
+function formatDate(value?: string | null) {
     if (!value) {
         return "-";
     }

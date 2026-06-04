@@ -183,6 +183,7 @@ class AppPageController extends Controller
 
         return Inertia::render('Images/Index', [
             'images' => $images,
+            ...$this->importTrackingData($manageableClientIds),
             'canManageImages' => true,
             'filters' => [
                 'clients' => $this->manageableClientOptions($manageableClientIds),
@@ -198,25 +199,9 @@ class AppPageController extends Controller
         abort_unless($this->canManageClientContent($user), 403);
 
         $manageableClientIds = $this->manageableClientIds($user);
-        $query = Import::query()
-            ->with(['client:id,name', 'project:id,name', 'starter:id,name,email'])
-            ->where('source', 'folder_upload')
-            ->tap(fn ($query) => $this->applyImportManageableClientScope($query, $manageableClientIds));
-
-        $imports = (clone $query)
-            ->latest()
-            ->limit(40)
-            ->get()
-            ->map(fn (Import $import) => $this->importSummary($import));
 
         return Inertia::render('Imports/Index', [
-            'imports' => $imports,
-            'stats' => [
-                'total' => (clone $query)->count(),
-                'active' => (clone $query)->whereIn('status', ['pending', 'processing'])->count(),
-                'failed' => (clone $query)->where('status', 'failed')->count(),
-                'completed' => (clone $query)->where('status', 'completed')->count(),
-            ],
+            ...$this->importTrackingData($manageableClientIds),
         ]);
     }
 
@@ -584,6 +569,31 @@ class AppPageController extends Controller
                 'objectKeyOriginal' => $item->object_key_original,
                 'processedAt' => $item->processed_at?->toIso8601String(),
             ]),
+        ];
+    }
+
+    /**
+     * @return array{imports: mixed, stats: array{total: int, active: int, failed: int, completed: int}}
+     */
+    private function importTrackingData(?array $manageableClientIds): array
+    {
+        $query = Import::query()
+            ->with(['client:id,name', 'project:id,name', 'starter:id,name,email'])
+            ->where('source', 'folder_upload')
+            ->tap(fn ($query) => $this->applyImportManageableClientScope($query, $manageableClientIds));
+
+        return [
+            'imports' => (clone $query)
+                ->latest()
+                ->limit(40)
+                ->get()
+                ->map(fn (Import $import) => $this->importSummary($import)),
+            'stats' => [
+                'total' => (clone $query)->count(),
+                'active' => (clone $query)->whereIn('status', ['pending', 'processing'])->count(),
+                'failed' => (clone $query)->where('status', 'failed')->count(),
+                'completed' => (clone $query)->where('status', 'completed')->count(),
+            ],
         ];
     }
 }

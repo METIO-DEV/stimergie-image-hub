@@ -23,9 +23,15 @@ class ImageTagAnalysisRunController extends Controller
         $this->authorizeManageImages($request);
 
         $data = $request->validate([
-            'mode' => ['nullable', 'string', 'in:missing,all'],
+            'mode' => ['nullable', 'string'],
             'image_id' => ['nullable', 'integer', 'exists:images,id'],
         ]);
+
+        if (($data['mode'] ?? 'missing') !== 'missing') {
+            return response()->json([
+                'message' => 'La régénération globale des tags n est pas autorisée.',
+            ], 422);
+        }
 
         abort_if($this->activeRun(), 409, 'Une analyse de tags est déjà en cours.');
 
@@ -87,9 +93,6 @@ class ImageTagAnalysisRunController extends Controller
                 'total' => $total,
                 'withTags' => $withTags,
                 'withoutTags' => $withoutTags,
-                'aiTagged' => (clone $baseQuery)
-                    ->where('metadata->tag_source', 'ai')
-                    ->count(),
             ],
             'run' => $latestRun ? $this->runSummary($latestRun) : null,
         ];
@@ -107,7 +110,7 @@ class ImageTagAnalysisRunController extends Controller
 
         if (isset($data['image_id'])) {
             $query->whereKey((int) $data['image_id']);
-        } elseif (($data['mode'] ?? 'missing') === 'missing') {
+        } else {
             $query->doesntHave('tags');
         }
 
