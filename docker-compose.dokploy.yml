@@ -15,15 +15,17 @@ services:
       context: .
     user: "1000:1000"
     env_file:
-      - ./.env
+      - path: ./.env
+        required: false
     environment:
-      APP_URL: ${APP_URL:?APP_URL is required}
+      APP_URL: ${APP_URL:-https://stimergie.metio-dev.fr}
+      ASSET_URL: ${ASSET_URL:-https://stimergie.metio-dev.fr}
       DB_CONNECTION: ${DB_CONNECTION:-pgsql}
       DB_HOST: ${DB_HOST:-pgsql}
       DB_PORT: ${DB_PORT:-5432}
       DB_DATABASE: ${DB_DATABASE:-stimergie}
       DB_USERNAME: ${DB_USERNAME:-stimergie}
-      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      DB_PASSWORD: ${DB_PASSWORD:-stimergie}
       CACHE_STORE: ${CACHE_STORE:-database}
       QUEUE_CONNECTION: ${QUEUE_CONNECTION:-database}
       SESSION_DRIVER: ${SESSION_DRIVER:-database}
@@ -43,15 +45,17 @@ services:
       context: .
     user: "1000:1000"
     env_file:
-      - ./.env
+      - path: ./.env
+        required: false
     environment:
-      APP_URL: ${APP_URL:?APP_URL is required}
+      APP_URL: ${APP_URL:-https://stimergie.metio-dev.fr}
+      ASSET_URL: ${ASSET_URL:-https://stimergie.metio-dev.fr}
       DB_CONNECTION: ${DB_CONNECTION:-pgsql}
       DB_HOST: ${DB_HOST:-pgsql}
       DB_PORT: ${DB_PORT:-5432}
       DB_DATABASE: ${DB_DATABASE:-stimergie}
       DB_USERNAME: ${DB_USERNAME:-stimergie}
-      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      DB_PASSWORD: ${DB_PASSWORD:-stimergie}
       CACHE_STORE: ${CACHE_STORE:-database}
       QUEUE_CONNECTION: ${QUEUE_CONNECTION:-database}
       SESSION_DRIVER: ${SESSION_DRIVER:-database}
@@ -69,15 +73,17 @@ services:
       context: .
     user: "1000:1000"
     env_file:
-      - ./.env
+      - path: ./.env
+        required: false
     environment:
-      APP_URL: ${APP_URL:?APP_URL is required}
+      APP_URL: ${APP_URL:-https://stimergie.metio-dev.fr}
+      ASSET_URL: ${ASSET_URL:-https://stimergie.metio-dev.fr}
       DB_CONNECTION: ${DB_CONNECTION:-pgsql}
       DB_HOST: ${DB_HOST:-pgsql}
       DB_PORT: ${DB_PORT:-5432}
       DB_DATABASE: ${DB_DATABASE:-stimergie}
       DB_USERNAME: ${DB_USERNAME:-stimergie}
-      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      DB_PASSWORD: ${DB_PASSWORD:-stimergie}
       CACHE_STORE: ${CACHE_STORE:-database}
       QUEUE_CONNECTION: ${QUEUE_CONNECTION:-database}
       SESSION_DRIVER: ${SESSION_DRIVER:-database}
@@ -95,7 +101,7 @@ services:
     environment:
       POSTGRES_DB: ${DB_DATABASE:-stimergie}
       POSTGRES_USER: ${DB_USERNAME:-stimergie}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-stimergie}
     ports:
       - "${POSTGRES_HOST_PORT:-55432}:5432"
     volumes:
