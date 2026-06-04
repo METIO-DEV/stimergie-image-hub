@@ -1,4 +1,16 @@
 services:
+  composer:
+    build:
+      context: .
+    user: "1000:1000"
+    entrypoint: ["sh", "-lc"]
+    environment:
+      COMPOSER_HOME: /tmp/composer
+    volumes:
+      - .:/var/www/html
+      - vendor:/var/www/html/vendor
+    command: "rm -rf vendor/* && composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader"
+
   assets:
     image: node:22-alpine
     working_dir: /var/www/html
@@ -32,6 +44,8 @@ services:
       VITE_DEV_SERVER_URL: ""
       COMPOSER_HOME: /tmp/composer
     depends_on:
+      composer:
+        condition: service_completed_successfully
       assets:
         condition: service_completed_successfully
       pgsql:
@@ -39,6 +53,7 @@ services:
     volumes:
       - .:/var/www/html
       - node-modules:/var/www/html/node_modules
+      - vendor:/var/www/html/vendor
     command: sh -lc "rm -f public/hot && php artisan migrate --force --no-interaction && php artisan optimize --no-interaction && php artisan serve --host=0.0.0.0 --port=8000"
 
   queue:
@@ -68,6 +83,7 @@ services:
     volumes:
       - .:/var/www/html
       - node-modules:/var/www/html/node_modules
+      - vendor:/var/www/html/vendor
     command: php artisan queue:work --sleep=1 --tries=3 --timeout=120
 
   pgsql:
@@ -88,4 +104,5 @@ services:
 
 volumes:
   node-modules:
+  vendor:
   pgsql-data:
