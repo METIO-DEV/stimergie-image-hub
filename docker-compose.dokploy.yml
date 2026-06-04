@@ -1,0 +1,110 @@
+services:
+  assets:
+    image: node:22-alpine
+    working_dir: /var/www/html
+    user: "1000:1000"
+    environment:
+      NPM_CONFIG_CACHE: /tmp/.npm
+      VITE_APP_NAME: ${VITE_APP_NAME:-Stimergie Image Hub}
+    volumes:
+      - .:/var/www/html
+    command: sh -lc "rm -f public/hot && npm ci && npm run build"
+
+  app:
+    build:
+      context: .
+    user: "1000:1000"
+    env_file:
+      - ./.env
+    environment:
+      APP_URL: ${APP_URL:?APP_URL is required}
+      DB_CONNECTION: ${DB_CONNECTION:-pgsql}
+      DB_HOST: ${DB_HOST:-pgsql}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE:-stimergie}
+      DB_USERNAME: ${DB_USERNAME:-stimergie}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      CACHE_STORE: ${CACHE_STORE:-database}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-database}
+      SESSION_DRIVER: ${SESSION_DRIVER:-database}
+      VITE_DEV_SERVER_URL: ""
+      COMPOSER_HOME: /tmp/composer
+    depends_on:
+      assets:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - .:/var/www/html
+    command: sh -lc "rm -f public/hot && php artisan optimize --no-interaction && php artisan serve --host=0.0.0.0 --port=8000"
+
+  queue:
+    build:
+      context: .
+    user: "1000:1000"
+    env_file:
+      - ./.env
+    environment:
+      APP_URL: ${APP_URL:?APP_URL is required}
+      DB_CONNECTION: ${DB_CONNECTION:-pgsql}
+      DB_HOST: ${DB_HOST:-pgsql}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE:-stimergie}
+      DB_USERNAME: ${DB_USERNAME:-stimergie}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      CACHE_STORE: ${CACHE_STORE:-database}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-database}
+      SESSION_DRIVER: ${SESSION_DRIVER:-database}
+      VITE_DEV_SERVER_URL: ""
+      COMPOSER_HOME: /tmp/composer
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - .:/var/www/html
+    command: php artisan queue:work --sleep=1 --tries=3 --timeout=120
+
+  migrate:
+    build:
+      context: .
+    user: "1000:1000"
+    env_file:
+      - ./.env
+    environment:
+      APP_URL: ${APP_URL:?APP_URL is required}
+      DB_CONNECTION: ${DB_CONNECTION:-pgsql}
+      DB_HOST: ${DB_HOST:-pgsql}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE:-stimergie}
+      DB_USERNAME: ${DB_USERNAME:-stimergie}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      CACHE_STORE: ${CACHE_STORE:-database}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-database}
+      SESSION_DRIVER: ${SESSION_DRIVER:-database}
+      VITE_DEV_SERVER_URL: ""
+      COMPOSER_HOME: /tmp/composer
+    depends_on:
+      pgsql:
+        condition: service_healthy
+    volumes:
+      - .:/var/www/html
+    command: php artisan migrate --force --no-interaction
+
+  pgsql:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-stimergie}
+      POSTGRES_USER: ${DB_USERNAME:-stimergie}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+    ports:
+      - "${POSTGRES_HOST_PORT:-55432}:5432"
+    volumes:
+      - pgsql-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  pgsql-data:
