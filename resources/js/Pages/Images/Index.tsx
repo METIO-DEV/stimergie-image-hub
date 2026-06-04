@@ -1,6 +1,15 @@
 import { Badge } from "@/Components/ui/badge";
 import { Button } from "@/Components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/Components/ui/dialog";
 import { Input } from "@/Components/ui/input";
+import { Label } from "@/Components/ui/label";
 import {
     Table,
     TableBody,
@@ -32,13 +41,15 @@ import {
     AlertTriangle,
     CheckCircle2,
     Clock,
+    FolderUp,
     Pencil,
     Plus,
     RotateCcw,
     Sparkles,
     Square,
+    Upload,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type FilterOption = {
     id: number;
@@ -97,6 +108,24 @@ type ImportStats = {
     completed: number;
 };
 
+type ImportSummary = {
+    id: number;
+    status: string;
+    totalItems: number;
+    uploadedItems: number;
+    processedItems: number;
+    failedItems: number;
+    duplicateItems: number;
+    items: Array<{
+        id: number;
+        filename: string;
+        relativePath?: string | null;
+        status: string;
+        error?: string | null;
+    }>;
+};
+
+type ImportProjectMode = "existing" | "new";
 type ImagesTab = "library" | "imports" | "ai-tags";
 
 type TagAnalysisDashboard = {
@@ -125,6 +154,20 @@ type TagAnalysisRun = {
 
 const PAGE_SIZE = 20;
 
+const folderSegment = (value: string, fallback: string) => {
+    const normalized = value
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+
+    return normalized || fallback;
+};
+
+const generatedProjectFolder = (clientName: string, projectName: string) =>
+    `${folderSegment(clientName, "entreprise")}_${folderSegment(projectName, "projet")}`;
+
 export default function ImagesIndex({
     images,
     imports,
@@ -144,6 +187,7 @@ export default function ImagesIndex({
     );
     const [editingImage, setEditingImage] = useState<LegacyImage | null>(null);
     const [imageModalOpen, setImageModalOpen] = useState(false);
+    const [importModalOpen, setImportModalOpen] = useState(false);
     const [tagAnalysis, setTagAnalysis] =
         useState<TagAnalysisDashboard | null>(null);
     const [tagAnalysisLoading, setTagAnalysisLoading] = useState(false);
@@ -382,6 +426,7 @@ export default function ImagesIndex({
                             activeImports={activeImports}
                             selectedImport={selectedImport}
                             onSelectImport={setSelectedImportId}
+                            onOpenImport={() => setImportModalOpen(true)}
                         />
                     </TabsContent>
 
@@ -484,6 +529,12 @@ export default function ImagesIndex({
                     }
                 }}
             />
+            <FolderImportModal
+                open={importModalOpen}
+                clients={filters.clients}
+                projects={filters.projects}
+                onOpenChange={setImportModalOpen}
+            />
             <ClientInfoSheet
                 client={
                     selectedClientImage?.client ||
@@ -497,6 +548,541 @@ export default function ImagesIndex({
                 onClose={() => setSelectedClientImage(null)}
             />
         </AuthenticatedLayout>
+    );
+}
+
+function FolderImportModal({
+    open,
+    clients,
+    projects,
+    onOpenChange,
+}: {
+    open: boolean;
+    clients: FilterOption[];
+    projects: FilterOption[];
+    onOpenChange: (open: boolean) => void;
+}) {
+    const [projectMode, setProjectMode] =
+        useState<ImportProjectMode>("existing");
+    const [projectId, setProjectId] = useState("");
+    const [newProject, setNewProject] = useState({
+        client_id: "",
+        name: "",
+        type: "",
+        source_folder: "",
+    });
+    const [sourceFolderTouched, setSourceFolderTouched] = useState(false);
+    const [files, setFiles] = useState<File[]>([]);
+    const [summary, setSummary] = useState<ImportSummary | null>(null);
+    const [uploading, setUploading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const imageFiles = useMemo(
+        () => files.filter((file) => file.type.startsWith("image/")),
+        [files],
+    );
+    const ignoredCount = files.length - imageFiles.length;
+    const totalBytes = imageFiles.reduce((total, file) => total + file.size, 0);
+    const terminal =
+        summary?.status === "completed" ||
+        summary?.status === "failed" ||
+        summary?.status === "cancelled";
+    const progressTotal = summary?.totalItems || imageFiles.length || 1;
+    const progressDone =
+        (summary?.processedItems || 0) + (summary?.failedItems || 0);
+    const progress = Math.min(
+        100,
+        Math.round((progressDone / progressTotal) * 100),
+    );
+    const selectedProject = projects.find(
+        (project) => String(project.id) === projectId,
+    );
+    const selectedClient = clients.find(
+        (client) => String(client.id) === newProject.client_id,
+    );
+
+    useEffect(() => {
+        if (!open || !summary || terminal) {
+            return;
+        }
+
+        const interval = window.setInterval(async () => {
+            const response = await window.axios.get<ImportSummary>(
+                imageImportUrl(summary.id),
+            );
+            setSummary(response.data);
+
+            if (response.data.status === "completed") {
+                router.reload({ only: ["images", "imports", "stats"] });
+            }
+        }, 2500);
+
+        return () => window.clearInterval(interval);
+    }, [open, summary, terminal]);
+
+    useEffect(() => {
+        if (open) {
+            return;
+        }
+
+        setProjectId("");
+        setProjectMode("existing");
+        setNewProject({
+            client_id: "",
+            name: "",
+            type: "",
+            source_folder: "",
+        });
+        setSourceFolderTouched(false);
+        setFiles([]);
+        setSummary(null);
+        setError(null);
+        setUploading(false);
+    }, [open]);
+
+    useEffect(() => {
+        if (projectMode !== "new" || sourceFolderTouched || !selectedClient) {
+            return;
+        }
+
+        setNewProject((current) => ({
+            ...current,
+            source_folder: generatedProjectFolder(
+                selectedClient.name,
+                current.name,
+            ),
+        }));
+    }, [projectMode, selectedClient, sourceFolderTouched, newProject.name]);
+
+    const updateNewProject = (
+        field: keyof typeof newProject,
+        value: string,
+    ) => {
+        setNewProject((current) => ({ ...current, [field]: value }));
+    };
+
+    const submit = async (event: FormEvent) => {
+        event.preventDefault();
+
+        if (imageFiles.length === 0) {
+            setError("Sélectionnez au moins une image.");
+            return;
+        }
+
+        if (projectMode === "existing" && !projectId) {
+            setError("Sélectionnez un projet existant.");
+            return;
+        }
+
+        if (
+            projectMode === "new" &&
+            (!newProject.client_id || !newProject.name.trim())
+        ) {
+            setError("Renseignez l'entreprise et le nom du nouveau projet.");
+            return;
+        }
+
+        setUploading(true);
+        setError(null);
+
+        try {
+            const batchResponse = await window.axios.post<ImportSummary>(
+                imageImportUrl(),
+                {
+                    ...(projectMode === "existing"
+                        ? { project_id: Number(projectId) }
+                        : {
+                              new_project: {
+                                  client_id: Number(newProject.client_id),
+                                  name: newProject.name,
+                                  type: newProject.type,
+                                  source_folder: newProject.source_folder,
+                              },
+                          }),
+                    total_items: imageFiles.length,
+                    total_bytes: totalBytes,
+                },
+            );
+
+            let latestSummary = batchResponse.data;
+            setSummary(latestSummary);
+
+            for (const file of imageFiles) {
+                const payload = new FormData();
+                payload.append("file", file);
+                payload.append("relative_path", relativePath(file));
+
+                const itemResponse = await window.axios.post<ImportSummary>(
+                    imageImportItemUrl(latestSummary.id),
+                    payload,
+                    {
+                        headers: {
+                            "Content-Type": "multipart/form-data",
+                        },
+                    },
+                );
+
+                latestSummary = itemResponse.data;
+                setSummary(latestSummary);
+            }
+
+            router.reload({ only: ["imports", "stats"] });
+        } catch (exception) {
+            setError(errorMessage(exception));
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const retryFailed = async () => {
+        if (!summary) {
+            return;
+        }
+
+        setUploading(true);
+        setError(null);
+
+        try {
+            const response = await window.axios.post<ImportSummary>(
+                imageImportRetryUrl(summary.id),
+            );
+            setSummary(response.data);
+            router.reload({ only: ["imports", "stats"] });
+        } catch (exception) {
+            setError(errorMessage(exception));
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    return (
+        <Dialog
+            open={open}
+            onOpenChange={(nextOpen) => {
+                if (!nextOpen && uploading) {
+                    return;
+                }
+
+                onOpenChange(nextOpen);
+            }}
+        >
+            <DialogContent className="max-h-[90vh] max-w-2xl overflow-hidden">
+                <DialogHeader>
+                    <DialogTitle>Importer un dossier d'images</DialogTitle>
+                    <DialogDescription>
+                        Les images sont envoyées une par une puis traitées en
+                        arrière-plan.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <form onSubmit={submit}>
+                    <div className="max-h-[calc(90vh-210px)] space-y-5 overflow-y-auto pr-2">
+                        <div className="grid grid-cols-2 gap-2 rounded-md bg-muted p-1">
+                            <button
+                                type="button"
+                                className={`rounded px-3 py-2 text-sm font-semibold transition ${
+                                    projectMode === "existing"
+                                        ? "bg-background text-foreground shadow-sm"
+                                        : "text-muted-foreground hover:text-foreground"
+                                }`}
+                                disabled={uploading || Boolean(summary)}
+                                onClick={() => {
+                                    setProjectMode("existing");
+                                    setError(null);
+                                }}
+                            >
+                                Projet existant
+                            </button>
+                            <button
+                                type="button"
+                                className={`rounded px-3 py-2 text-sm font-semibold transition ${
+                                    projectMode === "new"
+                                        ? "bg-background text-foreground shadow-sm"
+                                        : "text-muted-foreground hover:text-foreground"
+                                }`}
+                                disabled={uploading || Boolean(summary)}
+                                onClick={() => {
+                                    setProjectMode("new");
+                                    setError(null);
+                                }}
+                            >
+                                Nouveau projet
+                            </button>
+                        </div>
+
+                        <div className="space-y-2">
+                            {projectMode === "existing" ? (
+                                <>
+                                    <Label htmlFor="folder-import-project">
+                                        Projet
+                                    </Label>
+                                    <select
+                                        id="folder-import-project"
+                                        value={projectId}
+                                        onChange={(event) =>
+                                            setProjectId(event.target.value)
+                                        }
+                                        className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                        disabled={uploading || Boolean(summary)}
+                                    >
+                                        <option value="">
+                                            Sélectionner un projet
+                                        </option>
+                                        {projects.map((project) => (
+                                            <option
+                                                key={project.id}
+                                                value={project.id}
+                                            >
+                                                {project.clientName
+                                                    ? `${project.clientName} - ${project.name}`
+                                                    : project.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <p className="text-xs text-muted-foreground">
+                                        Les images seront ajoutées au dossier du
+                                        projet sélectionné
+                                        {selectedProject?.sourceFolder
+                                            ? ` : ${selectedProject.sourceFolder}`
+                                            : "."}
+                                    </p>
+                                </>
+                            ) : (
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="folder-import-client">
+                                            Entreprise
+                                        </Label>
+                                        <select
+                                            id="folder-import-client"
+                                            value={newProject.client_id}
+                                            onChange={(event) => {
+                                                updateNewProject(
+                                                    "client_id",
+                                                    event.target.value,
+                                                );
+                                                setSourceFolderTouched(false);
+                                            }}
+                                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                            disabled={
+                                                uploading || Boolean(summary)
+                                            }
+                                        >
+                                            <option value="">
+                                                Sélectionner une entreprise
+                                            </option>
+                                            {clients.map((client) => (
+                                                <option
+                                                    key={client.id}
+                                                    value={client.id}
+                                                >
+                                                    {client.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="folder-import-project-name">
+                                            Nom du projet
+                                        </Label>
+                                        <Input
+                                            id="folder-import-project-name"
+                                            value={newProject.name}
+                                            disabled={
+                                                uploading || Boolean(summary)
+                                            }
+                                            onChange={(event) =>
+                                                updateNewProject(
+                                                    "name",
+                                                    event.target.value,
+                                                )
+                                            }
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="folder-import-project-type">
+                                            Type de projet
+                                        </Label>
+                                        <Input
+                                            id="folder-import-project-type"
+                                            value={newProject.type}
+                                            disabled={
+                                                uploading || Boolean(summary)
+                                            }
+                                            onChange={(event) =>
+                                                updateNewProject(
+                                                    "type",
+                                                    event.target.value,
+                                                )
+                                            }
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="folder-import-source-folder">
+                                            Nom du dossier
+                                        </Label>
+                                        <Input
+                                            id="folder-import-source-folder"
+                                            value={newProject.source_folder}
+                                            disabled={
+                                                uploading || Boolean(summary)
+                                            }
+                                            onChange={(event) => {
+                                                setSourceFolderTouched(true);
+                                                updateNewProject(
+                                                    "source_folder",
+                                                    event.target.value,
+                                                );
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <label className="flex cursor-pointer flex-col items-center rounded-lg border-2 border-dashed p-10 text-center transition-colors hover:bg-muted/50">
+                            <Upload className="h-9 w-9 text-muted-foreground" />
+                            <span className="mt-3 text-sm font-medium">
+                                Choisir un dossier
+                            </span>
+                            <span className="mt-1 text-xs text-muted-foreground">
+                                JPEG, PNG ou WebP, 100 Mo maximum par image.
+                            </span>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                className="hidden"
+                                disabled={uploading || Boolean(summary)}
+                                onChange={(event) =>
+                                    setFiles(
+                                        Array.from(event.target.files ?? []),
+                                    )
+                                }
+                                {...folderInputAttributes()}
+                            />
+                        </label>
+
+                        {files.length > 0 && (
+                            <div className="rounded-md border p-4 text-sm">
+                                <div className="font-medium">
+                                    {imageFiles.length} image
+                                    {imageFiles.length > 1 ? "s" : ""} prête
+                                    {imageFiles.length > 1 ? "s" : ""} à
+                                    importer
+                                </div>
+                                <div className="mt-1 text-muted-foreground">
+                                    {formatBytes(totalBytes)}
+                                    {ignoredCount > 0
+                                        ? ` · ${ignoredCount} fichier${ignoredCount > 1 ? "s" : ""} ignoré${ignoredCount > 1 ? "s" : ""}`
+                                        : ""}
+                                </div>
+                            </div>
+                        )}
+
+                        {summary && (
+                            <div className="space-y-4 rounded-md border p-4">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                        <div className="text-sm font-semibold">
+                                            Import #{summary.id}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                            {statusLabel(summary.status)}
+                                        </div>
+                                    </div>
+                                    <Badge>{progress}%</Badge>
+                                </div>
+                                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                                    <div
+                                        className="h-full bg-primary transition-all"
+                                        style={{ width: `${progress}%` }}
+                                    />
+                                </div>
+                                <div className="grid gap-3 text-sm sm:grid-cols-4">
+                                    <ImportMetric
+                                        label="Envoyées"
+                                        value={summary.uploadedItems}
+                                    />
+                                    <ImportMetric
+                                        label="Traitées"
+                                        value={summary.processedItems}
+                                    />
+                                    <ImportMetric
+                                        label="Doublons"
+                                        value={summary.duplicateItems}
+                                    />
+                                    <ImportMetric
+                                        label="Erreurs"
+                                        value={summary.failedItems}
+                                    />
+                                </div>
+                                {summary.items.length > 0 && (
+                                    <div className="max-h-44 overflow-y-auto rounded border">
+                                        {summary.items.map((item) => (
+                                            <div
+                                                key={item.id}
+                                                className="flex items-start justify-between gap-3 border-b px-3 py-2 text-xs last:border-b-0"
+                                            >
+                                                <div className="min-w-0">
+                                                    <div className="truncate font-medium">
+                                                        {item.relativePath ||
+                                                            item.filename}
+                                                    </div>
+                                                    {item.error && (
+                                                        <div className="mt-1 text-destructive">
+                                                            {item.error}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <span className="shrink-0 text-muted-foreground">
+                                                    {statusLabel(item.status)}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {error && (
+                            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                                {error}
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter className="border-t pt-4">
+                        {summary?.failedItems ? (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={retryFailed}
+                                disabled={uploading}
+                            >
+                                <RotateCcw className="mr-2 h-4 w-4" />
+                                Relancer les erreurs
+                            </Button>
+                        ) : null}
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => onOpenChange(false)}
+                            disabled={uploading}
+                        >
+                            Fermer
+                        </Button>
+                        {!summary && (
+                            <Button type="submit" disabled={uploading}>
+                                {uploading
+                                    ? "Import en cours..."
+                                    : "Lancer l'import"}
+                            </Button>
+                        )}
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     );
 }
 
@@ -515,15 +1101,32 @@ function ImportTrackingPanel({
     activeImports,
     selectedImport,
     onSelectImport,
+    onOpenImport,
 }: {
     imports: ImportBatch[];
     stats: ImportStats;
     activeImports: ImportBatch[];
     selectedImport: ImportBatch | null;
     onSelectImport: (id: number) => void;
+    onOpenImport: () => void;
 }) {
     return (
         <section className="space-y-8">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                    <h2 className="text-lg font-semibold">
+                        Suivi des imports dossier
+                    </h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        Lancez un nouvel import puis suivez son traitement.
+                    </p>
+                </div>
+                <Button onClick={onOpenImport}>
+                    <FolderUp className="mr-2 h-4 w-4" />
+                    Importer un dossier
+                </Button>
+            </div>
+
             <div className="grid gap-4 md:grid-cols-4">
                 <ImportMetric label="Imports actifs" value={stats.active} />
                 <ImportMetric label="Terminés" value={stats.completed} />
@@ -1063,8 +1666,49 @@ function imageTagAnalysisUrl(): string {
     return "/image-tag-analysis-runs";
 }
 
+function relativePath(file: File): string {
+    return (
+        (file as File & { webkitRelativePath?: string }).webkitRelativePath ||
+        file.name
+    );
+}
+
+function folderInputAttributes() {
+    return {
+        webkitdirectory: "",
+        directory: "",
+    } as Record<string, string>;
+}
+
+function imageImportUrl(importId?: number): string {
+    return importId ? `/image-imports/${importId}` : "/image-imports";
+}
+
+function imageImportItemUrl(importId: number): string {
+    return `/image-imports/${importId}/items`;
+}
+
+function imageImportRetryUrl(importId: number): string {
+    return `/image-imports/${importId}/retry-failed`;
+}
+
 function imageTagAnalysisStopUrl(runId: number): string {
     return `/image-tag-analysis-runs/${runId}/stop`;
+}
+
+function formatBytes(bytes: number): string {
+    if (bytes === 0) {
+        return "0 octet";
+    }
+
+    const units = ["octets", "Ko", "Mo", "Go"];
+    const exponent = Math.min(
+        Math.floor(Math.log(bytes) / Math.log(1024)),
+        units.length - 1,
+    );
+    const value = bytes / 1024 ** exponent;
+
+    return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
 }
 
 function statusLabel(status: string): string {
