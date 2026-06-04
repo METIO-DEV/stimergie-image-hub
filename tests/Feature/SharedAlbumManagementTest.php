@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Mail\SharedAlbumInvitation;
 use App\Models\Client;
 use App\Models\ClientMembership;
 use App\Models\Image;
@@ -10,7 +9,7 @@ use App\Models\Project;
 use App\Models\SharedAlbum;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -20,7 +19,15 @@ class SharedAlbumManagementTest extends TestCase
 
     public function test_manager_can_create_shared_album_from_visible_images(): void
     {
-        Mail::fake();
+        config([
+            'services.brevo.api_key' => 'brevo-test-key',
+            'services.brevo.templates.shared_album_invitation' => 22,
+            'services.brevo.sender_email' => 'contact@stimergie.fr',
+            'services.brevo.sender_name' => 'Stimergie',
+        ]);
+        Http::fake([
+            'https://api.brevo.com/v3/smtp/email' => Http::response(['messageId' => 'test-message']),
+        ]);
 
         $manager = User::factory()->create([
             'platform_role' => 'admin_client',
@@ -79,7 +86,10 @@ class SharedAlbumManagementTest extends TestCase
             ['client@example.test', 'autre@example.test'],
             $album->fresh()->metadata['recipients'],
         );
-        Mail::assertSent(SharedAlbumInvitation::class, 2);
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($request) => $request->hasHeader('api-key', 'brevo-test-key')
+            && $request['templateId'] === 22
+            && $request['params']['album_name'] === 'Album client');
     }
 
     public function test_shared_album_public_page_hides_expired_album(): void

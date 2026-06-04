@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Client;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class UserManagementTest extends TestCase
@@ -13,6 +14,16 @@ class UserManagementTest extends TestCase
 
     public function test_super_admin_can_create_and_update_a_user_with_client_memberships(): void
     {
+        config([
+            'services.brevo.api_key' => 'brevo-test-key',
+            'services.brevo.templates.registration' => 11,
+            'services.brevo.sender_email' => 'contact@stimergie.fr',
+            'services.brevo.sender_name' => 'Stimergie',
+        ]);
+        Http::fake([
+            'https://api.brevo.com/v3/smtp/email' => Http::response(['messageId' => 'registration-message']),
+        ]);
+
         $admin = User::factory()->create([
             'platform_role' => 'super_admin',
             'status' => 'active',
@@ -50,6 +61,10 @@ class UserManagementTest extends TestCase
             'id' => $user->id,
             'platform_role' => 'admin_client',
         ]);
+        Http::assertSent(fn ($request) => $request->hasHeader('api-key', 'brevo-test-key')
+            && $request['templateId'] === 11
+            && $request['to'][0]['email'] === 'alice@example.test'
+            && isset($request['params']['reset_password_url']));
 
         $this->actingAs($admin)->patch(route('users.update', $user), [
             'first_name' => 'Alice',

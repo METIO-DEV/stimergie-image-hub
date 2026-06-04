@@ -40,4 +40,15 @@ return [
         'image_tag_model' => env('OPENAI_IMAGE_TAG_MODEL', 'gpt-4.1-mini'),
     ],
 
+    'brevo' => [
+        'api_key' => env('BREVO_API_KEY'),
+        'sender_email' => env('BREVO_SENDER_EMAIL', env('MAIL_FROM_ADDRESS', 'hello@example.com')),
+        'sender_name' => env('BREVO_SENDER_NAME', env('MAIL_FROM_NAME', 'Stimergie Image Hub')),
+        'templates' => [
+            'registration' => env('BREVO_TEMPLATE_REGISTRATION'),
+            'shared_album_invitation' => env('BREVO_TEMPLATE_SHARED_ALBUM_INVITATION'),
+            'monthly_image_digest' => env('BREVO_TEMPLATE_MONTHLY_IMAGE_DIGEST'),
+        ],
+    ],
+
 ];

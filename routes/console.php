@@ -34,3 +34,4 @@ Artisan::command('downloads:cleanup-expired', function () {
 })->purpose('Delete expired generated download archives');
 
 Schedule::command('downloads:cleanup-expired')->daily();
+Schedule::command('images:send-monthly-digest')->monthlyOn(1, '08:00');

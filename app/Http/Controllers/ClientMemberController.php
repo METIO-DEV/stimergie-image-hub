@@ -7,6 +7,7 @@ use App\Http\Requests\UpdateClientMemberRequest;
 use App\Models\Client;
 use App\Models\ClientMembership;
 use App\Models\User;
+use App\Support\UserInvitationMailer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -14,11 +15,13 @@ use Illuminate\Validation\ValidationException;
 
 class ClientMemberController extends Controller
 {
+    public function __construct(private readonly UserInvitationMailer $invitations) {}
+
     public function store(StoreClientMemberRequest $request, Client $client): RedirectResponse
     {
         $data = $request->validated();
 
-        DB::transaction(function () use ($client, $data, $request): void {
+        [$user, $wasCreated] = DB::transaction(function () use ($client, $data, $request): array {
             $user = User::query()->firstOrCreate(
                 ['email' => Str::lower($data['email'])],
                 [
@@ -47,7 +50,13 @@ class ClientMemberController extends Controller
                     'created_by' => $request->user()->id,
                 ],
             );
+
+            return [$user, $user->wasRecentlyCreated];
         });
+
+        if ($wasCreated) {
+            $this->invitations->send($user);
+        }
 
         return back()->with('success', "Membre ajouté à l'entreprise.");
     }

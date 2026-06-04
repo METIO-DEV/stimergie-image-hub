@@ -3,13 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreSharedAlbumRequest;
-use App\Mail\SharedAlbumInvitation;
 use App\Models\Image;
 use App\Models\SharedAlbum;
 use App\Support\ImageUrlResolver;
 use App\Support\ProjectAccess;
+use App\Support\SharedAlbumInvitationMailer;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -23,6 +22,7 @@ class SharedAlbumController extends Controller
     public function __construct(
         private readonly ImageUrlResolver $imageUrls,
         private readonly ProjectAccess $projectAccess,
+        private readonly SharedAlbumInvitationMailer $invitations,
     ) {}
 
     public function store(StoreSharedAlbumRequest $request): RedirectResponse
@@ -61,7 +61,9 @@ class SharedAlbumController extends Controller
 
         foreach ($album->metadata['recipients'] ?? [] as $recipient) {
             try {
-                Mail::to($recipient)->send(new SharedAlbumInvitation($album));
+                if (! $this->invitations->send($album, $recipient)) {
+                    $failedInvitations++;
+                }
             } catch (Throwable) {
                 $failedInvitations++;
             }

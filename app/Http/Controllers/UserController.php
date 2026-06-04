@@ -6,6 +6,7 @@ use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Models\ClientMembership;
 use App\Models\User;
+use App\Support\UserInvitationMailer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -14,6 +15,8 @@ use Illuminate\Support\Str;
 
 class UserController extends Controller
 {
+    public function __construct(private readonly UserInvitationMailer $invitations) {}
+
     public function search(Request $request): JsonResponse
     {
         $actor = $request->user();
@@ -54,7 +57,7 @@ class UserController extends Controller
     {
         $data = $request->validated();
 
-        DB::transaction(function () use ($data, $request): void {
+        $user = DB::transaction(function () use ($data, $request): User {
             $user = User::create([
                 'name' => $this->fullName($data['first_name'], $data['last_name'] ?? ''),
                 'email' => Str::lower($data['email']),
@@ -64,7 +67,11 @@ class UserController extends Controller
             ]);
 
             $this->syncClientMemberships($user, $data['client_ids'] ?? [], $data['role'], $data['status'], $request->user()->id);
+
+            return $user;
         });
+
+        $this->invitations->send($user);
 
         return back()->with('success', 'Utilisateur créé.');
     }
@@ -93,7 +100,7 @@ class UserController extends Controller
     }
 
     /**
-     * @param array<int, int|string> $clientIds
+     * @param  array<int, int|string>  $clientIds
      */
     private function syncClientMemberships(User $user, array $clientIds, string $role, string $status, int $actorId): void
     {

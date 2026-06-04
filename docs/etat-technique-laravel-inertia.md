@@ -15,7 +15,8 @@ Ce document complete l'audit historique `docs/audit-technique.md`, qui decrit su
 - Imports images : batch API + jobs `ProcessImageImportItem`.
 - Telechargements groupes : jobs serveur `PrepareDownloadArchive`, avec archives stockees dans le bucket image.
 - Analyse IA des tags : route Laravel serveur, OpenAI Responses API, variables `OPENAI_API_KEY` et `OPENAI_IMAGE_TAG_MODEL`.
-- Partage externe : albums publics temporaires `shared_albums`, invitations email via Laravel Mail.
+- Emails transactionnels : Brevo API `/v3/smtp/email` avec templates configures par `BREVO_TEMPLATE_REGISTRATION`, `BREVO_TEMPLATE_SHARED_ALBUM_INVITATION` et `BREVO_TEMPLATE_MONTHLY_IMAGE_DIGEST`.
+- Partage externe : albums publics temporaires `shared_albums`, invitations email via template Brevo.
 - Partage interne : pivot `image_client_shares`, visible via `ProjectAccess` pour les clients destinataires pendant la periode active.
 
 ## Risques traites le 2026-06-04
@@ -30,5 +31,5 @@ Ce document complete l'audit historique `docs/audit-technique.md`, qui decrit su
 
 - La generation ZIP utilise encore `ZipArchive::addFromString()` avec lecture complete des objets source. Les limites ajoutees reduisent le risque, mais un streaming plus fin restera preferable si les lots HD reels sont volumineux.
 - L'analyse IA utilise le niveau image `low` pour limiter cout et latence. Si les tags sont trop generiques en production, tester un niveau de detail plus eleve sur un petit echantillon.
-- Les emails d'invitation reposent sur la configuration Laravel Mail. En local, le mailer `log` ou `array` suffit ; en production, configurer un provider transactionnel.
+- Les emails transactionnels reposent sur Brevo. Si `BREVO_API_KEY` ou le template ID cible manque, l'envoi est ignore et journalise. En production, configurer les trois templates transactionnels avant activation.
 - Les documents historiques doivent rester consultables comme reference de migration, mais ne doivent plus etre utilises comme etat technique principal sans verification contre le code Laravel actuel.
