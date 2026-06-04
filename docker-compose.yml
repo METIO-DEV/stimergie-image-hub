@@ -5,7 +5,7 @@ services:
     env_file:
       - ./.env
     environment:
-      APP_URL: http://localhost:8000
+      APP_URL: http://localhost:${APP_HOST_PORT:-8100}
       DB_CONNECTION: pgsql
       DB_HOST: pgsql
       DB_PORT: 5432
@@ -15,12 +15,12 @@ services:
       CACHE_STORE: database
       QUEUE_CONNECTION: database
       SESSION_DRIVER: database
-      VITE_DEV_SERVER_URL: http://localhost:5173
+      VITE_DEV_SERVER_URL: http://localhost:${VITE_HOST_PORT:-5174}
     depends_on:
       migrate:
         condition: service_completed_successfully
     ports:
-      - "8000:8000"
+      - "${APP_HOST_PORT:-8100}:8000"
     volumes:
       - .:/var/www/html
     command: php artisan serve --host=0.0.0.0 --port=8000
@@ -72,8 +72,11 @@ services:
   vite:
     image: node:22-alpine
     working_dir: /var/www/html
+    environment:
+      APP_HOST_PORT: ${APP_HOST_PORT:-8100}
+      VITE_HOST_PORT: ${VITE_HOST_PORT:-5174}
     ports:
-      - "5173:5173"
+      - "${VITE_HOST_PORT:-5174}:5173"
     volumes:
       - .:/var/www/html
     command: sh -lc "npm install && npm run dev -- --host 0.0.0.0"
@@ -85,7 +88,7 @@ services:
       POSTGRES_USER: stimergie
       POSTGRES_PASSWORD: stimergie
     ports:
-      - "5432:5432"
+      - "${POSTGRES_HOST_PORT:-55432}:5432"
     volumes:
       - pgsql-data:/var/lib/postgresql/data
     healthcheck:

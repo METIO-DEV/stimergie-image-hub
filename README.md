@@ -26,9 +26,9 @@ docker compose up --build
 
 Services exposes :
 
-- App Laravel : http://localhost:8000
-- Vite : http://localhost:5173
-- PostgreSQL : localhost:5432
+- App Laravel : http://localhost:8100
+- Vite : http://localhost:5174
+- PostgreSQL : localhost:55432
 
 Le compose lance aussi un worker :
 
