@@ -1,7 +1,11 @@
 import AppFooter from "@/Components/AppFooter";
 import { PropsWithChildren } from "react";
 
-export default function Guest({ children }: PropsWithChildren) {
+type GuestLayoutProps = PropsWithChildren<{
+    showFooter?: boolean;
+}>;
+
+export default function Guest({ children, showFooter = true }: GuestLayoutProps) {
     return (
         <div className="flex min-h-screen flex-col bg-[#264653] text-[#080506]">
             <div className="flex flex-1 items-center justify-center px-5 py-10">
@@ -19,7 +23,7 @@ export default function Guest({ children }: PropsWithChildren) {
                     </div>
                 </div>
             </div>
-            <AppFooter />
+            {showFooter && <AppFooter />}
         </div>
     );
 }

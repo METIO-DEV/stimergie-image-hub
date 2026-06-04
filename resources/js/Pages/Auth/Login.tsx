@@ -28,7 +28,7 @@ export default function Login({
     };
 
     return (
-        <GuestLayout>
+        <GuestLayout showFooter={false}>
             <Head title="Connexion" />
 
             {status && (
