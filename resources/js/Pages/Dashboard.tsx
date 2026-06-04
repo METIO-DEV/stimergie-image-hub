@@ -3,6 +3,7 @@ import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, Link } from "@inertiajs/react";
 import {
     ArrowRight,
+    BookOpenText,
     Building2,
     CalendarRange,
     FolderOpen,
@@ -153,6 +154,13 @@ export default function Dashboard({
                         description="Interface de visualisation des images"
                         href={route("gallery.index")}
                         icon={Image}
+                    />
+                    <FeatureCard
+                        title="Blog et ressources"
+                        subtitle="Publier les contenus éditoriaux"
+                        description="Créer des ressources, articles Ensemble et brouillons"
+                        href={route("blog.admin.index")}
+                        icon={BookOpenText}
                     />
                     <FeatureCard
                         title="Utilisateurs"

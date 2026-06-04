@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AppPageController;
+use App\Http\Controllers\BlogPostController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ClientMemberController;
 use App\Http\Controllers\DownloadController;
@@ -34,6 +35,9 @@ Route::get('/conditions-utilisation', [LegalPageController::class, 'terms'])->na
 Route::get('/privacy-policy', [LegalPageController::class, 'privacy'])->name('privacy.legacy');
 Route::get('/confidentialite', [LegalPageController::class, 'privacy'])->name('privacy');
 Route::get('/licenses', [LegalPageController::class, 'licenses'])->name('licenses');
+Route::get('/resources', [BlogPostController::class, 'resources'])->name('blog.resources');
+Route::get('/ressources', [BlogPostController::class, 'resources'])->name('blog.resources.fr');
+Route::get('/ensemble', [BlogPostController::class, 'ensemble'])->name('blog.ensemble');
 Route::get('/shared-albums/{shareKey}', [SharedAlbumController::class, 'show'])->name('shared-albums.show');
 Route::get('/shared-albums/{shareKey}/download', [SharedAlbumController::class, 'download'])->name('shared-albums.download');
 
@@ -113,6 +117,14 @@ Route::middleware('auth')->group(function () {
     Route::patch('/access-periods/{accessPeriod}', [ProjectAccessPeriodController::class, 'update'])->name('access-periods.update');
     Route::delete('/access-periods/{accessPeriod}', [ProjectAccessPeriodController::class, 'destroy'])->name('access-periods.destroy');
     Route::patch('/legal-pages/{legalPage}', [LegalPageController::class, 'update'])->name('legal-pages.update');
+    Route::get('/blog-admin', [BlogPostController::class, 'index'])->name('blog.admin.index');
+    Route::get('/blog/new', [BlogPostController::class, 'create'])->name('blog.create');
+    Route::get('/blog/edit/{blogPost}', [BlogPostController::class, 'edit'])->name('blog.edit');
+    Route::get('/blog-editor', [BlogPostController::class, 'create'])->name('blog-editor.create');
+    Route::get('/blog-editor/{blogPost}', [BlogPostController::class, 'edit'])->name('blog-editor.edit');
+    Route::post('/blog', [BlogPostController::class, 'store'])->name('blog.store');
+    Route::patch('/blog/{blogPost}', [BlogPostController::class, 'update'])->name('blog.update');
+    Route::delete('/blog/{blogPost}', [BlogPostController::class, 'destroy'])->name('blog.destroy');
 
     Route::resource('clients', ClientController::class);
     Route::post('/clients/{client}/members', [ClientMemberController::class, 'store'])->name('clients.members.store');
@@ -123,5 +135,7 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
+
+Route::get('/blog/{blogPost:slug}', [BlogPostController::class, 'show'])->name('blog.show');
 
 require __DIR__.'/auth.php';

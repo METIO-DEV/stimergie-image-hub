@@ -16,6 +16,7 @@ import { Link, usePage } from "@inertiajs/react";
 import {
     Building2,
     ChevronRight,
+    BookOpenText,
     Download,
     FolderOpen,
     Image,
@@ -130,6 +131,12 @@ export default function Authenticated({
             active: route().current("images.index"),
         },
         {
+            href: route("blog.admin.index"),
+            label: "Blog et ressources",
+            icon: BookOpenText,
+            active: route().current("blog.admin.*") || route().current("blog.*"),
+        },
+        {
             href: route("clients.index"),
             label: "Gestion des entreprises",
             icon: Building2,
@@ -153,6 +160,10 @@ export default function Authenticated({
         ? adminMenu
         : adminMenu.filter((item) => {
               if (item.label === "Gestion des images") {
+                  return abilities.canManageClientContent;
+              }
+
+              if (item.label === "Blog et ressources") {
                   return abilities.canManageClientContent;
               }
 
@@ -463,6 +474,14 @@ function breadcrumbItems(): BreadcrumbItem[] {
 
     if (route().current("images.index")) {
         return [home, { label: "Images" }];
+    }
+
+    if (
+        route().current("blog.admin.index") ||
+        route().current("blog.create") ||
+        route().current("blog.edit")
+    ) {
+        return [home, { label: "Blog et ressources" }];
     }
 
     if (route().current("imports.index")) {
