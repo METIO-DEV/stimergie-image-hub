@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\ProjectAccessPeriod;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -45,8 +46,8 @@ class HandleInertiaRequests extends Middleware
                     'canViewClientManagement' => $canManageClientContent,
                     'canManageUsers' => $user?->isSuperAdmin() ?? false,
                     'canViewUsers' => $user?->isSuperAdmin() ?? false,
-                    'canViewAccessPeriods' => $user?->isSuperAdmin() ?? false,
-                    'canManageAccessPeriods' => false,
+                    'canViewAccessPeriods' => $user?->can('viewAny', ProjectAccessPeriod::class) ?? false,
+                    'canManageAccessPeriods' => $user?->can('viewAny', ProjectAccessPeriod::class) ?? false,
                 ],
             ],
             'flash' => [

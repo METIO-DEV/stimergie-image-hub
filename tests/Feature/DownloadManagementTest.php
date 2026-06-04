@@ -171,6 +171,51 @@ class DownloadManagementTest extends TestCase
         $this->assertDatabaseCount('download_jobs', 0);
     }
 
+    public function test_hd_download_archive_is_limited_to_fifty_images(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        [$client, $project] = $this->clientAndProject();
+        $imageIds = collect(range(1, 51))
+            ->map(fn (int $index) => $this->image($client, $project, [
+                'object_key_hd' => "images/hd/source-{$index}.jpg",
+            ])->id)
+            ->all();
+
+        $this->actingAs($admin)->post(route('downloads.store'), [
+            'variant' => 'hd',
+            'image_ids' => $imageIds,
+        ])->assertInvalid('image_ids');
+
+        $this->assertDatabaseCount('download_jobs', 0);
+    }
+
+    public function test_download_archive_rejects_oversized_estimated_payload(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        [$client, $project] = $this->clientAndProject();
+        $image = $this->image($client, $project, [
+            'object_key_web' => 'images/web/huge.jpg',
+            'size_bytes' => 1_600_000_000,
+        ]);
+
+        $this->actingAs($admin)->post(route('downloads.store'), [
+            'variant' => 'web',
+            'image_ids' => [$image->id],
+        ])->assertInvalid('image_ids');
+
+        $this->assertDatabaseCount('download_jobs', 0);
+    }
+
     public function test_expired_download_archive_cannot_be_downloaded_and_can_be_cleaned_up(): void
     {
         Storage::fake('scaleway');
@@ -295,6 +340,7 @@ class DownloadManagementTest extends TestCase
             'object_key_original' => $overrides['object_key_original'] ?? null,
             'object_key_web' => $overrides['object_key_web'] ?? null,
             'object_key_hd' => $overrides['object_key_hd'] ?? null,
+            'size_bytes' => $overrides['size_bytes'] ?? null,
         ]);
     }
 }

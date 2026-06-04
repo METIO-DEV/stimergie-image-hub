@@ -232,6 +232,34 @@ class AppPagesTest extends TestCase
                 ->etc());
     }
 
+    public function test_client_manager_receives_access_period_ability_from_policy(): void
+    {
+        $manager = User::factory()->create([
+            'platform_role' => 'admin_client',
+            'status' => 'active',
+        ]);
+        $client = Client::create([
+            'name' => 'Client Periodes',
+            'slug' => 'client-periodes',
+            'status' => 'active',
+        ]);
+
+        ClientMembership::create([
+            'client_id' => $client->id,
+            'user_id' => $manager->id,
+            'role' => 'manager',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($manager)
+            ->get(route('gallery.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('auth.abilities.canViewAccessPeriods', true)
+                ->where('auth.abilities.canManageAccessPeriods', true)
+                ->etc());
+    }
+
     public function test_legal_pages_are_publicly_reachable(): void
     {
         foreach (['legal-notice', 'about', 'terms', 'terms.legacy', 'privacy', 'privacy.legacy', 'licenses'] as $routeName) {
