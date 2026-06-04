@@ -8,6 +8,7 @@ use App\Models\Image;
 use App\Models\LegalPage;
 use App\Models\Project;
 use App\Models\ProjectAccessPeriod;
+use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -213,6 +214,78 @@ class AppPagesTest extends TestCase
                 ->has('manageableClients', 1)
                 ->where('projects.0.id', $project->id)
                 ->where('projects.0.canUpdate', true)
+                ->etc());
+    }
+
+    public function test_image_management_page_paginates_and_filters_on_server(): void
+    {
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $client = Client::create([
+            'name' => 'Client Images',
+            'slug' => 'client-images',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Images',
+            'slug' => 'projet-images',
+            'status' => 'active',
+        ]);
+        $tag = Tag::create([
+            'name' => 'Campagne',
+            'slug' => 'campagne',
+        ]);
+
+        foreach (range(1, 25) as $index) {
+            $image = Image::create([
+                'client_id' => $client->id,
+                'project_id' => $project->id,
+                'title' => "Image gestion {$index}",
+                'status' => 'ready',
+                'storage_provider' => 'scaleway',
+                'object_key_original' => "photos/client-images/source-{$index}.jpg",
+                'created_at' => now()->subSeconds($index),
+                'updated_at' => now()->subSeconds($index),
+            ]);
+
+            if ($index === 7) {
+                $image->tags()->attach($tag->id);
+            }
+        }
+
+        $this->actingAs($admin)
+            ->get(route('images.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Images/Index')
+                ->has('images', 20)
+                ->where('imagePagination.total', 25)
+                ->where('imagePagination.currentPage', 1)
+                ->where('imagePagination.perPage', 20)
+                ->etc());
+
+        $this->actingAs($admin)
+            ->get(route('images.index', ['page' => 2]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Images/Index')
+                ->has('images', 5)
+                ->where('imagePagination.total', 25)
+                ->where('imagePagination.currentPage', 2)
+                ->etc());
+
+        $this->actingAs($admin)
+            ->get(route('images.index', ['tag' => 'campagne']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Images/Index')
+                ->has('images', 1)
+                ->where('images.0.tags.0', 'Campagne')
+                ->where('imagePagination.total', 1)
+                ->where('activeFilters.tag', 'campagne')
                 ->etc());
     }
 

@@ -164,8 +164,18 @@ class AppPageController extends Controller
         abort_unless($this->canManageClientContent($user), 403);
 
         $manageableClientIds = $this->manageableClientIds($user);
+        $imageFilters = $this->manageableImageFilters($request);
+        $page = max(1, (int) $request->integer('page', 1));
+        $perPage = 20;
 
-        $images = Image::query()
+        $baseQuery = Image::query()
+            ->tap(fn ($query) => $this->applyPhotoBucketFilter($query))
+            ->tap(fn ($query) => $this->applyManageableClientScope($query, $manageableClientIds))
+            ->tap(fn ($query) => $this->applyManageableImageFilters($query, $imageFilters));
+
+        $totalImages = (clone $baseQuery)->count();
+
+        $images = (clone $baseQuery)
             ->with([
                 'client' => fn ($query) => $query
                     ->select('id', 'name', 'slug', 'logo_object_key', 'status')
@@ -174,10 +184,8 @@ class AppPageController extends Controller
                 'tags:id,name',
                 'sharedClients:id,name',
             ])
-            ->tap(fn ($query) => $this->applyPhotoBucketFilter($query))
-            ->tap(fn ($query) => $this->applyManageableClientScope($query, $manageableClientIds))
             ->latest()
-            ->limit(100)
+            ->forPage($page, $perPage)
             ->get()
             ->map(fn (Image $image) => $this->imageSummary($image, $user, $manageableClientIds));
 
@@ -188,6 +196,17 @@ class AppPageController extends Controller
             'filters' => [
                 'clients' => $this->manageableClientOptions($manageableClientIds),
                 'projects' => $this->manageableProjectOptions($user, $manageableClientIds),
+            ],
+            'activeFilters' => [
+                'search' => $imageFilters['search'],
+                'orientation' => $imageFilters['orientation'],
+                'clientId' => $imageFilters['clientId'] ? (string) $imageFilters['clientId'] : '',
+                'tag' => $imageFilters['tag'],
+            ],
+            'imagePagination' => [
+                'currentPage' => $page,
+                'perPage' => $perPage,
+                'total' => $totalImages,
             ],
         ]);
     }
@@ -468,6 +487,45 @@ class AppPageController extends Controller
             ->when($filters['orientation'] !== '', fn ($query) => $query->where('orientation', $filters['orientation']))
             ->when($filters['clientId'] !== null, fn ($query) => $query->where('client_id', $filters['clientId']))
             ->when($filters['projectId'] !== null, fn ($query) => $query->where('project_id', $filters['projectId']));
+    }
+
+    /**
+     * @return array{search: string, orientation: string, clientId: int|null, tag: string}
+     */
+    private function manageableImageFilters(Request $request): array
+    {
+        $orientation = (string) $request->query('orientation', '');
+
+        return [
+            'search' => trim((string) $request->query('search', '')),
+            'orientation' => in_array($orientation, ['landscape', 'portrait', 'square'], true) ? $orientation : '',
+            'clientId' => $request->query('client_id') ? max(1, (int) $request->query('client_id')) : null,
+            'tag' => trim((string) $request->query('tag', '')),
+        ];
+    }
+
+    /**
+     * @param  array{search: string, orientation: string, clientId: int|null, tag: string}  $filters
+     */
+    private function applyManageableImageFilters($query, array $filters): void
+    {
+        $query
+            ->when($filters['search'] !== '', function ($query) use ($filters): void {
+                $search = $filters['search'];
+
+                $query->where(function ($query) use ($search): void {
+                    $query
+                        ->where('title', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%");
+                });
+            })
+            ->when($filters['orientation'] !== '', fn ($query) => $query->where('orientation', $filters['orientation']))
+            ->when($filters['clientId'] !== null, fn ($query) => $query->where('client_id', $filters['clientId']))
+            ->when($filters['tag'] !== '', function ($query) use ($filters): void {
+                $tag = $filters['tag'];
+
+                $query->whereHas('tags', fn ($tags) => $tags->where('name', 'like', "%{$tag}%"));
+            });
     }
 
     private function canManageClientContent(User $user): bool

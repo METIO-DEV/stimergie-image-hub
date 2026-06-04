@@ -49,7 +49,14 @@ import {
     Square,
     Upload,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import {
+    FormEvent,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
 
 type FilterOption = {
     id: number;
@@ -67,6 +74,17 @@ type Props = {
     filters: {
         clients: FilterOption[];
         projects: FilterOption[];
+    };
+    activeFilters: {
+        search: string;
+        orientation: string;
+        clientId: string;
+        tag: string;
+    };
+    imagePagination: {
+        currentPage: number;
+        perPage: number;
+        total: number;
     };
 };
 
@@ -152,8 +170,6 @@ type TagAnalysisRun = {
     finishedAt?: string | null;
 };
 
-const PAGE_SIZE = 20;
-
 const folderSegment = (value: string, fallback: string) => {
     const normalized = value
         .normalize("NFD")
@@ -174,14 +190,15 @@ export default function ImagesIndex({
     stats,
     canManageImages,
     filters,
+    activeFilters,
+    imagePagination,
 }: Props) {
     const [viewMode, setViewMode] = useState<ViewMode>("list");
-    const [orientation, setOrientation] = useState("");
-    const [clientId, setClientId] = useState("");
-    const [search, setSearch] = useState("");
-    const [tag, setTag] = useState("");
+    const [orientation, setOrientation] = useState(activeFilters.orientation);
+    const [clientId, setClientId] = useState(activeFilters.clientId);
+    const [search, setSearch] = useState(activeFilters.search);
+    const [tag, setTag] = useState(activeFilters.tag);
     const [activeTab, setActiveTab] = useState<ImagesTab>("library");
-    const [currentPage, setCurrentPage] = useState(1);
     const [selectedImportId, setSelectedImportId] = useState<number | null>(
         imports[0]?.id ?? null,
     );
@@ -197,35 +214,37 @@ export default function ImagesIndex({
     const [selectedClientImage, setSelectedClientImage] =
         useState<LegacyImage | null>(null);
 
-    const filteredImages = useMemo(() => {
-        const query = search.trim().toLowerCase();
-        const tagQuery = tag.trim().toLowerCase();
-
-        return images.filter((image) => {
-            const matchesSearch =
-                !query || image.title.toLowerCase().includes(query);
-            const matchesTag =
-                !tagQuery ||
-                image.tags?.some((tagName) =>
-                    tagName.toLowerCase().includes(tagQuery),
-                );
-            const matchesOrientation =
-                !orientation || image.orientation === orientation;
-            const matchesClient =
-                !clientId || String(image.clientId) === clientId;
-
-            return (
-                matchesSearch &&
-                matchesTag &&
-                matchesOrientation &&
-                matchesClient
+    const imageFilterKey = useMemo(
+        () =>
+            JSON.stringify({
+                search: search.trim(),
+                orientation,
+                clientId,
+                tag: tag.trim(),
+            }),
+        [clientId, orientation, search, tag],
+    );
+    const imageFiltersMounted = useRef(false);
+    const visitImages = useCallback(
+        (page: number) => {
+            const params = Object.fromEntries(
+                Object.entries({
+                    search: search.trim(),
+                    orientation,
+                    client_id: clientId,
+                    tag: tag.trim(),
+                    page: page > 1 ? String(page) : "",
+                }).filter(([, value]) => value !== ""),
             );
-        });
-    }, [clientId, images, orientation, search, tag]);
 
-    const paginatedImages = filteredImages.slice(
-        (currentPage - 1) * PAGE_SIZE,
-        currentPage * PAGE_SIZE,
+            router.get("/images", params, {
+                only: ["images", "imagePagination", "activeFilters"],
+                preserveScroll: true,
+                preserveState: true,
+                replace: true,
+            });
+        },
+        [clientId, orientation, search, tag],
     );
     const tagAnalysisRunActive =
         tagAnalysis?.run?.status === "pending" ||
@@ -256,6 +275,17 @@ export default function ImagesIndex({
     }, []);
 
     useEffect(() => {
+        if (!imageFiltersMounted.current) {
+            imageFiltersMounted.current = true;
+            return;
+        }
+
+        const timeout = window.setTimeout(() => visitImages(1), 350);
+
+        return () => window.clearTimeout(timeout);
+    }, [imageFilterKey, visitImages]);
+
+    useEffect(() => {
         if (activeTab !== "ai-tags") {
             return;
         }
@@ -278,7 +308,7 @@ export default function ImagesIndex({
                     dashboard.run &&
                     !["pending", "processing"].includes(dashboard.run.status)
                 ) {
-                    router.reload({ only: ["images"] });
+                    router.reload({ only: ["images", "imagePagination"] });
                 }
             } catch (exception) {
                 setTagAnalysisError(errorMessage(exception));
@@ -391,7 +421,7 @@ export default function ImagesIndex({
                     <TabsContent value="ai-tags">
                         <TagAnalysisPanel
                             dashboard={tagAnalysis}
-                            images={filteredImages}
+                            images={images}
                             loading={tagAnalysisLoading}
                             error={tagAnalysisError}
                             onAnalyzeMissing={() =>
@@ -434,20 +464,14 @@ export default function ImagesIndex({
                         <div className="mb-6 flex flex-wrap items-center gap-4">
                             <LegacySelect
                                 value={clientId}
-                                onChange={(value) => {
-                                    setClientId(value);
-                                    setCurrentPage(1);
-                                }}
+                                onChange={setClientId}
                                 allLabel="Toutes les entreprises"
                                 options={filters.clients}
                                 className="w-full sm:w-64"
                             />
                             <LegacySelect
                                 value={orientation}
-                                onChange={(value) => {
-                                    setOrientation(value);
-                                    setCurrentPage(1);
-                                }}
+                                onChange={setOrientation}
                                 allLabel="Toutes les orientations"
                                 options={[
                                     { id: "landscape", name: "Paysage" },
@@ -458,19 +482,17 @@ export default function ImagesIndex({
                             />
                             <Input
                                 value={search}
-                                onChange={(event) => {
-                                    setSearch(event.target.value);
-                                    setCurrentPage(1);
-                                }}
+                                onChange={(event) =>
+                                    setSearch(event.target.value)
+                                }
                                 placeholder="Rechercher par titre..."
                                 className="min-w-[200px] flex-1"
                             />
                             <Input
                                 value={tag}
-                                onChange={(event) => {
-                                    setTag(event.target.value);
-                                    setCurrentPage(1);
-                                }}
+                                onChange={(event) =>
+                                    setTag(event.target.value)
+                                }
                                 placeholder="Filtrer par tag..."
                                 className="w-full sm:w-64"
                             />
@@ -478,7 +500,7 @@ export default function ImagesIndex({
 
                         {viewMode === "card" ? (
                             <MasonryGrid
-                                images={paginatedImages}
+                                images={images}
                                 onImageClick={
                                     canManageImages
                                         ? (image) => {
@@ -490,7 +512,7 @@ export default function ImagesIndex({
                             />
                         ) : (
                             <ImagesTable
-                                images={paginatedImages}
+                                images={images}
                                 canManageImages={canManageImages}
                                 onEdit={(image) => {
                                     setEditingImage(image);
@@ -509,10 +531,10 @@ export default function ImagesIndex({
                         )}
 
                         <LegacyPagination
-                            totalCount={filteredImages.length}
-                            currentPage={currentPage}
-                            onPageChange={setCurrentPage}
-                            pageSize={PAGE_SIZE}
+                            totalCount={imagePagination.total}
+                            currentPage={imagePagination.currentPage}
+                            onPageChange={visitImages}
+                            pageSize={imagePagination.perPage}
                         />
                     </TabsContent>
                 </Tabs>
@@ -613,7 +635,9 @@ function FolderImportModal({
             setSummary(response.data);
 
             if (response.data.status === "completed") {
-                router.reload({ only: ["images", "imports", "stats"] });
+                router.reload({
+                    only: ["images", "imagePagination", "imports", "stats"],
+                });
             }
         }, 2500);
 
@@ -726,7 +750,9 @@ function FolderImportModal({
                 setSummary(latestSummary);
             }
 
-            router.reload({ only: ["imports", "stats"] });
+            router.reload({
+                only: ["images", "imagePagination", "imports", "stats"],
+            });
         } catch (exception) {
             setError(errorMessage(exception));
         } finally {
@@ -747,7 +773,9 @@ function FolderImportModal({
                 imageImportRetryUrl(summary.id),
             );
             setSummary(response.data);
-            router.reload({ only: ["imports", "stats"] });
+            router.reload({
+                only: ["images", "imagePagination", "imports", "stats"],
+            });
         } catch (exception) {
             setError(errorMessage(exception));
         } finally {
@@ -1826,115 +1854,138 @@ function ImagesTable({
                             </TableCell>
                         </TableRow>
                     ) : (
-                        images.map((image) => (
-                            <TableRow key={image.id}>
-                                <TableCell>
-                                    <button
-                                        type="button"
-                                        className={`relative h-16 w-16 overflow-hidden rounded ${
-                                            canManageImages
-                                                ? "transition-opacity hover:opacity-80"
-                                                : ""
-                                        }`}
-                                        onClick={() => onEdit(image)}
-                                        disabled={!canManageImages}
-                                    >
-                                        {image.thumbUrl || image.imageUrl ? (
-                                            <img
-                                                src={
-                                                    image.thumbUrl ||
-                                                    image.imageUrl ||
-                                                    ""
-                                                }
-                                                alt={image.title}
-                                                className="h-full w-full object-cover"
-                                                loading="lazy"
-                                            />
-                                        ) : (
-                                            <div className="h-full w-full bg-muted" />
-                                        )}
-                                    </button>
-                                </TableCell>
-                                <TableCell className="font-medium">
-                                    {image.title}
-                                </TableCell>
-                                <TableCell>
-                                    {image.clientName ? (
+                        images.map((image) => {
+                            const imageTags = image.tags ?? [];
+                            const tagPreview = imageTags
+                                .map((tagName) => `#${tagName}`)
+                                .join(", ");
+
+                            return (
+                                <TableRow key={image.id}>
+                                    <TableCell>
                                         <button
                                             type="button"
-                                            className="font-medium text-primary hover:underline"
-                                            onClick={() => onClientOpen(image)}
+                                            className={`relative h-16 w-16 overflow-hidden rounded ${
+                                                canManageImages
+                                                    ? "transition-opacity hover:opacity-80"
+                                                    : ""
+                                            }`}
+                                            onClick={() => onEdit(image)}
+                                            disabled={!canManageImages}
                                         >
-                                            {image.clientName}
+                                            {image.thumbUrl || image.imageUrl ? (
+                                                <img
+                                                    src={
+                                                        image.thumbUrl ||
+                                                        image.imageUrl ||
+                                                        ""
+                                                    }
+                                                    alt={image.title}
+                                                    className="h-full w-full object-cover"
+                                                    loading="lazy"
+                                                />
+                                            ) : (
+                                                <div className="h-full w-full bg-muted" />
+                                            )}
                                         </button>
-                                    ) : (
-                                        "N/A"
-                                    )}
-                                </TableCell>
-                                <TableCell>
-                                    {image.width && image.height
-                                        ? `${image.width} × ${image.height}`
-                                        : "-"}
-                                </TableCell>
-                                <TableCell>
-                                    <Badge
-                                        variant="outline"
-                                        className="capitalize"
-                                    >
-                                        {labelOrientation(image.orientation)}
-                                    </Badge>
-                                </TableCell>
-                                <TableCell>
-                                    <div className="flex flex-wrap gap-1">
-                                        {image.tags && image.tags.length > 0 ? (
-                                            image.tags
-                                                .slice(0, 3)
-                                                .map((tag) => (
-                                                    <Badge
-                                                        key={tag}
-                                                        variant="secondary"
-                                                        className="text-xs"
-                                                    >
-                                                        #{tag}
-                                                    </Badge>
-                                                ))
-                                        ) : (
-                                            <span className="text-xs text-muted-foreground">
-                                                Aucun tag
-                                            </span>
-                                        )}
-                                    </div>
-                                </TableCell>
-                                <TableCell>
-                                    {formatDate(image.createdAt)}
-                                </TableCell>
-                                {canManageImages && (
-                                    <TableCell className="text-right">
-                                        <div className="flex justify-end gap-1">
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                title="Régénérer les tags IA"
-                                                disabled={analysisDisabled}
+                                    </TableCell>
+                                    <TableCell className="font-medium">
+                                        {image.title}
+                                    </TableCell>
+                                    <TableCell>
+                                        {image.clientName ? (
+                                            <button
+                                                type="button"
+                                                className="font-medium text-primary hover:underline"
                                                 onClick={() =>
-                                                    onAnalyze(image)
+                                                    onClientOpen(image)
                                                 }
                                             >
-                                                <Sparkles size={16} />
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                title="Modifier"
-                                                onClick={() => onEdit(image)}
-                                            >
-                                                <Pencil size={16} />
-                                            </Button>
+                                                {image.clientName}
+                                            </button>
+                                        ) : (
+                                            "N/A"
+                                        )}
+                                    </TableCell>
+                                    <TableCell>
+                                        {image.width && image.height
+                                            ? `${image.width} × ${image.height}`
+                                            : "-"}
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge
+                                            variant="outline"
+                                            className="capitalize"
+                                        >
+                                            {labelOrientation(image.orientation)}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell title={tagPreview || undefined}>
+                                        <div className="flex flex-wrap gap-1">
+                                            {imageTags.length > 0 ? (
+                                                <>
+                                                    {imageTags
+                                                        .slice(0, 3)
+                                                        .map((tagName) => (
+                                                            <Badge
+                                                                key={tagName}
+                                                                variant="secondary"
+                                                                className="text-xs"
+                                                            >
+                                                                #{tagName}
+                                                            </Badge>
+                                                        ))}
+                                                    {imageTags.length > 3 && (
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="text-xs"
+                                                        >
+                                                            +
+                                                            {imageTags.length -
+                                                                3}
+                                                        </Badge>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <span className="text-xs text-muted-foreground">
+                                                    Aucun tag
+                                                </span>
+                                            )}
                                         </div>
                                     </TableCell>
-                                )}
-                            </TableRow>
-                        ))
+                                    <TableCell>
+                                        {formatDate(image.createdAt)}
+                                    </TableCell>
+                                    {canManageImages && (
+                                        <TableCell className="text-right">
+                                            <div className="flex justify-end gap-1">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    title="Régénérer les tags IA"
+                                                    disabled={analysisDisabled}
+                                                    onClick={() =>
+                                                        onAnalyze(image)
+                                                    }
+                                                >
+                                                    <Sparkles size={16} />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    title="Modifier"
+                                                    onClick={() =>
+                                                        onEdit(image)
+                                                    }
+                                                >
+                                                    <Pencil size={16} />
+                                                </Button>
+                                            </div>
+                                        </TableCell>
+                                    )}
+                                </TableRow>
+                            );
+                        })
                     )}
                 </TableBody>
             </Table>
