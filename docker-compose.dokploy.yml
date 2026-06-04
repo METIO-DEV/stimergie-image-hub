@@ -34,12 +34,12 @@ services:
     depends_on:
       assets:
         condition: service_completed_successfully
-      migrate:
-        condition: service_completed_successfully
+      pgsql:
+        condition: service_healthy
     volumes:
       - .:/var/www/html
       - node-modules:/var/www/html/node_modules
-    command: sh -lc "rm -f public/hot && php artisan optimize --no-interaction && php artisan serve --host=0.0.0.0 --port=8000"
+    command: sh -lc "rm -f public/hot && php artisan migrate --force --no-interaction && php artisan optimize --no-interaction && php artisan serve --host=0.0.0.0 --port=8000"
 
   queue:
     build:
@@ -63,41 +63,12 @@ services:
       VITE_DEV_SERVER_URL: ""
       COMPOSER_HOME: /tmp/composer
     depends_on:
-      migrate:
-        condition: service_completed_successfully
+      app:
+        condition: service_started
     volumes:
       - .:/var/www/html
       - node-modules:/var/www/html/node_modules
     command: php artisan queue:work --sleep=1 --tries=3 --timeout=120
-
-  migrate:
-    build:
-      context: .
-    user: "1000:1000"
-    env_file:
-      - path: ./.env
-        required: false
-    environment:
-      APP_URL: ${APP_URL:-https://stimergie.metio-dev.fr}
-      ASSET_URL: ${ASSET_URL:-https://stimergie.metio-dev.fr}
-      DB_CONNECTION: pgsql
-      DB_HOST: pgsql
-      DB_PORT: 5432
-      DB_DATABASE: stimergie
-      DB_USERNAME: stimergie
-      DB_PASSWORD: ${DB_PASSWORD:-stimergie}
-      CACHE_STORE: ${CACHE_STORE:-database}
-      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-database}
-      SESSION_DRIVER: ${SESSION_DRIVER:-database}
-      VITE_DEV_SERVER_URL: ""
-      COMPOSER_HOME: /tmp/composer
-    depends_on:
-      pgsql:
-        condition: service_healthy
-    volumes:
-      - .:/var/www/html
-      - node-modules:/var/www/html/node_modules
-    command: php artisan migrate --force --no-interaction
 
   pgsql:
     image: postgres:16-alpine
