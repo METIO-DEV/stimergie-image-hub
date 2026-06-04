@@ -1,102 +1,77 @@
 services:
-  composer:
-    build:
-      context: .
-    user: "1000:1000"
-    entrypoint: []
-    environment:
-      COMPOSER_HOME: /tmp/composer
-    volumes:
-      - .:/var/www/html
-      - vendor:/var/www/html/vendor
-    command:
-      - sh
-      - -lc
-      - rm -rf vendor/* && composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
-
-  assets:
-    image: node:22-alpine
-    working_dir: /var/www/html
-    environment:
-      NPM_CONFIG_CACHE: /tmp/.npm
-      VITE_APP_NAME: ${VITE_APP_NAME:-Stimergie Image Hub}
-    volumes:
-      - .:/var/www/html
-      - node-modules:/var/www/html/node_modules
-    command: sh -lc "rm -f public/hot && npm ci && npm run build && chown -R 1000:1000 public/build && rm -f public/hot"
-
   app:
     build:
       context: .
-    user: "1000:1000"
+      dockerfile: Dockerfile
+    restart: unless-stopped
     env_file:
-      - path: ./.env
-        required: false
+      - .env
     environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
       APP_URL: ${APP_URL:-https://stimergie.metio-dev.fr}
-      ASSET_URL: ${ASSET_URL:-https://stimergie.metio-dev.fr}
       DB_CONNECTION: pgsql
-      DB_HOST: pgsql
-      DB_PORT: 5432
-      DB_DATABASE: stimergie
-      DB_USERNAME: stimergie
-      DB_PASSWORD: ${DB_PASSWORD:-stimergie}
+      DB_HOST: ${DB_HOST:-pgsql}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE:-stimergie}
+      DB_USERNAME: ${DB_USERNAME:-stimergie}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in Dokploy}
       CACHE_STORE: ${CACHE_STORE:-database}
       QUEUE_CONNECTION: ${QUEUE_CONNECTION:-database}
       SESSION_DRIVER: ${SESSION_DRIVER:-database}
       VITE_DEV_SERVER_URL: ""
-      COMPOSER_HOME: /tmp/composer
+      RUN_MIGRATIONS: "true"
+      RUN_OPTIMIZE: "true"
     depends_on:
-      composer:
-        condition: service_completed_successfully
-      assets:
-        condition: service_completed_successfully
       pgsql:
         condition: service_healthy
+    expose:
+      - "80"
     volumes:
-      - .:/var/www/html
-      - node-modules:/var/www/html/node_modules
-      - vendor:/var/www/html/vendor
-    command: sh -lc "rm -f public/hot && php artisan migrate --force --no-interaction && php artisan optimize --no-interaction && php artisan serve --host=0.0.0.0 --port=8000"
+      - storage-data:/var/www/html/storage
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/up >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   queue:
     build:
       context: .
-    user: "1000:1000"
+      dockerfile: Dockerfile
+    restart: unless-stopped
     env_file:
-      - path: ./.env
-        required: false
+      - .env
     environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
       APP_URL: ${APP_URL:-https://stimergie.metio-dev.fr}
-      ASSET_URL: ${ASSET_URL:-https://stimergie.metio-dev.fr}
       DB_CONNECTION: pgsql
-      DB_HOST: pgsql
-      DB_PORT: 5432
-      DB_DATABASE: stimergie
-      DB_USERNAME: stimergie
-      DB_PASSWORD: ${DB_PASSWORD:-stimergie}
+      DB_HOST: ${DB_HOST:-pgsql}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE:-stimergie}
+      DB_USERNAME: ${DB_USERNAME:-stimergie}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in Dokploy}
       CACHE_STORE: ${CACHE_STORE:-database}
       QUEUE_CONNECTION: ${QUEUE_CONNECTION:-database}
       SESSION_DRIVER: ${SESSION_DRIVER:-database}
       VITE_DEV_SERVER_URL: ""
-      COMPOSER_HOME: /tmp/composer
+      RUN_OPTIMIZE: "true"
     depends_on:
       app:
-        condition: service_started
+        condition: service_healthy
     volumes:
-      - .:/var/www/html
-      - node-modules:/var/www/html/node_modules
-      - vendor:/var/www/html/vendor
+      - storage-data:/var/www/html/storage
     command: php artisan queue:work --sleep=1 --tries=3 --timeout=120
 
   pgsql:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: stimergie
-      POSTGRES_USER: stimergie
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-stimergie}
-    ports:
-      - "${POSTGRES_HOST_PORT:-55432}:5432"
+      POSTGRES_DB: ${DB_DATABASE:-stimergie}
+      POSTGRES_USER: ${DB_USERNAME:-stimergie}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in Dokploy}
     volumes:
       - pgsql-data:/var/lib/postgresql/data
     healthcheck:
@@ -106,6 +81,5 @@ services:
       retries: 20
 
 volumes:
-  node-modules:
-  vendor:
+  storage-data:
   pgsql-data:

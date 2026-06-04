@@ -3,16 +3,39 @@ set -eu
 
 cd /var/www/html
 
-if [ ! -f .env ]; then
+mkdir -p storage/app/public storage/app/private storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
+
+if [ "$(id -u)" = "0" ]; then
+    chown -R www-data:www-data storage bootstrap/cache
+fi
+
+if [ ! -f .env ] && [ -f .env.example ]; then
     cp .env.example .env
 fi
 
-if [ ! -d vendor ]; then
+has_app_key() {
+    if [ -n "${APP_KEY:-}" ]; then
+        return 0
+    fi
+
+    if [ -f .env ] && grep -Eq '^APP_KEY=.+$' .env && ! grep -Eq '^APP_KEY=$' .env; then
+        return 0
+    fi
+
+    return 1
+}
+
+if [ ! -d vendor ] && command -v composer >/dev/null 2>&1; then
     composer install --no-interaction --prefer-dist
 fi
 
-if ! grep -q '^APP_KEY=base64:' .env; then
+if ! has_app_key && [ -f .env ]; then
     php artisan key:generate --force --no-interaction
+fi
+
+if ! has_app_key; then
+    echo "APP_KEY is not configured. Set it in Dokploy environment variables." >&2
+    exit 1
 fi
 
 if [ "${DB_CONNECTION:-}" = "pgsql" ]; then
@@ -39,6 +62,12 @@ fi
 
 if [ "${RUN_MIGRATIONS:-false}" = "true" ]; then
     php artisan migrate --force --no-interaction
+fi
+
+php artisan storage:link --force --no-interaction >/dev/null 2>&1 || true
+
+if [ "${RUN_OPTIMIZE:-false}" = "true" ]; then
+    php artisan optimize --no-interaction
 fi
 
 exec "$@"

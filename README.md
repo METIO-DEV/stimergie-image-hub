@@ -36,6 +36,36 @@ Le compose lance aussi un worker :
 php artisan queue:work --sleep=1 --tries=3 --timeout=120
 ```
 
+## Deploiement Dokploy
+
+Utiliser `docker-compose.dokploy.yml` comme Compose Path.
+
+La configuration prod construit une seule image applicative :
+
+- `composer install --no-dev` est execute pendant le build Docker.
+- `npm ci && npm run build` est execute pendant le build Docker.
+- `app` sert Laravel via Apache sur le port interne `80`.
+- `queue` reutilise la meme image pour `php artisan queue:work`.
+- `pgsql` persiste ses donnees dans un volume Docker nomme.
+
+Variables minimales a renseigner dans l'environnement Dokploy :
+
+```env
+APP_KEY=base64:...
+APP_URL=https://votre-domaine.tld
+DB_PASSWORD=mot-de-passe-solide
+SCALEWAY_ACCESS_KEY_ID=...
+SCALEWAY_SECRET_KEY=...
+SCALEWAY_OBJECT_STORAGE_BUCKET=...
+SCALEWAY_OBJECT_STORAGE_REGION=fr-par
+SCALEWAY_OBJECT_STORAGE_ENDPOINT=https://s3.fr-par.scw.cloud
+BREVO_TEMPLATE_MAILER=brevo
+BREVO_API_KEY=...
+MAIL_FROM_ADDRESS=...
+```
+
+Dans l'onglet Domains de Dokploy, pointer le domaine vers le service `app` et le port `80`. Dokploy injecte les variables de son UI dans un fichier `.env`; le compose les charge avec `env_file`.
+
 ## Import du dump legacy
 
 Depuis la racine du depot :
