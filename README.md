@@ -54,6 +54,8 @@ Variables minimales a renseigner dans l'environnement Dokploy :
 APP_KEY=base64:...
 APP_URL=https://votre-domaine.tld
 DB_PASSWORD=mot-de-passe-solide
+POSTGRES_DB=stimergie
+POSTGRES_USER=stimergie
 SCALEWAY_ACCESS_KEY_ID=...
 SCALEWAY_SECRET_KEY=...
 SCALEWAY_OBJECT_STORAGE_BUCKET=...
@@ -65,6 +67,10 @@ MAIL_FROM_ADDRESS=...
 ```
 
 Dans l'onglet Domains de Dokploy, pointer le domaine vers le service `app` et le port `80`. Dokploy injecte les variables de son UI dans un fichier `.env`; le compose les charge avec `env_file`.
+
+Le compose force `DB_HOST=pgsql` et `DB_PORT=5432` pour eviter qu'une ancienne variable Laravel dans l'environnement Dokploy casse la connexion entre les conteneurs. Pour changer le nom de base ou l'utilisateur Postgres, utiliser `POSTGRES_DB` et `POSTGRES_USER`, pas `DB_DATABASE` ou `DB_USERNAME`.
+
+Attention si le volume Postgres existe deja, par exemple apres import d'un dump : l'image `postgres` ignore alors `POSTGRES_DB`, `POSTGRES_USER` et `DB_PASSWORD` pour l'initialisation. Ces variables doivent correspondre a la base, l'utilisateur et le mot de passe deja presents dans le volume, ou il faut modifier le role directement dans Postgres.
 
 ## Import du dump legacy
 

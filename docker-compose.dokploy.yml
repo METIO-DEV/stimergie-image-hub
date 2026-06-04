@@ -11,10 +11,10 @@ services:
       APP_DEBUG: "false"
       APP_URL: ${APP_URL:-https://stimergie.metio-dev.fr}
       DB_CONNECTION: pgsql
-      DB_HOST: ${DB_HOST:-pgsql}
-      DB_PORT: ${DB_PORT:-5432}
-      DB_DATABASE: ${DB_DATABASE:-stimergie}
-      DB_USERNAME: ${DB_USERNAME:-stimergie}
+      DB_HOST: pgsql
+      DB_PORT: 5432
+      DB_DATABASE: ${POSTGRES_DB:-stimergie}
+      DB_USERNAME: ${POSTGRES_USER:-stimergie}
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in Dokploy}
       CACHE_STORE: ${CACHE_STORE:-database}
       QUEUE_CONNECTION: ${QUEUE_CONNECTION:-database}
@@ -49,10 +49,10 @@ services:
       APP_DEBUG: "false"
       APP_URL: ${APP_URL:-https://stimergie.metio-dev.fr}
       DB_CONNECTION: pgsql
-      DB_HOST: ${DB_HOST:-pgsql}
-      DB_PORT: ${DB_PORT:-5432}
-      DB_DATABASE: ${DB_DATABASE:-stimergie}
-      DB_USERNAME: ${DB_USERNAME:-stimergie}
+      DB_HOST: pgsql
+      DB_PORT: 5432
+      DB_DATABASE: ${POSTGRES_DB:-stimergie}
+      DB_USERNAME: ${POSTGRES_USER:-stimergie}
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in Dokploy}
       CACHE_STORE: ${CACHE_STORE:-database}
       QUEUE_CONNECTION: ${QUEUE_CONNECTION:-database}
@@ -71,8 +71,8 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${DB_DATABASE:-stimergie}
-      POSTGRES_USER: ${DB_USERNAME:-stimergie}
+      POSTGRES_DB: ${POSTGRES_DB:-stimergie}
+      POSTGRES_USER: ${POSTGRES_USER:-stimergie}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in Dokploy}
     volumes:
       - pgsql-data:/var/lib/postgresql/data

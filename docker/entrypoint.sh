@@ -45,17 +45,19 @@ if [ "${DB_CONNECTION:-}" = "pgsql" ]; then
         $db = getenv("DB_DATABASE") ?: "stimergie_image_hub";
         $user = getenv("DB_USERNAME") ?: "stimergie";
         $pass = getenv("DB_PASSWORD") ?: "stimergie";
+        $lastError = "unknown error";
 
         for ($i = 0; $i < 60; $i++) {
             try {
                 new PDO("pgsql:host={$host};port={$port};dbname={$db}", $user, $pass);
                 exit(0);
             } catch (Throwable $e) {
+                $lastError = $e->getMessage();
                 usleep(500000);
             }
         }
 
-        fwrite(STDERR, "Postgres is not reachable\n");
+        fwrite(STDERR, "Postgres is not reachable: host={$host} port={$port} db={$db} user={$user} error={$lastError}\n");
         exit(1);
     '
 fi
