@@ -1,13 +1,5 @@
 import { Badge } from "@/Components/ui/badge";
 import { Button } from "@/Components/ui/button";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from "@/Components/ui/dialog";
 import { Input } from "@/Components/ui/input";
 import { Label } from "@/Components/ui/label";
 import {
@@ -18,6 +10,12 @@ import {
     TableHeader,
     TableRow,
 } from "@/Components/ui/table";
+import {
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger,
+} from "@/Components/ui/tabs";
 import {
     LegacyImage,
     LegacyPagination,
@@ -32,7 +30,6 @@ import { ImageEditModal } from "@/Components/Legacy/LegacyModals";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, Link, router } from "@inertiajs/react";
 import {
-    FolderUp,
     Pencil,
     Plus,
     RotateCcw,
@@ -79,7 +76,7 @@ type ImportSummary = {
 };
 
 type ImportProjectMode = "existing" | "new";
-type ImagesTab = "library" | "ai-tags";
+type ImagesTab = "library" | "imports" | "ai-tags";
 
 type TagAnalysisDashboard = {
     stats: {
@@ -136,7 +133,6 @@ export default function ImagesIndex({
     const [currentPage, setCurrentPage] = useState(1);
     const [editingImage, setEditingImage] = useState<LegacyImage | null>(null);
     const [imageModalOpen, setImageModalOpen] = useState(false);
-    const [importModalOpen, setImportModalOpen] = useState(false);
     const [tagAnalysis, setTagAnalysis] =
         useState<TagAnalysisDashboard | null>(null);
     const [tagAnalysisLoading, setTagAnalysisLoading] = useState(false);
@@ -278,19 +274,14 @@ export default function ImagesIndex({
                 description="Gérez les images, leurs métadonnées et leur rattachement aux projets accessibles."
                 action={
                     <div className="flex items-center gap-4">
-                        <ViewToggle
-                            currentView={viewMode}
-                            onViewChange={setViewMode}
-                        />
+                        {activeTab === "library" && (
+                            <ViewToggle
+                                currentView={viewMode}
+                                onViewChange={setViewMode}
+                            />
+                        )}
                         {canManageImages && (
                             <div className="flex items-center gap-3">
-                                <Button
-                                    variant="outline"
-                                    onClick={() => setImportModalOpen(true)}
-                                >
-                                    <FolderUp size={16} className="mr-2" />
-                                    Importer un dossier
-                                </Button>
                                 <Button
                                     onClick={() => {
                                         setEditingImage(null);
@@ -307,145 +298,144 @@ export default function ImagesIndex({
             />
 
             <main className="mx-auto max-w-7xl px-6 py-12">
-                <div className="mb-6 flex flex-wrap gap-2">
-                    <button
-                        type="button"
-                        className={`rounded-md px-4 py-2 text-sm font-semibold transition ${
-                            activeTab === "library"
-                                ? "bg-primary text-primary-foreground"
-                                : "border bg-background text-muted-foreground hover:text-foreground"
-                        }`}
-                        onClick={() => setActiveTab("library")}
-                    >
-                        Bibliothèque
-                    </button>
-                    <button
-                        type="button"
-                        className={`rounded-md px-4 py-2 text-sm font-semibold transition ${
-                            activeTab === "ai-tags"
-                                ? "bg-primary text-primary-foreground"
-                                : "border bg-background text-muted-foreground hover:text-foreground"
-                        }`}
-                        onClick={() => setActiveTab("ai-tags")}
-                    >
-                        Tags IA
-                    </button>
-                </div>
+                <Tabs
+                    value={activeTab}
+                    onValueChange={(value) => setActiveTab(value as ImagesTab)}
+                >
+                    <TabsList>
+                        <TabsTrigger value="library">Bibliothèque</TabsTrigger>
+                        <TabsTrigger value="imports">Import dossier</TabsTrigger>
+                        <TabsTrigger value="ai-tags">Tags IA</TabsTrigger>
+                    </TabsList>
 
-                {activeTab === "ai-tags" && (
-                    <TagAnalysisPanel
-                        dashboard={tagAnalysis}
-                        images={filteredImages}
-                        loading={tagAnalysisLoading}
-                        error={tagAnalysisError}
-                        onAnalyzeMissing={() =>
-                            startTagAnalysis({ mode: "missing" })
-                        }
-                        onAnalyzeAll={() => startTagAnalysis({ mode: "all" })}
-                        onAnalyzeImage={(image) =>
-                            startTagAnalysis({ image_id: Number(image.id) })
-                        }
-                        onStop={stopTagAnalysis}
-                        onRefresh={() => {
-                            setTagAnalysisError(null);
-                            setTagAnalysisLoading(true);
-                            void refreshTagAnalysis()
-                                .catch((exception) =>
-                                    setTagAnalysisError(
-                                        errorMessage(exception),
-                                    ),
-                                )
-                                .finally(() => setTagAnalysisLoading(false));
-                        }}
-                    />
-                )}
+                    <TabsContent value="ai-tags">
+                        <TagAnalysisPanel
+                            dashboard={tagAnalysis}
+                            images={filteredImages}
+                            loading={tagAnalysisLoading}
+                            error={tagAnalysisError}
+                            onAnalyzeMissing={() =>
+                                startTagAnalysis({ mode: "missing" })
+                            }
+                            onAnalyzeAll={() =>
+                                startTagAnalysis({ mode: "all" })
+                            }
+                            onAnalyzeImage={(image) =>
+                                startTagAnalysis({
+                                    image_id: Number(image.id),
+                                })
+                            }
+                            onStop={stopTagAnalysis}
+                            onRefresh={() => {
+                                setTagAnalysisError(null);
+                                setTagAnalysisLoading(true);
+                                void refreshTagAnalysis()
+                                    .catch((exception) =>
+                                        setTagAnalysisError(
+                                            errorMessage(exception),
+                                        ),
+                                    )
+                                    .finally(() =>
+                                        setTagAnalysisLoading(false),
+                                    );
+                            }}
+                        />
+                    </TabsContent>
 
-                {activeTab === "library" && (
-                    <>
-                <div className="mb-6 flex flex-wrap items-center gap-4">
-                    <LegacySelect
-                        value={clientId}
-                        onChange={(value) => {
-                            setClientId(value);
-                            setCurrentPage(1);
-                        }}
-                        allLabel="Toutes les entreprises"
-                        options={filters.clients}
-                        className="w-full sm:w-64"
-                    />
-                    <LegacySelect
-                        value={orientation}
-                        onChange={(value) => {
-                            setOrientation(value);
-                            setCurrentPage(1);
-                        }}
-                        allLabel="Toutes les orientations"
-                        options={[
-                            { id: "landscape", name: "Paysage" },
-                            { id: "portrait", name: "Portrait" },
-                            { id: "square", name: "Carré" },
-                        ]}
-                        className="w-full sm:w-64"
-                    />
-                    <Input
-                        value={search}
-                        onChange={(event) => {
-                            setSearch(event.target.value);
-                            setCurrentPage(1);
-                        }}
-                        placeholder="Rechercher par titre..."
-                        className="min-w-[200px] flex-1"
-                    />
-                    <Input
-                        value={tag}
-                        onChange={(event) => {
-                            setTag(event.target.value);
-                            setCurrentPage(1);
-                        }}
-                        placeholder="Filtrer par tag..."
-                        className="w-full sm:w-64"
-                    />
-                </div>
+                    <TabsContent value="imports">
+                        <FolderImportPanel
+                            active={activeTab === "imports"}
+                            clients={filters.clients}
+                            projects={filters.projects}
+                        />
+                    </TabsContent>
 
-                {viewMode === "card" ? (
-                    <MasonryGrid
-                        images={paginatedImages}
-                        onImageClick={
-                            canManageImages
-                                ? (image) => {
-                                      setEditingImage(image);
-                                      setImageModalOpen(true);
-                                  }
-                                : undefined
-                        }
-                    />
-                ) : (
-                    <ImagesTable
-                        images={paginatedImages}
-                        canManageImages={canManageImages}
-                        onEdit={(image) => {
-                            setEditingImage(image);
-                            setImageModalOpen(true);
-                        }}
-                        onAnalyze={(image) =>
-                            startTagAnalysis({ image_id: Number(image.id) })
-                        }
-                        analysisDisabled={
-                            tagAnalysisLoading || tagAnalysisRunActive
-                        }
-                        onClientOpen={setSelectedClientImage}
-                    />
-                )}
+                    <TabsContent value="library">
+                        <div className="mb-6 flex flex-wrap items-center gap-4">
+                            <LegacySelect
+                                value={clientId}
+                                onChange={(value) => {
+                                    setClientId(value);
+                                    setCurrentPage(1);
+                                }}
+                                allLabel="Toutes les entreprises"
+                                options={filters.clients}
+                                className="w-full sm:w-64"
+                            />
+                            <LegacySelect
+                                value={orientation}
+                                onChange={(value) => {
+                                    setOrientation(value);
+                                    setCurrentPage(1);
+                                }}
+                                allLabel="Toutes les orientations"
+                                options={[
+                                    { id: "landscape", name: "Paysage" },
+                                    { id: "portrait", name: "Portrait" },
+                                    { id: "square", name: "Carré" },
+                                ]}
+                                className="w-full sm:w-64"
+                            />
+                            <Input
+                                value={search}
+                                onChange={(event) => {
+                                    setSearch(event.target.value);
+                                    setCurrentPage(1);
+                                }}
+                                placeholder="Rechercher par titre..."
+                                className="min-w-[200px] flex-1"
+                            />
+                            <Input
+                                value={tag}
+                                onChange={(event) => {
+                                    setTag(event.target.value);
+                                    setCurrentPage(1);
+                                }}
+                                placeholder="Filtrer par tag..."
+                                className="w-full sm:w-64"
+                            />
+                        </div>
 
-                <LegacyPagination
-                    totalCount={filteredImages.length}
-                    currentPage={currentPage}
-                    onPageChange={setCurrentPage}
-                    pageSize={PAGE_SIZE}
-                />
-                    </>
-                )}
+                        {viewMode === "card" ? (
+                            <MasonryGrid
+                                images={paginatedImages}
+                                onImageClick={
+                                    canManageImages
+                                        ? (image) => {
+                                              setEditingImage(image);
+                                              setImageModalOpen(true);
+                                          }
+                                        : undefined
+                                }
+                            />
+                        ) : (
+                            <ImagesTable
+                                images={paginatedImages}
+                                canManageImages={canManageImages}
+                                onEdit={(image) => {
+                                    setEditingImage(image);
+                                    setImageModalOpen(true);
+                                }}
+                                onAnalyze={(image) =>
+                                    startTagAnalysis({
+                                        image_id: Number(image.id),
+                                    })
+                                }
+                                analysisDisabled={
+                                    tagAnalysisLoading || tagAnalysisRunActive
+                                }
+                                onClientOpen={setSelectedClientImage}
+                            />
+                        )}
 
+                        <LegacyPagination
+                            totalCount={filteredImages.length}
+                            currentPage={currentPage}
+                            onPageChange={setCurrentPage}
+                            pageSize={PAGE_SIZE}
+                        />
+                    </TabsContent>
+                </Tabs>
             </main>
             <ImageEditModal
                 image={editingImage}
@@ -458,12 +448,6 @@ export default function ImagesIndex({
                         setEditingImage(null);
                     }
                 }}
-            />
-            <FolderImportModal
-                open={importModalOpen}
-                clients={filters.clients}
-                projects={filters.projects}
-                onOpenChange={setImportModalOpen}
             />
             <ClientInfoSheet
                 client={
@@ -481,16 +465,14 @@ export default function ImagesIndex({
     );
 }
 
-function FolderImportModal({
-    open,
+function FolderImportPanel({
+    active,
     clients,
     projects,
-    onOpenChange,
 }: {
-    open: boolean;
+    active: boolean;
     clients: FilterOption[];
     projects: FilterOption[];
-    onOpenChange: (open: boolean) => void;
 }) {
     const [projectMode, setProjectMode] =
         useState<ImportProjectMode>("existing");
@@ -529,7 +511,7 @@ function FolderImportModal({
     );
 
     useEffect(() => {
-        if (!open || !summary || terminal) {
+        if (!active || !summary || terminal) {
             return;
         }
 
@@ -545,27 +527,7 @@ function FolderImportModal({
         }, 2500);
 
         return () => window.clearInterval(interval);
-    }, [open, summary, terminal]);
-
-    useEffect(() => {
-        if (open) {
-            return;
-        }
-
-        setProjectId("");
-        setProjectMode("existing");
-        setNewProject({
-            client_id: "",
-            name: "",
-            type: "",
-            source_folder: "",
-        });
-        setSourceFolderTouched(false);
-        setFiles([]);
-        setSummary(null);
-        setError(null);
-        setUploading(false);
-    }, [open]);
+    }, [active, summary, terminal]);
 
     useEffect(() => {
         if (
@@ -684,59 +646,54 @@ function FolderImportModal({
     };
 
     return (
-        <Dialog
-            open={open}
-            onOpenChange={(nextOpen) => {
-                if (!nextOpen && uploading) {
-                    return;
-                }
+        <section className="space-y-6">
+            <div>
+                <h2 className="text-lg font-semibold">
+                    Importer un dossier d'images
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                    Les images sont envoyées une par une puis traitées en
+                    arrière-plan pour éviter les surcharges.
+                </p>
+            </div>
 
-                onOpenChange(nextOpen);
-            }}
-        >
-            <DialogContent className="max-h-[90vh] max-w-2xl overflow-hidden">
-                <DialogHeader>
-                    <DialogTitle>Importer un dossier d'images</DialogTitle>
-                    <DialogDescription>
-                        Les images sont envoyées une par une puis traitées en
-                        arrière-plan pour éviter les surcharges.
-                    </DialogDescription>
-                </DialogHeader>
-
-                <form onSubmit={submit}>
-                    <div className="max-h-[calc(90vh-210px)] space-y-5 overflow-y-auto pr-2">
-                        <div className="grid grid-cols-2 gap-2 rounded-md bg-muted p-1">
-                            <button
-                                type="button"
-                                className={`rounded px-3 py-2 text-sm font-semibold transition ${
-                                    projectMode === "existing"
-                                        ? "bg-background text-foreground shadow-sm"
-                                        : "text-muted-foreground hover:text-foreground"
-                                }`}
-                                disabled={uploading || Boolean(summary)}
-                                onClick={() => {
-                                    setProjectMode("existing");
-                                    setError(null);
-                                }}
-                            >
-                                Projet existant
-                            </button>
-                            <button
-                                type="button"
-                                className={`rounded px-3 py-2 text-sm font-semibold transition ${
-                                    projectMode === "new"
-                                        ? "bg-background text-foreground shadow-sm"
-                                        : "text-muted-foreground hover:text-foreground"
-                                }`}
-                                disabled={uploading || Boolean(summary)}
-                                onClick={() => {
-                                    setProjectMode("new");
-                                    setError(null);
-                                }}
-                            >
-                                Nouveau projet
-                            </button>
-                        </div>
+            <form
+                onSubmit={submit}
+                className="rounded-md border bg-background p-5"
+            >
+                <div className="space-y-5">
+                    <div className="grid grid-cols-2 gap-2 rounded-md bg-muted p-1">
+                        <button
+                            type="button"
+                            className={`rounded px-3 py-2 text-sm font-semibold transition ${
+                                projectMode === "existing"
+                                    ? "bg-background text-foreground shadow-sm"
+                                    : "text-muted-foreground hover:text-foreground"
+                            }`}
+                            disabled={uploading || Boolean(summary)}
+                            onClick={() => {
+                                setProjectMode("existing");
+                                setError(null);
+                            }}
+                        >
+                            Projet existant
+                        </button>
+                        <button
+                            type="button"
+                            className={`rounded px-3 py-2 text-sm font-semibold transition ${
+                                projectMode === "new"
+                                    ? "bg-background text-foreground shadow-sm"
+                                    : "text-muted-foreground hover:text-foreground"
+                            }`}
+                            disabled={uploading || Boolean(summary)}
+                            onClick={() => {
+                                setProjectMode("new");
+                                setError(null);
+                            }}
+                        >
+                            Nouveau projet
+                        </button>
+                    </div>
 
                         <div className="space-y-2">
                             {projectMode === "existing" ? (
@@ -977,9 +934,9 @@ function FolderImportModal({
                                 {error}
                             </div>
                         )}
-                    </div>
+                </div>
 
-                    <DialogFooter className="border-t pt-4">
+                <div className="mt-5 flex flex-wrap justify-end gap-2 border-t pt-4">
                         {summary?.failedItems ? (
                             <Button
                                 type="button"
@@ -991,14 +948,6 @@ function FolderImportModal({
                                 Relancer les erreurs
                             </Button>
                         ) : null}
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => onOpenChange(false)}
-                            disabled={uploading}
-                        >
-                            Fermer
-                        </Button>
                         {summary && (
                             <Button type="button" variant="outline" asChild>
                                 <Link href={route("imports.index")}>
@@ -1016,10 +965,9 @@ function FolderImportModal({
                                     : "Lancer l'import"}
                             </Button>
                         )}
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
+                </div>
+            </form>
+        </section>
     );
 }
 
