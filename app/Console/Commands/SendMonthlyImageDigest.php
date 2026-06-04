@@ -5,7 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Image;
 use App\Models\User;
 use App\Support\BrevoTemplateMailer;
-use App\Support\ImageUrlResolver;
+use App\Support\MonthlyImageDigestPayload;
 use App\Support\ProjectAccess;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -19,7 +19,7 @@ class SendMonthlyImageDigest extends Command
     public function __construct(
         private readonly BrevoTemplateMailer $brevo,
         private readonly ProjectAccess $projectAccess,
-        private readonly ImageUrlResolver $imageUrls,
+        private readonly MonthlyImageDigestPayload $payload,
     ) {
         parent::__construct();
     }
@@ -64,28 +64,7 @@ class SendMonthlyImageDigest extends Command
                             'email' => $user->email,
                             'name' => $user->name,
                         ],
-                    ], [
-                        'user_name' => $user->name,
-                        'period_start' => $startsAt->toDateString(),
-                        'period_end' => $endsAt->toDateString(),
-                        'image_count' => $images->count(),
-                        'gallery_url' => route('gallery.index'),
-                        'projects' => $images
-                            ->groupBy('project_id')
-                            ->map(fn ($projectImages) => [
-                                'project_name' => $projectImages->first()->project?->name,
-                                'client_name' => $projectImages->first()->client?->name,
-                                'image_count' => $projectImages->count(),
-                            ])
-                            ->values()
-                            ->all(),
-                        'images' => $images->take(20)->map(fn (Image $image) => [
-                            'title' => $image->title,
-                            'project_name' => $image->project?->name,
-                            'client_name' => $image->client?->name,
-                            'url' => $this->imageUrls->displayUrl($image),
-                        ])->values()->all(),
-                    ])) {
+                    ], $this->payload->build($user, $images, $startsAt, $endsAt))) {
                         $sent++;
                     }
                 }

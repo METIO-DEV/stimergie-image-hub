@@ -21,6 +21,7 @@ class SharedAlbumManagementTest extends TestCase
     {
         config([
             'services.brevo.api_key' => 'brevo-test-key',
+            'services.brevo.template_mailer' => 'brevo',
             'services.brevo.templates.shared_album_invitation' => 22,
             'services.brevo.sender_email' => 'contact@stimergie.fr',
             'services.brevo.sender_name' => 'Stimergie',

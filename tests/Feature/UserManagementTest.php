@@ -16,6 +16,7 @@ class UserManagementTest extends TestCase
     {
         config([
             'services.brevo.api_key' => 'brevo-test-key',
+            'services.brevo.template_mailer' => 'brevo',
             'services.brevo.templates.registration' => 11,
             'services.brevo.sender_email' => 'contact@stimergie.fr',
             'services.brevo.sender_name' => 'Stimergie',
