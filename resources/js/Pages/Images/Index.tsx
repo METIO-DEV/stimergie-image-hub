@@ -379,7 +379,7 @@ export default function ImagesIndex({
 
             <SectionHeader
                 title="Images"
-                description="Gérez les images, leurs métadonnées et leur rattachement aux projets accessibles."
+                description="Pilotez la bibliothèque d'images, les tags, les imports et les actions de traitement."
                 action={
                     <div className="flex items-center gap-4">
                         {activeTab === "library" && (
