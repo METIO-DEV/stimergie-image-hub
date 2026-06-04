@@ -85,18 +85,14 @@ class OpenAiImageTagAnalyzer
             ->timeout(45)
             ->acceptJson()
             ->post('https://api.openai.com/v1/responses', [
-                'model' => config('services.openai.image_tag_model', 'gpt-4.1-mini'),
+                'model' => config('services.openai.image_tag_model', 'o4-mini'),
                 'input' => [
                     [
                         'role' => 'user',
                         'content' => [
                             [
                                 'type' => 'input_text',
-                                'text' => implode(' ', [
-                                    'Analyse cette image pour une banque d images Stimergie.',
-                                    'Retourne uniquement un JSON valide sous la forme {"tags":["tag"]}.',
-                                    'Produis 5 à 10 tags courts, en français, sans hashtag, utiles pour la recherche métier.',
-                                ]),
+                                'text' => 'You are a helpful image tagging assistant. Generate 5-10 relevant tags for the image provided. Return only an array of tags in French, with no additional text or explanation.',
                             ],
                             [
                                 'type' => 'input_image',
@@ -114,9 +110,7 @@ class OpenAiImageTagAnalyzer
 
         $content = (string) ($response->json('output_text') ?: $this->extractText($response->json('output', [])));
         $decoded = json_decode($content, true);
-        $rawTags = is_array($decoded) && isset($decoded['tags']) && is_array($decoded['tags'])
-            ? $decoded['tags']
-            : preg_split('/[,;\n]+/', $content);
+        $rawTags = $this->extractTags($decoded, $content);
 
         $tags = $this->tags->normalizeArray($rawTags ?: []);
 
@@ -125,6 +119,24 @@ class OpenAiImageTagAnalyzer
         }
 
         return $tags;
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    private function extractTags(mixed $decoded, string $content): array
+    {
+        if (is_array($decoded)) {
+            if (isset($decoded['tags']) && is_array($decoded['tags'])) {
+                return $decoded['tags'];
+            }
+
+            if (array_is_list($decoded)) {
+                return $decoded;
+            }
+        }
+
+        return preg_split('/[,;\n]+/', $content) ?: [];
     }
 
     /**

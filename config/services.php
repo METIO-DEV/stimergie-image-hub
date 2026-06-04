@@ -37,7 +37,7 @@ return [
 
     'openai' => [
         'api_key' => env('OPENAI_API_KEY'),
-        'image_tag_model' => env('OPENAI_IMAGE_TAG_MODEL', 'gpt-4.1-mini'),
+        'image_tag_model' => env('OPENAI_IMAGE_TAG_MODEL', 'o4-mini'),
     ],
 
     'brevo' => [

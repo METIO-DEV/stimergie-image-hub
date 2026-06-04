@@ -35,7 +35,7 @@ class ImageAiAnalysisTest extends TestCase
 
         Http::fake([
             'https://api.openai.com/v1/responses' => Http::response([
-                'output_text' => '{"tags":["Chantier","énergie solaire","CHANTIER","#Bâtiment","thermique"]}',
+                'output_text' => '["Chantier","énergie solaire","CHANTIER","#Bâtiment","thermique"]',
             ]),
         ]);
 
@@ -58,6 +58,8 @@ class ImageAiAnalysisTest extends TestCase
             ]);
 
         Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer test-key')
-            && $request->url() === 'https://api.openai.com/v1/responses');
+            && $request->url() === 'https://api.openai.com/v1/responses'
+            && $request['model'] === 'o4-mini'
+            && $request['input'][0]['content'][0]['text'] === 'You are a helpful image tagging assistant. Generate 5-10 relevant tags for the image provided. Return only an array of tags in French, with no additional text or explanation.');
     }
 }
