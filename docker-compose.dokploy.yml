@@ -3,13 +3,16 @@ services:
     build:
       context: .
     user: "1000:1000"
-    entrypoint: ["sh", "-lc"]
+    entrypoint: []
     environment:
       COMPOSER_HOME: /tmp/composer
     volumes:
       - .:/var/www/html
       - vendor:/var/www/html/vendor
-    command: "rm -rf vendor/* && composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader"
+    command:
+      - sh
+      - -lc
+      - rm -rf vendor/* && composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 
   assets:
     image: node:22-alpine
