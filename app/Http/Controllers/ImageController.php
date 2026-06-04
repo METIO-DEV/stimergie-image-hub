@@ -7,8 +7,7 @@ use App\Http\Requests\StoreImageRequest;
 use App\Http\Requests\UpdateImageRequest;
 use App\Models\Image;
 use App\Models\Project;
-use App\Models\Tag;
-use App\Support\ImageTagNormalizer;
+use App\Support\ImageTagSyncer;
 use App\Support\ImageUrlResolver;
 use App\Support\ImageVariantGenerator;
 use App\Support\ProjectAccess;
@@ -26,7 +25,7 @@ class ImageController extends Controller
         private readonly ImageUrlResolver $imageUrls,
         private readonly ProjectImageStoragePath $storagePath,
         private readonly ProjectAccess $projectAccess,
-        private readonly ImageTagNormalizer $tagNormalizer,
+        private readonly ImageTagSyncer $tagSyncer,
     ) {}
 
     public function bulkProject(BulkAssignImagesProjectRequest $request): RedirectResponse
@@ -84,7 +83,7 @@ class ImageController extends Controller
             ]);
 
             $this->imageVariants->syncImageVariants($image, $fileData['variants']);
-            $this->syncTags($image, $data['tags'] ?? '');
+            $this->tagSyncer->syncString($image, $data['tags'] ?? '');
         });
 
         return back()->with('success', 'Image ajoutée.');
@@ -141,7 +140,7 @@ class ImageController extends Controller
             if (isset($fileData)) {
                 $this->imageVariants->syncImageVariants($image, $fileData['variants']);
             }
-            $this->syncTags($image, $data['tags'] ?? '');
+            $this->tagSyncer->syncString($image, $data['tags'] ?? '');
         });
 
         return back()->with('success', 'Image mise à jour.');
@@ -163,19 +162,6 @@ class ImageController extends Controller
             $source['objectKey'],
             $this->downloadFilename($image, $source['objectKey'], $variant),
         );
-    }
-
-    private function syncTags(Image $image, ?string $tags): void
-    {
-        $tagIds = collect($this->tagNormalizer->normalizeString($tags))
-            ->map(function (string $tag) {
-                return Tag::query()->firstOrCreate(
-                    ['slug' => Str::slug($tag)],
-                    ['name' => $tag],
-                )->id;
-            });
-
-        $image->tags()->sync($tagIds);
     }
 
     private function downloadFilename(Image $image, string $objectKey, string $variant): string

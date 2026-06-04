@@ -8,6 +8,7 @@ use App\Http\Controllers\ImageAnalysisController;
 use App\Http\Controllers\ImageClientShareController;
 use App\Http\Controllers\ImageController;
 use App\Http\Controllers\ImageImportController;
+use App\Http\Controllers\ImageTagAnalysisRunController;
 use App\Http\Controllers\LegalPageController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectAccessPeriodController;
@@ -87,6 +88,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/images', [ImageController::class, 'store'])->name('images.store');
     Route::patch('/images/bulk-project', [ImageController::class, 'bulkProject'])->name('images.bulk-project');
     Route::post('/images/{image}', [ImageController::class, 'update'])->name('images.update');
+    Route::get('/image-tag-analysis-runs', [ImageTagAnalysisRunController::class, 'index'])->name('image-tag-analysis-runs.index');
+    Route::post('/image-tag-analysis-runs', [ImageTagAnalysisRunController::class, 'store'])->name('image-tag-analysis-runs.store');
+    Route::post('/image-tag-analysis-runs/{run}/stop', [ImageTagAnalysisRunController::class, 'stop'])->name('image-tag-analysis-runs.stop');
     Route::get('/images/{image}/client-shares', [ImageClientShareController::class, 'index'])->name('images.client-shares.index');
     Route::post('/images/{image}/client-shares', [ImageClientShareController::class, 'store'])->name('images.client-shares.store');
     Route::delete('/images/{image}/client-shares/{client}', [ImageClientShareController::class, 'destroy'])->name('images.client-shares.destroy');

@@ -31,7 +31,15 @@ import {
 import { ImageEditModal } from "@/Components/Legacy/LegacyModals";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, Link, router } from "@inertiajs/react";
-import { FolderUp, Pencil, Plus, RotateCcw, Upload } from "lucide-react";
+import {
+    FolderUp,
+    Pencil,
+    Plus,
+    RotateCcw,
+    Sparkles,
+    Square,
+    Upload,
+} from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type FilterOption = {
@@ -71,6 +79,32 @@ type ImportSummary = {
 };
 
 type ImportProjectMode = "existing" | "new";
+type ImagesTab = "library" | "ai-tags";
+
+type TagAnalysisDashboard = {
+    stats: {
+        total: number;
+        withTags: number;
+        withoutTags: number;
+        aiTagged: number;
+    };
+    run: TagAnalysisRun | null;
+};
+
+type TagAnalysisRun = {
+    id: number;
+    status: string;
+    mode: string;
+    totalImages: number;
+    processedImages: number;
+    failedImages: number;
+    currentImage?: {
+        id: number;
+        title: string;
+    } | null;
+    startedAt?: string | null;
+    finishedAt?: string | null;
+};
 
 const PAGE_SIZE = 20;
 
@@ -98,10 +132,17 @@ export default function ImagesIndex({
     const [clientId, setClientId] = useState("");
     const [search, setSearch] = useState("");
     const [tag, setTag] = useState("");
+    const [activeTab, setActiveTab] = useState<ImagesTab>("library");
     const [currentPage, setCurrentPage] = useState(1);
     const [editingImage, setEditingImage] = useState<LegacyImage | null>(null);
     const [imageModalOpen, setImageModalOpen] = useState(false);
     const [importModalOpen, setImportModalOpen] = useState(false);
+    const [tagAnalysis, setTagAnalysis] =
+        useState<TagAnalysisDashboard | null>(null);
+    const [tagAnalysisLoading, setTagAnalysisLoading] = useState(false);
+    const [tagAnalysisError, setTagAnalysisError] = useState<string | null>(
+        null,
+    );
     const [selectedClientImage, setSelectedClientImage] =
         useState<LegacyImage | null>(null);
 
@@ -135,6 +176,98 @@ export default function ImagesIndex({
         (currentPage - 1) * PAGE_SIZE,
         currentPage * PAGE_SIZE,
     );
+    const tagAnalysisRunActive =
+        tagAnalysis?.run?.status === "pending" ||
+        tagAnalysis?.run?.status === "processing";
+
+    const refreshTagAnalysis = async () => {
+        const response = await window.axios.get<TagAnalysisDashboard>(
+            imageTagAnalysisUrl(),
+        );
+
+        setTagAnalysis(response.data);
+        return response.data;
+    };
+
+    useEffect(() => {
+        void refreshTagAnalysis().catch(() => undefined);
+    }, []);
+
+    useEffect(() => {
+        if (activeTab !== "ai-tags") {
+            return;
+        }
+
+        void refreshTagAnalysis().catch((exception) =>
+            setTagAnalysisError(errorMessage(exception)),
+        );
+    }, [activeTab]);
+
+    useEffect(() => {
+        if (!tagAnalysisRunActive) {
+            return;
+        }
+
+        const interval = window.setInterval(async () => {
+            try {
+                const dashboard = await refreshTagAnalysis();
+
+                if (
+                    dashboard.run &&
+                    !["pending", "processing"].includes(dashboard.run.status)
+                ) {
+                    router.reload({ only: ["images"] });
+                }
+            } catch (exception) {
+                setTagAnalysisError(errorMessage(exception));
+            }
+        }, 2500);
+
+        return () => window.clearInterval(interval);
+    }, [tagAnalysisRunActive]);
+
+    const startTagAnalysis = async (payload: {
+        mode?: "missing" | "all";
+        image_id?: number;
+    }) => {
+        setTagAnalysisLoading(true);
+        setTagAnalysisError(null);
+
+        try {
+            const response = await window.axios.post<TagAnalysisDashboard>(
+                imageTagAnalysisUrl(),
+                payload,
+            );
+            setTagAnalysis(response.data);
+            setActiveTab("ai-tags");
+        } catch (exception) {
+            setTagAnalysisError(errorMessage(exception));
+        } finally {
+            setTagAnalysisLoading(false);
+        }
+    };
+
+    const stopTagAnalysis = async () => {
+        const runId = tagAnalysis?.run?.id;
+
+        if (!runId) {
+            return;
+        }
+
+        setTagAnalysisLoading(true);
+        setTagAnalysisError(null);
+
+        try {
+            const response = await window.axios.post<TagAnalysisDashboard>(
+                imageTagAnalysisStopUrl(runId),
+            );
+            setTagAnalysis(response.data);
+        } catch (exception) {
+            setTagAnalysisError(errorMessage(exception));
+        } finally {
+            setTagAnalysisLoading(false);
+        }
+    };
 
     return (
         <AuthenticatedLayout>
@@ -174,6 +307,61 @@ export default function ImagesIndex({
             />
 
             <main className="mx-auto max-w-7xl px-6 py-12">
+                <div className="mb-6 flex flex-wrap gap-2">
+                    <button
+                        type="button"
+                        className={`rounded-md px-4 py-2 text-sm font-semibold transition ${
+                            activeTab === "library"
+                                ? "bg-primary text-primary-foreground"
+                                : "border bg-background text-muted-foreground hover:text-foreground"
+                        }`}
+                        onClick={() => setActiveTab("library")}
+                    >
+                        Bibliothèque
+                    </button>
+                    <button
+                        type="button"
+                        className={`rounded-md px-4 py-2 text-sm font-semibold transition ${
+                            activeTab === "ai-tags"
+                                ? "bg-primary text-primary-foreground"
+                                : "border bg-background text-muted-foreground hover:text-foreground"
+                        }`}
+                        onClick={() => setActiveTab("ai-tags")}
+                    >
+                        Tags IA
+                    </button>
+                </div>
+
+                {activeTab === "ai-tags" && (
+                    <TagAnalysisPanel
+                        dashboard={tagAnalysis}
+                        images={filteredImages}
+                        loading={tagAnalysisLoading}
+                        error={tagAnalysisError}
+                        onAnalyzeMissing={() =>
+                            startTagAnalysis({ mode: "missing" })
+                        }
+                        onAnalyzeAll={() => startTagAnalysis({ mode: "all" })}
+                        onAnalyzeImage={(image) =>
+                            startTagAnalysis({ image_id: Number(image.id) })
+                        }
+                        onStop={stopTagAnalysis}
+                        onRefresh={() => {
+                            setTagAnalysisError(null);
+                            setTagAnalysisLoading(true);
+                            void refreshTagAnalysis()
+                                .catch((exception) =>
+                                    setTagAnalysisError(
+                                        errorMessage(exception),
+                                    ),
+                                )
+                                .finally(() => setTagAnalysisLoading(false));
+                        }}
+                    />
+                )}
+
+                {activeTab === "library" && (
+                    <>
                 <div className="mb-6 flex flex-wrap items-center gap-4">
                     <LegacySelect
                         value={clientId}
@@ -239,6 +427,12 @@ export default function ImagesIndex({
                             setEditingImage(image);
                             setImageModalOpen(true);
                         }}
+                        onAnalyze={(image) =>
+                            startTagAnalysis({ image_id: Number(image.id) })
+                        }
+                        analysisDisabled={
+                            tagAnalysisLoading || tagAnalysisRunActive
+                        }
                         onClientOpen={setSelectedClientImage}
                     />
                 )}
@@ -249,6 +443,8 @@ export default function ImagesIndex({
                     onPageChange={setCurrentPage}
                     pageSize={PAGE_SIZE}
                 />
+                    </>
+                )}
 
             </main>
             <ImageEditModal
@@ -836,6 +1032,225 @@ function ImportMetric({ label, value }: { label: string; value: number }) {
     );
 }
 
+function TagAnalysisPanel({
+    dashboard,
+    images,
+    loading,
+    error,
+    onAnalyzeMissing,
+    onAnalyzeAll,
+    onAnalyzeImage,
+    onStop,
+    onRefresh,
+}: {
+    dashboard: TagAnalysisDashboard | null;
+    images: LegacyImage[];
+    loading: boolean;
+    error: string | null;
+    onAnalyzeMissing: () => void;
+    onAnalyzeAll: () => void;
+    onAnalyzeImage: (image: LegacyImage) => void;
+    onStop: () => void;
+    onRefresh: () => void;
+}) {
+    const run = dashboard?.run;
+    const active = run?.status === "pending" || run?.status === "processing";
+    const progress = run
+        ? Math.min(
+              100,
+              Math.round(
+                  ((run.processedImages + run.failedImages) /
+                      Math.max(run.totalImages, 1)) *
+                      100,
+              ),
+          )
+        : 0;
+    const priorityImages = images
+        .filter((image) => !image.tags || image.tags.length === 0)
+        .slice(0, 12);
+
+    return (
+        <section className="mb-8 space-y-6">
+            <div className="grid gap-4 md:grid-cols-4">
+                <ImportMetric
+                    label="Images gérées"
+                    value={dashboard?.stats.total ?? images.length}
+                />
+                <ImportMetric
+                    label="Avec tags"
+                    value={
+                        dashboard?.stats.withTags ??
+                        images.filter((image) => image.tags?.length).length
+                    }
+                />
+                <ImportMetric
+                    label="Sans tags"
+                    value={
+                        dashboard?.stats.withoutTags ??
+                        images.filter(
+                            (image) => !image.tags || image.tags.length === 0,
+                        ).length
+                    }
+                />
+                <ImportMetric
+                    label="Taguées par IA"
+                    value={dashboard?.stats.aiTagged ?? 0}
+                />
+            </div>
+
+            <div className="rounded-md border bg-background p-5">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <h2 className="text-lg font-semibold">
+                            Analyse IA des tags
+                        </h2>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            Les images sont analysées une par une via la queue.
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={onRefresh}
+                            disabled={loading}
+                        >
+                            <RotateCcw className="mr-2 h-4 w-4" />
+                            Actualiser
+                        </Button>
+                        {active ? (
+                            <Button
+                                variant="outline"
+                                onClick={onStop}
+                                disabled={loading}
+                            >
+                                <Square className="mr-2 h-4 w-4" />
+                                Stopper
+                            </Button>
+                        ) : (
+                            <>
+                                <Button
+                                    variant="outline"
+                                    onClick={onAnalyzeAll}
+                                    disabled={loading}
+                                >
+                                    <Sparkles className="mr-2 h-4 w-4" />
+                                    Régénérer tout
+                                </Button>
+                                <Button
+                                    onClick={onAnalyzeMissing}
+                                    disabled={
+                                        loading ||
+                                        (dashboard?.stats.withoutTags ?? 0) ===
+                                            0
+                                    }
+                                >
+                                    <Sparkles className="mr-2 h-4 w-4" />
+                                    Analyser sans tags
+                                </Button>
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                {run && (
+                    <div className="mt-5 space-y-3 rounded-md border p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <div className="text-sm font-semibold">
+                                    Run #{run.id} · {analysisStatusLabel(run.status)}
+                                </div>
+                                {run.currentImage && (
+                                    <div className="mt-1 text-xs text-muted-foreground">
+                                        Image en cours : {run.currentImage.title}
+                                    </div>
+                                )}
+                            </div>
+                            <Badge>{progress}%</Badge>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-muted">
+                            <div
+                                className="h-full bg-primary transition-all"
+                                style={{ width: `${progress}%` }}
+                            />
+                        </div>
+                        <div className="grid gap-3 text-sm sm:grid-cols-3">
+                            <ImportMetric
+                                label="À analyser"
+                                value={run.totalImages}
+                            />
+                            <ImportMetric
+                                label="Réussies"
+                                value={run.processedImages}
+                            />
+                            <ImportMetric
+                                label="Erreurs"
+                                value={run.failedImages}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {error && (
+                    <div className="mt-4 rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                        {error}
+                    </div>
+                )}
+            </div>
+
+            <div className="overflow-hidden rounded-md border">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Images sans tags visibles</TableHead>
+                            <TableHead>Entreprise</TableHead>
+                            <TableHead>Projet</TableHead>
+                            <TableHead className="text-right">
+                                Action
+                            </TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {priorityImages.length === 0 ? (
+                            <TableRow>
+                                <TableCell
+                                    colSpan={4}
+                                    className="py-8 text-center text-muted-foreground"
+                                >
+                                    Aucune image sans tags dans la sélection
+                                    courante.
+                                </TableCell>
+                            </TableRow>
+                        ) : (
+                            priorityImages.map((image) => (
+                                <TableRow key={image.id}>
+                                    <TableCell className="font-medium">
+                                        {image.title}
+                                    </TableCell>
+                                    <TableCell>{image.clientName}</TableCell>
+                                    <TableCell>{image.projectName}</TableCell>
+                                    <TableCell className="text-right">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() =>
+                                                onAnalyzeImage(image)
+                                            }
+                                            disabled={loading || active}
+                                        >
+                                            <Sparkles className="mr-2 h-4 w-4" />
+                                            Analyser
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            ))
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
+        </section>
+    );
+}
+
 function relativePath(file: File): string {
     return (
         (file as File & { webkitRelativePath?: string }).webkitRelativePath ||
@@ -860,6 +1275,14 @@ function imageImportItemUrl(importId: number): string {
 
 function imageImportRetryUrl(importId: number): string {
     return `/image-imports/${importId}/retry-failed`;
+}
+
+function imageTagAnalysisUrl(): string {
+    return "/image-tag-analysis-runs";
+}
+
+function imageTagAnalysisStopUrl(runId: number): string {
+    return `/image-tag-analysis-runs/${runId}/stop`;
 }
 
 function formatBytes(bytes: number): string {
@@ -887,6 +1310,18 @@ function statusLabel(status: string): string {
             completed: "Terminé",
             failed: "Erreur",
             duplicate: "Doublon",
+        }[status] || status
+    );
+}
+
+function analysisStatusLabel(status: string): string {
+    return (
+        {
+            pending: "En attente",
+            processing: "Analyse en cours",
+            completed: "Terminée",
+            failed: "Terminée avec erreurs",
+            cancelled: "Stoppée",
         }[status] || status
     );
 }
@@ -939,11 +1374,15 @@ function ImagesTable({
     images,
     canManageImages,
     onEdit,
+    onAnalyze,
+    analysisDisabled,
     onClientOpen,
 }: {
     images: LegacyImage[];
     canManageImages: boolean;
     onEdit: (image: LegacyImage) => void;
+    onAnalyze: (image: LegacyImage) => void;
+    analysisDisabled: boolean;
     onClientOpen: (image: LegacyImage) => void;
 }) {
     return (
@@ -1060,14 +1499,27 @@ function ImagesTable({
                                 </TableCell>
                                 {canManageImages && (
                                     <TableCell className="text-right">
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            title="Modifier"
-                                            onClick={() => onEdit(image)}
-                                        >
-                                            <Pencil size={16} />
-                                        </Button>
+                                        <div className="flex justify-end gap-1">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                title="Régénérer les tags IA"
+                                                disabled={analysisDisabled}
+                                                onClick={() =>
+                                                    onAnalyze(image)
+                                                }
+                                            >
+                                                <Sparkles size={16} />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                title="Modifier"
+                                                onClick={() => onEdit(image)}
+                                            >
+                                                <Pencil size={16} />
+                                            </Button>
+                                        </div>
                                     </TableCell>
                                 )}
                             </TableRow>
