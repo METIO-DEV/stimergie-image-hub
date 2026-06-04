@@ -17,12 +17,27 @@ Les statuts utilises sont :
 - `Disponible` : fonctionnalite deja reprise dans Laravel/Inertia ou couverte par le projet actuel.
 - `Partiel` : fonctionnalite presente, mais avec un comportement ou une integration encore a completer.
 - `A finaliser` : fonctionnalite identifiee et attendue, mais pas encore complete cote Laravel/Inertia.
+- `A cadrer` : besoin signale pendant la relecture client, mais arbitrage fonctionnel ou priorite encore a valider.
+
+Notes client integrees depuis le PDF annote `cadrage-client-fonctionnalites-user-stories cm.pdf` :
+
+- le profil viewer doit pouvoir acceder a plusieurs contenus issus de clients differents ;
+- les parcours de recherche et rattachement utilisateur doivent prevoir de l'autocompletion ;
+- les mentions legales doivent exister, meme si elles ne portent pas de fonctionnalite metier specifique ;
+- une partie blog / ressources etait prevue a l'origine du projet et doit etre maintenue dans le perimetre a cadrer ;
+- les cessions de droits des images doivent etre gerees avec date, avertissement et possibilite de demander une extension ;
+- un champ ou une information de copyright doit etre arbitre : champ dedie, metadata ou tag structure ;
+- le modele d'abonnement Stimergie peut necessiter des indications de facturation dans la fiche client ou un module dedie ;
+- la gestion des images n'est pas ouverte aux clients dans un premier temps : ajout, upload, remplacement, import, classement et enrichissement passent par Stimergie ;
+- l'application doit generer des tags descriptifs par analyse IA, avec modification manuelle possible.
 
 ## Synthese du perimetre
 
-Stimergie Image Hub est une application web de banque d'images et de gestion de ressources visuelles. Elle permet a Stimergie et a ses clients de centraliser des images par client et par projet, de gerer les droits d'acces, de rechercher et consulter les visuels, de partager une selection d'images, puis de preparer des telechargements web ou HD.
+Stimergie Image Hub est une application web de banque d'images et de gestion de ressources visuelles. Elle permet a Stimergie et a ses clients de centraliser des images par client et par projet, de gerer les droits d'acces et les cessions de droits, de rechercher et consulter les visuels, de partager une selection d'images, puis de preparer des telechargements web ou HD.
 
 Le projet actuel repose sur Laravel, Inertia.js et React. Il reprend les principaux parcours de l'application historique, en les consolidant dans une application Laravel.
+
+Le premier perimetre d'exploitation prevoit que les clients consultent et telechargent les images autorisees, mais ne gerent pas les images eux-memes. Les ajouts, imports, uploads, remplacements, classements, rattachements projet et enrichissements passent d'abord par Stimergie. L'ouverture de ces actions aux clients pourra etre traitee dans un second temps si le besoin est confirme.
 
 ## Roles utilisateurs
 
@@ -30,10 +45,10 @@ Le projet actuel repose sur Laravel, Inertia.js et React. Il reprend les princip
 | --- | --- | --- |
 | Super-admin Stimergie | Administrateur global de la plateforme. | Gere clients, projets, images, utilisateurs, droits d'acces et telechargements. |
 | Owner client | Responsable d'un espace client. | Consulte la fiche client, gere les membres du client si autorise, accede aux contenus rattaches. |
-| Manager client | Profil de gestion rattache a un client. | Gere les projets et images du client selon les droits attribues. |
-| Viewer / utilisateur client | Utilisateur final consommant les visuels. | Consulte la banque d'images autorisee et telecharge les fichiers disponibles. |
+| Manager client | Profil de gestion rattache a un client. | Consulte les contenus autorises et peut gerer le perimetre client confirme, hors gestion d'images dans le premier scope. |
+| Viewer / utilisateur client | Utilisateur final consommant les visuels. | Consulte la banque d'images autorisee, y compris plusieurs contenus ou espaces clients si ses appartenances le permettent, et telecharge les fichiers disponibles. |
 
-Hypothese de perimetre : les owners/managers client peuvent gerer les membres et projets de leur espace selon leurs droits. La gestion des periodes d'acces reste reservee a l'administration Stimergie dans le scope cible.
+Hypothese de perimetre : les owners/managers client peuvent gerer les membres et projets de leur espace selon leurs droits si ce perimetre est confirme. La gestion des images, des periodes d'acces et des cessions de droits reste reservee a l'administration Stimergie dans le scope cible initial.
 
 ## Pages disponibles
 
@@ -42,7 +57,7 @@ Hypothese de perimetre : les owners/managers client peuvent gerer les membres et
 | Login / authentification | Connexion des utilisateurs. | Disponible |
 | Dashboard | Vue de synthese des volumes clients, projets et images. | Disponible |
 | Banque d'images / Galerie | Recherche, consultation, selection et telechargement d'images. | Disponible |
-| Gestion des images | Administration des images, metadonnees et fichiers. | Disponible |
+| Gestion des images | Administration Stimergie des images, metadonnees et fichiers. | Disponible |
 | Projets | Gestion des projets rattaches aux clients. | Disponible |
 | Clients | Liste, creation et modification des clients. | Disponible |
 | Fiche client | Detail client, statistiques, projets, images et membres. | Disponible |
@@ -51,7 +66,11 @@ Hypothese de perimetre : les owners/managers client peuvent gerer les membres et
 | Membres client | Ajout, modification et suppression des membres rattaches. | Disponible |
 | Gestion des utilisateurs | Administration globale des utilisateurs et rattachements clients. | Disponible |
 | Droits d'acces / periodes d'acces | Gestion des periodes d'ouverture client/projet. | Partiel |
+| Cessions de droits image | Gestion des dates de cession, alertes et demandes d'extension. | A finaliser |
 | Partages / albums partages | Creation et consultation de partages temporaires d'images. | A finaliser |
+| Blog / ressources | Publication de contenus editoriaux prevus dans le projet initial. | A cadrer |
+| Mentions legales | Pages legales sans workflow metier specifique. | A finaliser |
+| Abonnement / facturation | Informations d'abonnement Stimergie et donnees de facturation client. | A cadrer |
 | Vos telechargements | Historique et recuperation des archives preparees. | Disponible |
 | Profil | Informations personnelles, mot de passe, suppression du compte. | Disponible |
 | Contact | Envoi d'une demande a Stimergie. | Disponible |
@@ -81,6 +100,7 @@ Hypothese de perimetre : les owners/managers client peuvent gerer les membres et
 | Header beige repris du design historique | Disponible | Cohesion avec l'existant Stimergie. |
 | Recherche texte | Disponible | Recherche sur titre et donnees associees selon implementation. |
 | Filtres orientation, client, projet | Disponible | Filtres principaux de consultation. |
+| Autocompletion de recherche | A finaliser | Besoin client signale pour accelerer la recherche ou le choix d'entites. |
 | Masonry grid | Disponible | Affichage visuel de la banque d'images. |
 | Pagination visible | Disponible | Navigation dans les volumes importants. |
 | Defilement infini | Disponible | Mode alternatif de consultation. |
@@ -88,6 +108,8 @@ Hypothese de perimetre : les owners/managers client peuvent gerer les membres et
 | Tout selectionner | Disponible | Selection de la page courante. |
 | Loader progressif | Disponible | Lazy loading, placeholder, spinner et fallback. |
 | Panneau lateral de detail image | Disponible | Ouverture au clic sur une image. |
+| Affichage des informations de cession de droits | A finaliser | Date de fin, avertissement et etat visuel lorsque la cession est depassee. |
+| Demande d'extension de droits | A finaliser | L'utilisateur doit pouvoir demander une extension au lieu d'etre simplement bloque. |
 | Action groupee `Lier a un projet` | Disponible | Permet de rattacher plusieurs images a un projet cible. |
 | Verification des droits sur liaison groupee | Disponible | Controle serveur sur les clients source et le projet cible. |
 | Creation de demande de telechargement depuis la galerie | Disponible | Redirection vers `Vos telechargements` apres preparation. |
@@ -108,9 +130,13 @@ Hypothese de perimetre : les owners/managers client peuvent gerer les membres et
 | Modification orientation | Disponible | Saisie ou calcul selon le flux. |
 | Modification statut | Disponible | Gestion de disponibilite de l'image. |
 | Gestion des tags | Disponible | Synchronisation cote Laravel. |
+| Generation de tags par IA | A finaliser | L'application doit proposer des tags descriptifs modifiables manuellement apres analyse de l'image. |
+| Information copyright | A cadrer | Choisir entre champ dedie, metadata ou tag structure. |
+| Date de cession de droits | A finaliser | Champ attendu pour calculer alertes, expiration et demandes d'extension. |
 | Remplacement du fichier original | Disponible | Nouvelle fonctionnalite reprise dans le cadrage. |
 | Generation reelle des variantes thumb/web/HD | A finaliser | Les champs existent, mais le pipeline final reste a consolider. |
 | Stockage objet S3/Scaleway des nouveaux uploads | A finaliser | Decision technique actee ; implementation complete des nouveaux uploads a finaliser. |
+| Gestion image reservee a Stimergie en phase initiale | A finaliser | Ajout, upload, remplacement, import, classement et enrichissement ne sont pas ouverts aux clients dans un premier temps. |
 
 ### Projets
 
@@ -136,9 +162,11 @@ Hypothese de perimetre : les owners/managers client peuvent gerer les membres et
 | Fiche client | Disponible | Vue detaillee du client. |
 | Statistiques client | Disponible | Projets, images, membres. |
 | Gestion des membres depuis la fiche client | Disponible | Ajout, modification, suppression. |
+| Recherche utilisateur avec autocompletion | Disponible | Recherche et auto-remplissage d'un compte existant lors du rattachement a une entreprise. |
 | Modification role/statut membre | Disponible | Gestion des droits client. |
 | Protection dernier owner actif | Disponible | Evite de rendre un client sans responsable actif. |
 | Desactivation client | A finaliser | Privilegiee a la suppression pour conserver l'historique. |
+| Indications abonnement/facturation | A cadrer | Determiner si elles appartiennent a la fiche client ou a un module dedie. |
 
 ### Gestion des utilisateurs
 
@@ -151,6 +179,7 @@ Hypothese de perimetre : les owners/managers client peuvent gerer les membres et
 | Modification utilisateur | Disponible | Mise a jour nom, email, role affiche, statut. |
 | Mot de passe optionnel | Disponible | Selon creation ou modification. |
 | Rattachement a un ou plusieurs clients | Disponible | Via memberships client. |
+| Viewer multi-client | Disponible | Un utilisateur final peut etre rattache a plusieurs clients et acceder aux contenus autorises correspondants. |
 | Synchronisation des memberships | Disponible | Les rattachements pilotent les droits. |
 | Gestion reservee super-admin | Disponible | Protection serveur attendue. |
 
@@ -172,6 +201,20 @@ La page `Droits d'acces` gere les periodes pendant lesquelles un client ou ses u
 | Statuts `Active`, `Inactive`, `A venir`, `Expiree` | A finaliser | Calcul fin a consolider. |
 | Validation date de fin apres date de debut | A finaliser | Regle attendue sur le formulaire. |
 | Application stricte aux galeries/projets/telechargements | A finaliser | Point cle pour la securite metier. |
+
+### Cessions de droits image
+
+Cette section est distincte des periodes d'acces client/projet. Une periode d'acces dit si un client peut voir un projet ; une cession de droits dit si une image peut encore etre exploitee selon les droits negocies.
+
+| Fonctionnalite | Statut | Commentaire |
+| --- | --- | --- |
+| Date de debut et fin de cession | A finaliser | Donnees a porter par l'image ou une table dediee selon le niveau de detail attendu. |
+| Avertissement avant expiration | A finaliser | Alerte visible pour Stimergie et, si utile, pour les clients concernes. |
+| Image expiree affichee en gris | A finaliser | Une image dont la cession est depassee doit rester identifiable avec un message explicite. |
+| Message `Etendre la cession de droits` | A finaliser | Libelle attendu dans la galerie ou le detail image. |
+| Demande d'extension de droits | A finaliser | Un utilisateur ne doit pas seulement etre bloque ; il doit pouvoir demander une extension. |
+| Regle de telechargement selon cession | A cadrer | Determiner si l'expiration bloque le telechargement, affiche un avertissement ou declenche une demande. |
+| Copyright image | A cadrer | Arbitrer champ dedie, tag structure ou metadata. |
 
 ### Vos telechargements
 
@@ -236,6 +279,23 @@ Deux types de partage sont a distinguer :
 | Envoi sujet et message | Disponible | Formulaire authentifie. |
 | Enregistrement dans l'audit log | Disponible | Action `contact.requested`. |
 
+### Blog / ressources et pages legales
+
+| Fonctionnalite | Statut | Commentaire |
+| --- | --- | --- |
+| Blog / ressources editoriales | A cadrer | Fonctionnalite prevue a l'origine du projet ; confirmer priorite, types de contenu et droits d'edition. |
+| Pages de mentions legales | A finaliser | Pages attendues sans fonctionnalite metier specifique. |
+| Publication / brouillon | A cadrer | A reprendre si le blog reste dans le perimetre. |
+| Image mise en avant et categorie | A cadrer | A reprendre si le blog reste dans le perimetre. |
+
+### Abonnement / facturation
+
+| Fonctionnalite | Statut | Commentaire |
+| --- | --- | --- |
+| Informations d'abonnement Stimergie | A cadrer | Stimergie doit etre propose sur abonnement ; confirmer les donnees a afficher ou stocker. |
+| Donnees de facturation client | A cadrer | Determiner si elles appartiennent a la fiche client, a un module finance ou a un outil externe. |
+| Impact des droits selon abonnement | A cadrer | Clarifier si l'abonnement conditionne des volumes, options ou acces. |
+
 ## User stories detaillees
 
 ### Authentification et navigation
@@ -245,6 +305,7 @@ Deux types de partage sont a distinguer :
 - En tant qu'utilisateur, je veux acceder rapidement a la Banque d'images et au Contact depuis la navigation principale.
 - En tant qu'utilisateur, je veux ouvrir mon menu utilisateur pour acceder a mon profil, mes telechargements et les pages d'administration selon mes droits.
 - En tant qu'utilisateur, je veux me deconnecter depuis le menu utilisateur.
+- En tant qu'utilisateur, je veux acceder aux mentions legales de l'application.
 
 ### Dashboard
 
@@ -264,12 +325,15 @@ Deux types de partage sont a distinguer :
 - En tant que super-admin ou owner client, je veux retirer un membre d'un client.
 - En tant qu'application, je dois empecher la suppression ou degradation du dernier owner actif d'un client.
 - En tant qu'utilisateur multi-client, je veux que mes droits soient derives de mes appartenances client.
+- En tant que viewer multi-client, je veux acceder aux contenus de plusieurs clients lorsque Stimergie m'y a rattache.
+- En tant que responsable Stimergie, je veux savoir si les informations d'abonnement ou de facturation doivent etre affichees dans la fiche client.
 
 ### Roles et utilisateurs
 
 - En tant que super-admin, je veux creer un utilisateur global.
 - En tant que super-admin, je veux modifier le nom, l'email, le statut et le role affiche d'un utilisateur.
 - En tant que super-admin, je veux rattacher un utilisateur a un ou plusieurs clients.
+- En tant que super-admin ou owner client, je veux rechercher un utilisateur existant avec autocompletion avant de le rattacher a une entreprise.
 - En tant que super-admin, je veux retirer un utilisateur d'un client.
 - En tant que super-admin, je veux filtrer les utilisateurs par client.
 - En tant que super-admin, je veux filtrer les utilisateurs par role.
@@ -294,26 +358,31 @@ Deux types de partage sont a distinguer :
 
 ### Ajout et modification d'images
 
-- En tant que super-admin ou manager d'un client, je veux ajouter une image pour alimenter la banque d'images.
-- En tant que super-admin ou manager d'un client, je veux choisir le projet de l'image lors de l'ajout.
-- En tant que super-admin ou manager d'un client, je veux uploader le fichier original.
-- En tant que super-admin ou manager d'un client, je veux renseigner un titre.
-- En tant que super-admin ou manager d'un client, je veux renseigner une description.
-- En tant que super-admin ou manager d'un client, je veux definir ou laisser calculer l'orientation de l'image.
-- En tant que super-admin ou manager d'un client, je veux renseigner des tags separes par virgule.
-- En tant que super-admin ou manager d'un client, je veux changer le statut d'une image.
-- En tant que super-admin ou manager d'un client, je veux remplacer le fichier original d'une image.
-- En tant que super-admin ou manager d'un client, je veux changer le projet d'une image.
+- En tant qu'administrateur Stimergie, je veux ajouter une image pour alimenter la banque d'images.
+- En tant qu'administrateur Stimergie, je veux choisir le projet de l'image lors de l'ajout.
+- En tant qu'administrateur Stimergie, je veux uploader le fichier original.
+- En tant qu'administrateur Stimergie, je veux renseigner un titre.
+- En tant qu'administrateur Stimergie, je veux renseigner une description.
+- En tant qu'administrateur Stimergie, je veux definir ou laisser calculer l'orientation de l'image.
+- En tant qu'administrateur Stimergie, je veux renseigner des tags separes par virgule.
+- En tant qu'administrateur Stimergie, je veux changer le statut d'une image.
+- En tant qu'administrateur Stimergie, je veux remplacer le fichier original d'une image.
+- En tant qu'administrateur Stimergie, je veux changer le projet d'une image.
+- En tant qu'administrateur Stimergie, je veux renseigner ou verifier le copyright d'une image.
+- En tant qu'administrateur Stimergie, je veux renseigner la date de cession de droits d'une image.
+- En tant qu'application, je dois generer des tags descriptifs avec une analyse IA de l'image.
+- En tant qu'administrateur Stimergie, je veux pouvoir modifier manuellement les tags proposes par l'IA.
+- En tant qu'application, je dois reserver toute la gestion d'images a Stimergie dans le premier perimetre.
 - En tant qu'application, je dois deduire le client de l'image a partir du projet selectionne.
 - En tant qu'application, je dois synchroniser les tags lors de la creation ou modification d'une image.
 - En tant qu'application, je dois refuser la modification d'une image si l'utilisateur n'a pas les droits sur le client source et le projet cible.
 
 ### Liaison rapide images vers projet
 
-- En tant qu'utilisateur habilite, je veux selectionner plusieurs images dans la Banque d'images.
-- En tant qu'utilisateur habilite, je veux cliquer sur `Lier a un projet` pour eviter de modifier chaque image une par une.
-- En tant qu'utilisateur habilite, je veux choisir le projet cible.
-- En tant qu'utilisateur habilite, je veux voir combien d'images vont etre rattachees.
+- En tant qu'administrateur Stimergie, je veux selectionner plusieurs images dans la Banque d'images.
+- En tant qu'administrateur Stimergie, je veux cliquer sur `Lier a un projet` pour eviter de modifier chaque image une par une.
+- En tant qu'administrateur Stimergie, je veux choisir le projet cible.
+- En tant qu'administrateur Stimergie, je veux voir combien d'images vont etre rattachees.
 - En tant qu'application, je dois rattacher les images selectionnees au projet cible.
 - En tant qu'application, je dois mettre a jour le client des images selon le client du projet cible.
 - En tant qu'application, je dois verifier les droits sur les clients source et le projet cible avant la mutation.
@@ -334,15 +403,19 @@ Deux types de partage sont a distinguer :
 - En tant qu'utilisateur, je veux effacer ma selection.
 - En tant qu'utilisateur, je veux cliquer sur une image pour afficher ses details dans un panneau lateral.
 - En tant qu'utilisateur, je veux voir le titre, la description, le client, le projet, les tags, les dimensions et la date d'ajout d'une image.
+- En tant qu'utilisateur, je veux voir clairement si la cession de droits d'une image est expiree ou proche de l'etre.
+- En tant qu'utilisateur, je veux demander une extension de droits lorsque je souhaite exploiter une image dont la cession est depassee ou insuffisante.
 - En tant qu'utilisateur, je veux voir les images se charger progressivement avec un loader propre.
 
 ### Gestion des images
 
-- En tant qu'administrateur, je veux afficher les images en tableau pour gerer rapidement leurs informations.
-- En tant qu'administrateur, je veux afficher les images en grille pour les reconnaitre visuellement.
-- En tant qu'administrateur, je veux ouvrir la modification en cliquant sur la vignette.
-- En tant qu'administrateur, je veux ouvrir la fiche client depuis le nom du client d'une image.
-- En tant qu'administrateur, je veux filtrer les images par client, orientation, texte et tag.
+- En tant qu'administrateur Stimergie, je veux afficher les images en tableau pour gerer rapidement leurs informations.
+- En tant qu'administrateur Stimergie, je veux afficher les images en grille pour les reconnaitre visuellement.
+- En tant qu'administrateur Stimergie, je veux ouvrir la modification en cliquant sur la vignette.
+- En tant qu'administrateur Stimergie, je veux ouvrir la fiche client depuis le nom du client d'une image.
+- En tant qu'administrateur Stimergie, je veux filtrer les images par client, orientation, texte et tag.
+- En tant qu'administrateur Stimergie, je veux identifier les images dont les droits arrivent a expiration.
+- En tant qu'administrateur Stimergie, je veux traiter les demandes d'extension de droits.
 
 ### Variantes d'images
 
@@ -437,6 +510,16 @@ Etat actuel des droits d'acces :
 - La page de consultation est disponible.
 - La creation/modification des periodes et leur application fine a tous les flux restent a renforcer.
 
+### Cessions de droits image
+
+- En tant qu'administrateur Stimergie, je veux saisir une date de fin de cession de droits sur une image.
+- En tant qu'administrateur Stimergie, je veux recevoir ou voir un avertissement avant expiration d'une cession.
+- En tant qu'utilisateur, je veux qu'une image avec cession depassee soit affichee en gris avec un message clair.
+- En tant qu'utilisateur, je veux demander une extension de cession de droits depuis l'image concernee.
+- En tant qu'application, je dois tracer l'etat de cession d'une image sans le confondre avec les periodes d'acces client/projet.
+- En tant qu'application, je dois appliquer la regle decidee pour le telechargement d'une image dont la cession est expiree.
+- En tant qu'application, je dois stocker l'information de copyright de facon exploitable.
+
 ### Contact
 
 - En tant qu'utilisateur, je veux ouvrir le formulaire de contact depuis la navigation.
@@ -448,3 +531,16 @@ Etat actuel des droits d'acces :
 - En tant qu'utilisateur, je veux modifier mes informations personnelles.
 - En tant qu'utilisateur, je veux modifier mon mot de passe.
 - En tant qu'utilisateur, je veux supprimer mon compte si autorise.
+
+### Blog / ressources et mentions legales
+
+- En tant que visiteur ou utilisateur, je veux consulter les mentions legales de l'application.
+- En tant que Stimergie, je veux conserver la possibilite d'un blog ou espace ressources prevu a l'origine.
+- En tant qu'administrateur, je veux creer et publier un contenu editorial si ce module est confirme.
+- En tant qu'administrateur, je veux gerer les brouillons, categories et images mises en avant si le blog reste dans le perimetre.
+
+### Abonnement / facturation
+
+- En tant que Stimergie, je veux cadrer les informations d'abonnement a afficher ou stocker pour un client.
+- En tant que Stimergie, je veux savoir si la facturation est geree dans l'application ou dans un outil externe.
+- En tant qu'application, je dois pouvoir faire evoluer le modele client si l'abonnement conditionne des droits, volumes ou options.
