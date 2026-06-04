@@ -3,16 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreSharedAlbumRequest;
+use App\Mail\SharedAlbumInvitation;
 use App\Models\Image;
 use App\Models\SharedAlbum;
 use App\Support\ImageUrlResolver;
 use App\Support\ProjectAccess;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Throwable;
 use ZipArchive;
 
 class SharedAlbumController extends Controller
@@ -54,7 +57,23 @@ class SharedAlbumController extends Controller
             ])->all(),
         );
 
-        return back()->with('success', 'Album partagé créé : '.route('shared-albums.show', $album->share_key));
+        $failedInvitations = 0;
+
+        foreach ($album->metadata['recipients'] ?? [] as $recipient) {
+            try {
+                Mail::to($recipient)->send(new SharedAlbumInvitation($album));
+            } catch (Throwable) {
+                $failedInvitations++;
+            }
+        }
+
+        $response = back()->with('success', 'Album partagé créé : '.route('shared-albums.show', $album->share_key));
+
+        if ($failedInvitations > 0) {
+            $response->with('warning', "{$failedInvitations} invitation(s) email n'ont pas pu être envoyées.");
+        }
+
+        return $response;
     }
 
     public function show(string $shareKey): Response

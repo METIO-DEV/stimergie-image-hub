@@ -60,6 +60,11 @@ export type LegacyImage = {
     width?: number | null;
     height?: number | null;
     tags?: string[];
+    sharedClients?: Array<{
+        id: number;
+        name: string;
+        expiresAt?: string | null;
+    }>;
     createdAt?: string;
     canManage?: boolean;
 };

@@ -48,6 +48,7 @@ class AppPageController extends Controller
                     ->withCount(['projects', 'images', 'memberships']),
                 'project:id,name',
                 'tags:id,name',
+                'sharedClients:id,name',
             ])
             ->tap(fn ($query) => $this->applyPhotoBucketFilter($query))
             ->tap(fn ($query) => $this->projectAccess->applyImageVisibility($query, $request->user()))
@@ -171,6 +172,7 @@ class AppPageController extends Controller
                     ->withCount(['projects', 'images', 'memberships']),
                 'project:id,name',
                 'tags:id,name',
+                'sharedClients:id,name',
             ])
             ->tap(fn ($query) => $this->applyPhotoBucketFilter($query))
             ->tap(fn ($query) => $this->applyManageableClientScope($query, $manageableClientIds))
@@ -443,6 +445,13 @@ class AppPageController extends Controller
             'width' => $image->width,
             'height' => $image->height,
             'tags' => $image->tags->pluck('name')->values(),
+            'sharedClients' => $image->sharedClients
+                ->map(fn (Client $client) => [
+                    'id' => $client->id,
+                    'name' => $client->name,
+                    'expiresAt' => $client->pivot->expires_at,
+                ])
+                ->values(),
             'createdAt' => $image->created_at->toIso8601String(),
             'canManage' => $this->canManageClientId($image->client_id, $manageableClientIds),
         ];

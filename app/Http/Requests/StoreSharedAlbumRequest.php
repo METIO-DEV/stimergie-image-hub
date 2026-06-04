@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreSharedAlbumRequest extends FormRequest
 {
@@ -31,6 +32,23 @@ class StoreSharedAlbumRequest extends FormRequest
             'expires_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
             'image_ids' => ['required', 'array', 'min:1', 'max:200'],
             'image_ids.*' => ['integer', Rule::exists('images', 'id')],
+        ];
+    }
+
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                $recipients = collect(preg_split('/[\s,;]+/', (string) $this->input('recipients')) ?: [])
+                    ->map(fn (string $recipient) => trim($recipient))
+                    ->filter();
+
+                foreach ($recipients as $recipient) {
+                    if (! filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+                        $validator->errors()->add('recipients', "Adresse email invalide : {$recipient}");
+                    }
+                }
+            },
         ];
     }
 }

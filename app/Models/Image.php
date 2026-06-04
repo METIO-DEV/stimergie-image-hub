@@ -42,6 +42,7 @@ class Image extends Model
     public function sharedClients(): BelongsToMany
     {
         return $this->belongsToMany(Client::class, 'image_client_shares')
+            ->withPivot(['created_by', 'expires_at'])
             ->withTimestamps();
     }
 }

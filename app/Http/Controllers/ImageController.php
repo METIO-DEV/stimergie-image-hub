@@ -8,10 +8,11 @@ use App\Http\Requests\UpdateImageRequest;
 use App\Models\Image;
 use App\Models\Project;
 use App\Models\Tag;
+use App\Support\ImageTagNormalizer;
 use App\Support\ImageUrlResolver;
 use App\Support\ImageVariantGenerator;
-use App\Support\ProjectImageStoragePath;
 use App\Support\ProjectAccess;
+use App\Support\ProjectImageStoragePath;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -25,6 +26,7 @@ class ImageController extends Controller
         private readonly ImageUrlResolver $imageUrls,
         private readonly ProjectImageStoragePath $storagePath,
         private readonly ProjectAccess $projectAccess,
+        private readonly ImageTagNormalizer $tagNormalizer,
     ) {}
 
     public function bulkProject(BulkAssignImagesProjectRequest $request): RedirectResponse
@@ -75,6 +77,10 @@ class ImageController extends Controller
                 'legacy_thumbnail_url' => $fileData['url'],
                 'status' => $data['status'],
                 'processed_at' => now(),
+                'metadata' => [
+                    'tag_source' => $data['tag_source'] ?? 'manual',
+                    'ai_tags_applied_at' => ($data['tag_source'] ?? null) === 'ai' ? now()->toIso8601String() : null,
+                ],
             ]);
 
             $this->imageVariants->syncImageVariants($image, $fileData['variants']);
@@ -97,6 +103,13 @@ class ImageController extends Controller
                 'description' => $data['description'] ?? null,
                 'orientation' => $data['orientation'] ?: $image->orientation,
                 'status' => $data['status'],
+                'metadata' => [
+                    ...($image->metadata ?? []),
+                    'tag_source' => $data['tag_source'] ?? 'manual',
+                    'ai_tags_applied_at' => ($data['tag_source'] ?? null) === 'ai'
+                        ? now()->toIso8601String()
+                        : data_get($image->metadata, 'ai_tags_applied_at'),
+                ],
             ];
 
             if ($request->hasFile('file')) {
@@ -154,10 +167,7 @@ class ImageController extends Controller
 
     private function syncTags(Image $image, ?string $tags): void
     {
-        $tagIds = collect(explode(',', $tags ?? ''))
-            ->map(fn (string $tag) => trim($tag))
-            ->filter()
-            ->unique(fn (string $tag) => Str::lower($tag))
+        $tagIds = collect($this->tagNormalizer->normalizeString($tags))
             ->map(function (string $tag) {
                 return Tag::query()->firstOrCreate(
                     ['slug' => Str::slug($tag)],

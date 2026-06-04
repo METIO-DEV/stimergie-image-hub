@@ -14,6 +14,9 @@ Ce document complete l'audit historique `docs/audit-technique.md`, qui decrit su
 - Traitements asynchrones : queue Laravel `database`.
 - Imports images : batch API + jobs `ProcessImageImportItem`.
 - Telechargements groupes : jobs serveur `PrepareDownloadArchive`, avec archives stockees dans le bucket image.
+- Analyse IA des tags : route Laravel serveur, OpenAI Responses API, variables `OPENAI_API_KEY` et `OPENAI_IMAGE_TAG_MODEL`.
+- Partage externe : albums publics temporaires `shared_albums`, invitations email via Laravel Mail.
+- Partage interne : pivot `image_client_shares`, visible via `ProjectAccess` pour les clients destinataires pendant la periode active.
 
 ## Risques traites le 2026-06-04
 
@@ -21,8 +24,11 @@ Ce document complete l'audit historique `docs/audit-technique.md`, qui decrit su
 - Les abilities Inertia pour les periodes d'acces utilisent la policy backend.
 - Les telechargements HD sont limites a 50 images par archive.
 - Les archives dont la taille estimee depasse 1,5 Go sont refusees avant creation du job.
+- L'analyse IA et le partage d'images ont ete portes cote Laravel, sans secret OpenAI ou Supabase expose au frontend.
 
 ## Points de vigilance restants
 
 - La generation ZIP utilise encore `ZipArchive::addFromString()` avec lecture complete des objets source. Les limites ajoutees reduisent le risque, mais un streaming plus fin restera preferable si les lots HD reels sont volumineux.
+- L'analyse IA utilise le niveau image `low` pour limiter cout et latence. Si les tags sont trop generiques en production, tester un niveau de detail plus eleve sur un petit echantillon.
+- Les emails d'invitation reposent sur la configuration Laravel Mail. En local, le mailer `log` ou `array` suffit ; en production, configurer un provider transactionnel.
 - Les documents historiques doivent rester consultables comme reference de migration, mais ne doivent plus etre utilises comme etat technique principal sans verification contre le code Laravel actuel.

@@ -13,8 +13,16 @@ import { Label } from "@/Components/ui/label";
 import { Textarea } from "@/Components/ui/textarea";
 import { LegacyImage } from "@/Components/Legacy/LegacyDesign";
 import { useForm, usePage } from "@inertiajs/react";
-import { ImagePlus, Mail, Upload } from "lucide-react";
-import { FormEvent, useEffect, useState } from "react";
+import {
+    ImagePlus,
+    Loader2,
+    Mail,
+    Share2,
+    Sparkles,
+    Trash2,
+    Upload,
+} from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type ProjectForEdit = {
     id: number;
@@ -384,14 +392,22 @@ export function ImageEditModal({
     image,
     open,
     projects,
+    clients,
     onOpenChange,
 }: {
     image: LegacyImage | null;
     open: boolean;
     projects: Array<{ id: number; name: string; clientName?: string }>;
+    clients: Array<{ id: number; name: string }>;
     onOpenChange: (open: boolean) => void;
 }) {
     const [preview, setPreview] = useState<string | null>(null);
+    const [analyzingTags, setAnalyzingTags] = useState(false);
+    const [analysisError, setAnalysisError] = useState<string | null>(null);
+    const [sharedClients, setSharedClients] = useState(image?.sharedClients || []);
+    const [selectedShareClientId, setSelectedShareClientId] = useState("");
+    const [shareExpiresAt, setShareExpiresAt] = useState("");
+    const [sharing, setSharing] = useState(false);
     const {
         data,
         setData,
@@ -407,6 +423,7 @@ export function ImageEditModal({
         orientation: "",
         status: "ready",
         tags: "",
+        tag_source: "manual",
         file: null as File | null,
     });
 
@@ -423,8 +440,13 @@ export function ImageEditModal({
             orientation: image?.orientation || "",
             status: image?.status || "ready",
             tags: image?.tags?.join(", ") || "",
+            tag_source: "manual",
             file: null,
         });
+        setAnalysisError(null);
+        setSharedClients(image?.sharedClients || []);
+        setSelectedShareClientId("");
+        setShareExpiresAt("");
     }, [image, open, setData]);
 
     useEffect(() => {
@@ -438,12 +460,94 @@ export function ImageEditModal({
     const selectedProject = projects.find(
         (project) => String(project.id) === data.project_id,
     );
+    const availableShareClients = useMemo(
+        () =>
+            clients.filter(
+                (client) =>
+                    String(client.id) !== String(image?.clientId) &&
+                    !sharedClients.some((shared) => shared.id === client.id),
+            ),
+        [clients, image?.clientId, sharedClients],
+    );
 
     const handleFileChange = (file: File | null) => {
         setData("file", file);
+        setData("tag_source", "manual");
+        setAnalysisError(null);
 
         if (file) {
             setPreview(URL.createObjectURL(file));
+        }
+    };
+
+    const analyzeTags = async () => {
+        setAnalyzingTags(true);
+        setAnalysisError(null);
+
+        try {
+            const response = data.file
+                ? await analyzeUploadedImage(data.file)
+                : image
+                  ? await window.axios.post(
+                        route("images.analyze-tags.existing", image.id),
+                    )
+                  : null;
+
+            if (!response) {
+                setAnalysisError("Sélectionnez une image à analyser.");
+                return;
+            }
+
+            setData("tags", response.data.tags.join(", "));
+            setData("tag_source", "ai");
+        } catch (exception) {
+            setAnalysisError(errorMessage(exception));
+        } finally {
+            setAnalyzingTags(false);
+        }
+    };
+
+    const shareWithClient = async () => {
+        if (!image || !selectedShareClientId) {
+            return;
+        }
+
+        setSharing(true);
+
+        try {
+            const response = await window.axios.post(
+                route("images.client-shares.store", image.id),
+                {
+                    client_id: Number(selectedShareClientId),
+                    expires_at: shareExpiresAt || null,
+                },
+            );
+            setSharedClients(response.data.sharedClients);
+            setSelectedShareClientId("");
+            setShareExpiresAt("");
+        } catch (exception) {
+            setAnalysisError(errorMessage(exception));
+        } finally {
+            setSharing(false);
+        }
+    };
+
+    const removeClientShare = async (clientId: number) => {
+        if (!image) {
+            return;
+        }
+
+        setSharing(true);
+
+        try {
+            const response = await window.axios.delete(
+                route("images.client-shares.destroy", [image.id, clientId]),
+            );
+            setSharedClients(response.data.sharedClients);
+        } catch (exception) {
+            setAnalysisError(errorMessage(exception));
+        } finally {
+            setSharing(false);
         }
     };
 
@@ -594,16 +698,119 @@ export function ImageEditModal({
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="image-tags">Tags</Label>
-                            <Input
-                                id="image-tags"
-                                value={data.tags}
-                                onChange={(event) =>
-                                    setData("tags", event.target.value)
-                                }
-                            />
+                            <div className="flex gap-2">
+                                <Input
+                                    id="image-tags"
+                                    value={data.tags}
+                                    onChange={(event) => {
+                                        setData("tags", event.target.value);
+                                        setData("tag_source", "manual");
+                                    }}
+                                    placeholder="tag, autre tag"
+                                />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={analyzeTags}
+                                    disabled={
+                                        analyzingTags ||
+                                        (!data.file && !image)
+                                    }
+                                    title="Suggérer des tags avec l'IA"
+                                >
+                                    {analyzingTags ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <Sparkles className="h-4 w-4" />
+                                    )}
+                                </Button>
+                            </div>
                             <InputError message={errors.tags} />
+                            {analysisError && (
+                                <p className="text-sm text-destructive">
+                                    {analysisError}
+                                </p>
+                            )}
                         </div>
                     </div>
+                    {image?.canManage && (
+                        <div className="space-y-3 rounded-md border p-4">
+                            <div className="flex items-center gap-2 text-sm font-medium">
+                                <Share2 className="h-4 w-4" />
+                                Partage interne avec d'autres entreprises
+                            </div>
+                            {sharedClients.length > 0 ? (
+                                <div className="space-y-2">
+                                    {sharedClients.map((client) => (
+                                        <div
+                                            key={client.id}
+                                            className="flex items-center justify-between rounded-md bg-muted px-3 py-2 text-sm"
+                                        >
+                                            <span>{client.name}</span>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7"
+                                                disabled={sharing}
+                                                onClick={() =>
+                                                    removeClientShare(client.id)
+                                                }
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-sm text-muted-foreground">
+                                    Aucun partage interne actif.
+                                </p>
+                            )}
+                            <div className="grid gap-2 md:grid-cols-[1fr_150px_auto]">
+                                <select
+                                    value={selectedShareClientId}
+                                    onChange={(event) =>
+                                        setSelectedShareClientId(
+                                            event.target.value,
+                                        )
+                                    }
+                                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                    disabled={sharing}
+                                >
+                                    <option value="">
+                                        Sélectionner une entreprise
+                                    </option>
+                                    {availableShareClients.map((client) => (
+                                        <option
+                                            key={client.id}
+                                            value={client.id}
+                                        >
+                                            {client.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                <Input
+                                    type="date"
+                                    value={shareExpiresAt}
+                                    onChange={(event) =>
+                                        setShareExpiresAt(event.target.value)
+                                    }
+                                    disabled={sharing}
+                                />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={
+                                        sharing || !selectedShareClientId
+                                    }
+                                    onClick={shareWithClient}
+                                >
+                                    Partager
+                                </Button>
+                            </div>
+                        </div>
+                    )}
                     <div className="space-y-2">
                         <Label htmlFor="image-status">Statut</Label>
                         <select
@@ -624,6 +831,7 @@ export function ImageEditModal({
 
                 <DialogFooter className="border-t pt-4">
                     <Button
+                        type="button"
                         variant="outline"
                         onClick={() => onOpenChange(false)}
                     >
@@ -637,6 +845,35 @@ export function ImageEditModal({
             </DialogContent>
         </Dialog>
     );
+}
+
+async function analyzeUploadedImage(file: File) {
+    const payload = new FormData();
+    payload.append("file", file);
+
+    return window.axios.post(route("images.analyze-tags"), payload, {
+        headers: {
+            "Content-Type": "multipart/form-data",
+        },
+    });
+}
+
+function errorMessage(exception: unknown): string {
+    if (
+        typeof exception === "object" &&
+        exception !== null &&
+        "response" in exception
+    ) {
+        const response = (
+            exception as { response?: { data?: { message?: string } } }
+        ).response;
+
+        if (response?.data?.message) {
+            return response.data.message;
+        }
+    }
+
+    return "Une erreur est survenue.";
 }
 
 export function UserEditModal({

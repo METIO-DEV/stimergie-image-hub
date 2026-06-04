@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\Client;
 use App\Models\Image;
 use App\Models\Project;
 use App\Models\ProjectAccessPeriod;
@@ -76,10 +77,23 @@ class ProjectAccess
             return $query;
         }
 
-        return $query->whereHas(
-            'project',
-            fn (Builder $projects) => $this->applyProjectVisibility($projects, $user),
-        );
+        $clientIds = $this->accessibleClientIds($user);
+
+        if ($clientIds === [] || $clientIds === null) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where(function (Builder $query) use ($clientIds, $user): void {
+            $query
+                ->whereHas(
+                    'project',
+                    fn (Builder $projects) => $this->applyProjectVisibility($projects, $user),
+                )
+                ->orWhereHas(
+                    'sharedClients',
+                    fn (Builder $clients) => $this->applyActiveImageShare($clients, $clientIds),
+                );
+        });
     }
 
     public function userCanViewImage(User $user, Image $image): bool
@@ -94,9 +108,12 @@ class ProjectAccess
             return false;
         }
 
-        $image->loadMissing('project.accessPeriods');
+        $image->loadMissing('project.accessPeriods', 'sharedClients');
 
-        return $this->projectVisibleToClientIds($image->project, $clientIds);
+        return $this->projectVisibleToClientIds($image->project, $clientIds)
+            || $image->sharedClients
+                ->contains(fn ($client) => in_array($client->id, $clientIds, true)
+                    && ($client->pivot->expires_at === null || now()->lte($client->pivot->expires_at)));
     }
 
     /**
@@ -134,6 +151,22 @@ class ProjectAccess
             })
             ->where(function (Builder $query) use ($now): void {
                 $query->whereNull('ends_at')->orWhere('ends_at', '>=', $now);
+            });
+    }
+
+    /**
+     * @param  Builder<Client>  $query
+     * @param  array<int>  $clientIds
+     * @return Builder<Client>
+     */
+    private function applyActiveImageShare(Builder $query, array $clientIds): Builder
+    {
+        return $query
+            ->whereIn('clients.id', $clientIds)
+            ->where(function (Builder $query): void {
+                $query
+                    ->whereNull('image_client_shares.expires_at')
+                    ->orWhere('image_client_shares.expires_at', '>=', now());
             });
     }
 

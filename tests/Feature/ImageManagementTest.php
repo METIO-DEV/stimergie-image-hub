@@ -42,6 +42,7 @@ class ImageManagementTest extends TestCase
             'orientation' => '',
             'status' => 'ready',
             'tags' => 'matcha, boisson',
+            'tag_source' => 'ai',
             'file' => UploadedFile::fake()->image('matcha.jpg', 800, 600),
         ])->assertRedirect();
 
@@ -57,6 +58,8 @@ class ImageManagementTest extends TestCase
         $this->assertNotSame($image->object_key_original, $image->object_key_web);
         $this->assertSame('scaleway', $image->storage_provider);
         $this->assertSame('landscape', $image->orientation);
+        $this->assertSame('ai', $image->metadata['tag_source']);
+        $this->assertNotNull($image->metadata['ai_tags_applied_at']);
         $this->assertDatabaseHas('image_variants', [
             'image_id' => $image->id,
             'kind' => 'web',

@@ -30,6 +30,7 @@ class StoreImageRequest extends FormRequest
             'orientation' => ['nullable', 'string', Rule::in(['landscape', 'portrait', 'square'])],
             'status' => ['required', 'string', Rule::in(['ready', 'pending_upload', 'archived'])],
             'tags' => ['nullable', 'string', 'max:1000'],
+            'tag_source' => ['nullable', 'string', Rule::in(['manual', 'ai'])],
             'file' => ['required', 'image', 'max:102400'],
         ];
     }
