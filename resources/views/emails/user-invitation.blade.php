@@ -10,7 +10,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Votre accès Stimergie Image Hub</title>
+    <title>Invitation Stimergie Image Hub</title>
 </head>
 <body style="margin:0;background:#F2F0F0;color:#111111;font-family:Arial,Helvetica,sans-serif;line-height:1.5;">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#F2F0F0;padding:32px 16px;">
@@ -21,18 +21,18 @@
                         <td style="padding:26px 32px 22px;border-bottom:4px solid #274854;">
                             <img src="{{ asset('logo_stimergie_header.png') }}" alt="Stimergie" width="188" style="display:block;width:188px;max-width:70%;height:auto;margin:0 0 22px;">
                             <p style="margin:0 0 8px;color:#6B6765;font-size:13px;font-weight:bold;letter-spacing:0;text-transform:uppercase;">Image Hub</p>
-                            <h1 style="margin:0;color:#111111;font-size:26px;line-height:1.2;">Votre accès est prêt</h1>
+                            <h1 style="margin:0;color:#111111;font-size:26px;line-height:1.2;">Vous êtes invité à rejoindre Stimergie Image Hub</h1>
                         </td>
                     </tr>
                     <tr>
                         <td style="padding:32px;">
                             <p style="margin:0 0 16px;">Bonjour {{ $userName ?: $userEmail }},</p>
                             <p style="margin:0 0 20px;">
-                                Un compte a été créé pour vous sur Stimergie Image Hub avec l'adresse
+                                Un administrateur a créé un accès pour vous sur Stimergie Image Hub avec l'adresse
                                 <strong>{{ $userEmail }}</strong>.
                             </p>
                             <p style="margin:0 0 28px;">
-                                Définissez votre mot de passe pour accéder à la galerie et aux images associées à vos projets.
+                                Pour activer votre compte, définissez votre mot de passe depuis le lien sécurisé ci-dessous.
                             </p>
 
                             @if ($resetPasswordUrl)
@@ -45,7 +45,7 @@
 
                             @if ($loginUrl)
                                 <p style="margin:0;color:#6B6765;font-size:14px;">
-                                    Connexion directe : <a href="{{ $loginUrl }}" style="color:#274854;">{{ $loginUrl }}</a>
+                                    Connexion : <a href="{{ $loginUrl }}" style="color:#274854;">{{ $loginUrl }}</a>
                                 </p>
                             @endif
                         </td>

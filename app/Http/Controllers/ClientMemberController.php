@@ -12,6 +12,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class ClientMemberController extends Controller
 {
@@ -54,8 +55,20 @@ class ClientMemberController extends Controller
             return [$user, $user->wasRecentlyCreated];
         });
 
+        $invitationSent = true;
+
         if ($wasCreated) {
-            $this->invitations->send($user);
+            try {
+                $invitationSent = $this->invitations->send($user);
+            } catch (Throwable) {
+                $invitationSent = false;
+            }
+        }
+
+        if (! $invitationSent) {
+            return back()
+                ->with('success', "Membre ajouté à l'entreprise.")
+                ->with('warning', "L'email d'invitation n'a pas pu être envoyé. Vérifiez la configuration Brevo.");
         }
 
         return back()->with('success', "Membre ajouté à l'entreprise.");

@@ -12,6 +12,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Throwable;
 
 class UserController extends Controller
 {
@@ -71,7 +72,19 @@ class UserController extends Controller
             return $user;
         });
 
-        $this->invitations->send($user);
+        $invitationSent = false;
+
+        try {
+            $invitationSent = $this->invitations->send($user);
+        } catch (Throwable) {
+            $invitationSent = false;
+        }
+
+        if (! $invitationSent) {
+            return back()
+                ->with('success', 'Utilisateur créé.')
+                ->with('warning', "L'email d'invitation n'a pas pu être envoyé. Vérifiez la configuration Brevo.");
+        }
 
         return back()->with('success', 'Utilisateur créé.');
     }
@@ -97,6 +110,23 @@ class UserController extends Controller
         });
 
         return back()->with('success', 'Utilisateur mis à jour.');
+    }
+
+    public function destroy(Request $request, User $user): RedirectResponse
+    {
+        abort_unless(
+            $request->user()?->isSuperAdmin() === true
+                && $request->user()?->status === 'active',
+            403,
+        );
+
+        if ($request->user()->is($user)) {
+            return back()->with('warning', 'Vous ne pouvez pas supprimer votre propre compte.');
+        }
+
+        $user->delete();
+
+        return back()->with('success', 'Utilisateur supprimé.');
     }
 
     /**

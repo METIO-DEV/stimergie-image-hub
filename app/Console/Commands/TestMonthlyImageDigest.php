@@ -5,9 +5,9 @@ namespace App\Console\Commands;
 use App\Models\Client;
 use App\Models\Image;
 use App\Models\User;
-use App\Support\BrevoTemplateMailer;
 use App\Support\MonthlyImageDigestPayload;
 use App\Support\ProjectAccess;
+use App\Support\TransactionalMailer;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -23,7 +23,7 @@ use Illuminate\Support\Carbon;
 class TestMonthlyImageDigest extends Command
 {
     public function __construct(
-        private readonly BrevoTemplateMailer $brevo,
+        private readonly TransactionalMailer $mailer,
         private readonly MonthlyImageDigestPayload $payload,
         private readonly ProjectAccess $projectAccess,
     ) {
@@ -68,7 +68,7 @@ class TestMonthlyImageDigest extends Command
                     return;
                 }
 
-                if ($this->brevo->send('monthly_image_digest', [
+                if ($this->mailer->send('monthly_image_digest', [
                     [
                         'email' => $user->email,
                         'name' => $user->name,
@@ -86,8 +86,6 @@ class TestMonthlyImageDigest extends Command
 
     private function configureLocalMailer(): void
     {
-        config(['services.brevo.template_mailer' => 'laravel']);
-
         if ($this->option('use-current-mailer')) {
             return;
         }

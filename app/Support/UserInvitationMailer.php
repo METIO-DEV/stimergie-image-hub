@@ -7,13 +7,13 @@ use Illuminate\Support\Facades\Password;
 
 class UserInvitationMailer
 {
-    public function __construct(private readonly BrevoTemplateMailer $brevo) {}
+    public function __construct(private readonly TransactionalMailer $mailer) {}
 
     public function send(User $user): bool
     {
         $token = Password::broker()->createToken($user);
 
-        return $this->brevo->send('registration', [
+        return $this->mailer->send('user_invitation', [
             [
                 'email' => $user->email,
                 'name' => $user->name,

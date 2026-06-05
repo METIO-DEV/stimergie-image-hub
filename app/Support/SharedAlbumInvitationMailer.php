@@ -6,11 +6,11 @@ use App\Models\SharedAlbum;
 
 class SharedAlbumInvitationMailer
 {
-    public function __construct(private readonly BrevoTemplateMailer $brevo) {}
+    public function __construct(private readonly TransactionalMailer $mailer) {}
 
     public function send(SharedAlbum $album, string $recipient): bool
     {
-        return $this->brevo->send('shared_album_invitation', [
+        return $this->mailer->send('shared_album_invitation', [
             ['email' => $recipient],
         ], [
             'album_name' => $album->name,

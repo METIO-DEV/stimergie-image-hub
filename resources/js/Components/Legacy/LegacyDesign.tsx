@@ -789,12 +789,14 @@ export function LegacyUserCard({
     role,
     clients,
     onEdit,
+    onDelete,
 }: {
     name: string;
     email: string;
     role: string;
     clients: string[];
     onEdit?: () => void;
+    onDelete?: () => void;
 }) {
     return (
         <Card className="transition-shadow hover:shadow-md">
@@ -820,14 +822,17 @@ export function LegacyUserCard({
                         >
                             <Pencil size={16} />
                         </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Supprimer"
-                            className="text-destructive hover:text-destructive/90"
-                        >
-                            <Trash2 size={16} />
-                        </Button>
+                        {onDelete && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Supprimer"
+                                className="text-destructive hover:text-destructive/90"
+                                onClick={onDelete}
+                            >
+                                <Trash2 size={16} />
+                            </Button>
+                        )}
                     </div>
                 </div>
             </CardHeader>

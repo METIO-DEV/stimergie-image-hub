@@ -29,7 +29,7 @@ export default function ResetPassword({
     };
 
     return (
-        <GuestLayout>
+        <GuestLayout showFooter={false}>
             <Head title="Réinitialiser le mot de passe" />
 
             <div className="mb-8 text-center">

@@ -18,7 +18,7 @@ import {
     TableRow,
 } from "@/Components/ui/table";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import { Head } from "@inertiajs/react";
+import { Head, router } from "@inertiajs/react";
 import {
     Building2,
     Mail,
@@ -69,6 +69,20 @@ export default function UsersIndex({ users, clients, roles }: Props) {
     const [viewMode, setViewMode] = useState<ViewMode>("card");
     const [editingUser, setEditingUser] = useState<UserRow | null>(null);
     const [userModalOpen, setUserModalOpen] = useState(false);
+
+    const deleteUser = (user: UserRow) => {
+        if (
+            !window.confirm(
+                `Supprimer l'utilisateur "${user.name || user.email}" ? Cette action est définitive.`,
+            )
+        ) {
+            return;
+        }
+
+        router.delete(route("users.destroy", user.id), {
+            preserveScroll: true,
+        });
+    };
 
     const filteredUsers = useMemo(
         () =>
@@ -151,6 +165,7 @@ export default function UsersIndex({ users, clients, roles }: Props) {
                                     setEditingUser(user);
                                     setUserModalOpen(true);
                                 }}
+                                onDelete={() => deleteUser(user)}
                             />
                         ))}
                     </div>
@@ -161,6 +176,7 @@ export default function UsersIndex({ users, clients, roles }: Props) {
                             setEditingUser(user);
                             setUserModalOpen(true);
                         }}
+                        onDelete={deleteUser}
                     />
                 )}
             </main>
@@ -183,9 +199,11 @@ export default function UsersIndex({ users, clients, roles }: Props) {
 function UsersTable({
     users,
     onEdit,
+    onDelete,
 }: {
     users: UserRow[];
     onEdit: (user: UserRow) => void;
+    onDelete: (user: UserRow) => void;
 }) {
     return (
         <div className="w-full overflow-hidden rounded-md border">
@@ -264,6 +282,7 @@ function UsersTable({
                                         size="icon"
                                         title="Supprimer"
                                         className="text-destructive hover:text-destructive/90"
+                                        onClick={() => onDelete(user)}
                                     >
                                         <Trash2 size={16} />
                                     </Button>

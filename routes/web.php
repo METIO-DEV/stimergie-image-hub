@@ -112,6 +112,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/users/search', [UserController::class, 'search'])->name('users.search');
     Route::post('/users', [UserController::class, 'store'])->name('users.store');
     Route::patch('/users/{user}', [UserController::class, 'update'])->name('users.update');
+    Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
     Route::get('/access-periods', [AppPageController::class, 'accessPeriods'])->name('access-periods.index');
     Route::post('/access-periods', [ProjectAccessPeriodController::class, 'store'])->name('access-periods.store');
     Route::patch('/access-periods/{accessPeriod}', [ProjectAccessPeriodController::class, 'update'])->name('access-periods.update');

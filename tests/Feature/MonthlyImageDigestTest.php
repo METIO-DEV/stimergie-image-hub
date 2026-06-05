@@ -7,27 +7,28 @@ use App\Models\ClientMembership;
 use App\Models\Image;
 use App\Models\Project;
 use App\Models\User;
-use App\Support\BrevoTemplateMailer;
+use App\Support\TransactionalMailer;
+use Closure;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
+use Mockery;
 use Tests\TestCase;
 
 class MonthlyImageDigestTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_monthly_digest_sends_brevo_template_for_accessible_new_images(): void
+    public function test_monthly_digest_sends_local_template_for_accessible_new_images(): void
     {
-        config([
-            'services.brevo.api_key' => 'brevo-test-key',
-            'services.brevo.template_mailer' => 'brevo',
-            'services.brevo.templates.monthly_image_digest' => 33,
-            'services.brevo.sender_email' => 'contact@stimergie.fr',
-            'services.brevo.sender_name' => 'Stimergie',
-        ]);
-        Http::fake([
-            'https://api.brevo.com/v3/smtp/email' => Http::response(['messageId' => 'digest-message']),
-        ]);
+        Mail::shouldReceive('send')
+            ->once()
+            ->with(
+                'emails.monthly-image-digest',
+                Mockery::on(fn (array $data) => data_get($data, 'params.image_count') === 4
+                    && data_get($data, 'params.projects.0.project_name') === 'Projet Digest'
+                    && count(data_get($data, 'params.projects.0.preview_images', [])) === 3),
+                Mockery::type(Closure::class),
+            );
 
         $user = User::factory()->create([
             'email' => 'viewer@example.test',
@@ -67,12 +68,6 @@ class MonthlyImageDigestTest extends TestCase
             ->expectsOutput('Digests mensuels envoyes: 1; utilisateurs sans nouveautes: 0')
             ->assertExitCode(0);
 
-        Http::assertSent(fn ($request) => $request->hasHeader('api-key', 'brevo-test-key')
-            && $request['templateId'] === 33
-            && $request['to'][0]['email'] === 'viewer@example.test'
-            && $request['params']['image_count'] === 4
-            && $request['params']['projects'][0]['project_name'] === 'Projet Digest'
-            && count($request['params']['projects'][0]['preview_images']) === 3);
     }
 
     public function test_monthly_digest_test_command_sends_to_active_client_users(): void
@@ -121,7 +116,7 @@ class MonthlyImageDigestTest extends TestCase
             'updated_at' => '2026-04-03 10:00:00',
         ]);
 
-        $this->mock(BrevoTemplateMailer::class, function ($mock): void {
+        $this->mock(TransactionalMailer::class, function ($mock): void {
             $mock->shouldReceive('send')
                 ->twice()
                 ->withArgs(fn (string $template, array $to, array $params) => $template === 'monthly_image_digest'
