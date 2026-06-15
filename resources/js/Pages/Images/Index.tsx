@@ -1470,6 +1470,8 @@ function TagAnalysisPanel({
     const missingImages = images.filter(
         (image) => !image.tags || image.tags.length === 0,
     );
+    const withoutTagsCount = dashboard?.stats.withoutTags ?? missingImages.length;
+    const canAnalyzeMissing = withoutTagsCount > 0;
     const missingPageSize = 10;
     const missingPageCount = Math.max(
         1,
@@ -1513,12 +1515,17 @@ function TagAnalysisPanel({
 
             <div className="rounded-md border bg-background p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
+                    <div className="max-w-2xl">
                         <h2 className="text-lg font-semibold">
                             Analyse IA des tags
                         </h2>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Les images sont analysées une par une via la queue.
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                            Le bouton principal lance l'analyse de toutes les
+                            images prêtes qui n'ont pas encore de tags. Les
+                            analyses passent en attente dans la queue, puis sont
+                            traitées une par une. Pour régénérer une image déjà
+                            taguée, utilisez le bouton d'action avec l'icône IA
+                            dans la bibliothèque.
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -1542,9 +1549,11 @@ function TagAnalysisPanel({
                         ) : (
                             <Button
                                 onClick={onAnalyzeMissing}
-                                disabled={
-                                    loading ||
-                                    (dashboard?.stats.withoutTags ?? 0) === 0
+                                disabled={loading || !canAnalyzeMissing}
+                                title={
+                                    canAnalyzeMissing
+                                        ? "Analyser les images sans tags"
+                                        : "Toutes les images prêtes ont déjà des tags"
                                 }
                             >
                                 <Sparkles className="mr-2 h-4 w-4" />
@@ -1553,6 +1562,14 @@ function TagAnalysisPanel({
                         )}
                     </div>
                 </div>
+
+                {!active && !canAnalyzeMissing && (
+                    <div className="mt-4 rounded-md border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
+                        Le bouton est grisé car toutes les images prêtes ont
+                        déjà des tags. La régénération reste possible image par
+                        image avec les boutons IA de la bibliothèque.
+                    </div>
+                )}
 
                 {run && (
                     <div className="mt-5 space-y-3 rounded-md border p-4">
