@@ -71,19 +71,19 @@ export default function ClientsShow({
     return (
         <AuthenticatedLayout
             header={
-                <div className="flex items-center justify-between gap-4">
-                    <div>
+                <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
                         <p className="text-sm font-medium text-muted-foreground">
                             Entreprise
                         </p>
-                        <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+                        <h1 className="mt-1 break-words text-2xl font-semibold leading-tight tracking-tight">
                             {client.name}
                         </h1>
                         <p className="mt-2 text-sm text-muted-foreground">
                             Retrouvez les membres et projets associés à cette entreprise.
                         </p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                         {canUpdateClient && (
                             <Button asChild>
                                 <Link href={route("clients.edit", client.id)}>

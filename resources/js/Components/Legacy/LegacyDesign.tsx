@@ -907,12 +907,14 @@ export function SectionHeader({
 }) {
     return (
         <div className="border-b border-border bg-muted/30">
-            <div className="mx-auto max-w-7xl px-6 py-16">
-                <div className="flex items-center justify-between gap-6">
-                    <div>
-                        <div className="flex items-center gap-3">
+            <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-16">
+                <div className="flex min-w-0 flex-col gap-6 md:flex-row md:items-center md:justify-between">
+                    <div className="min-w-0">
+                        <div className="flex min-w-0 items-center gap-3">
                             {icon}
-                            <h1 className="text-3xl font-bold">{title}</h1>
+                            <h1 className="min-w-0 break-words text-2xl font-bold leading-tight sm:text-3xl">
+                                {title}
+                            </h1>
                         </div>
                         {description && (
                             <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
@@ -920,7 +922,11 @@ export function SectionHeader({
                             </p>
                         )}
                     </div>
-                    {action}
+                    {action && (
+                        <div className="flex w-full flex-wrap items-center gap-3 md:w-auto md:justify-end">
+                            {action}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

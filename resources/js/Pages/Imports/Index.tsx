@@ -87,9 +87,9 @@ export default function ImportsIndex({ imports, stats }: Props) {
             <Head title="Suivi des imports" />
 
             <main className="container py-10">
-                <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                    <div>
-                        <h1 className="text-4xl font-bold tracking-normal">
+                <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                    <div className="min-w-0">
+                        <h1 className="break-words text-3xl font-bold leading-tight tracking-normal md:text-4xl">
                             Suivi des imports
                         </h1>
                         <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
@@ -97,7 +97,7 @@ export default function ImportsIndex({ imports, stats }: Props) {
                             et les fichiers en erreur ou en doublon.
                         </p>
                     </div>
-                    <Button asChild>
+                    <Button asChild className="h-auto whitespace-normal text-left">
                         <Link href={route("images.index")}>
                             <ImagePlus className="mr-2 h-4 w-4" />
                             Importer un dossier

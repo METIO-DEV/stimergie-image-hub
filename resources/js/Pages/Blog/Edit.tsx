@@ -92,7 +92,7 @@ export default function Edit({
             <Head title={existingPost ? "Modifier l'article" : "Nouvel article"} />
 
             <main className="mx-auto max-w-5xl px-4 py-10 pb-20">
-                <div className="mb-6 flex items-center justify-between gap-4">
+                <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <Button variant="outline" size="sm" asChild>
                         <Link href={route("blog.admin.index")}>
                             <ArrowLeft className="h-4 w-4" />

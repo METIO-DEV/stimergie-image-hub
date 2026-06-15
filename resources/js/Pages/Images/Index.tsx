@@ -381,7 +381,7 @@ export default function ImagesIndex({
                 title="Images"
                 description="Pilotez la bibliothèque d'images, les tags, les imports et les actions de traitement."
                 action={
-                    <div className="flex items-center gap-4">
+                    <div className="flex w-full flex-wrap items-center gap-3 md:w-auto md:justify-end">
                         {activeTab === "library" && (
                             <ViewToggle
                                 currentView={viewMode}
@@ -391,6 +391,7 @@ export default function ImagesIndex({
                         {canManageImages && (
                             <div className="flex items-center gap-3">
                                 <Button
+                                    className="h-auto whitespace-normal text-left"
                                     onClick={() => {
                                         setEditingImage(null);
                                         setImageModalOpen(true);

@@ -35,7 +35,7 @@ export default function ClientsCreate({ statuses }: Props) {
                     <p className="text-sm font-medium text-muted-foreground">
                         Entreprises
                     </p>
-                    <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+                    <h1 className="mt-1 break-words text-2xl font-semibold leading-tight tracking-tight">
                         Nouvelle entreprise
                     </h1>
                     <p className="mt-2 text-sm text-muted-foreground">

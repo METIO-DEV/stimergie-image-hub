@@ -112,9 +112,9 @@ export default function AccessPeriodsIndex({
             <main className="flex-grow">
                 <div className="mx-auto max-w-7xl px-4 py-8">
                     <div className="space-y-6">
-                        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                            <div>
-                                <h1 className="text-2xl font-bold">
+                        <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                            <div className="min-w-0">
+                                <h1 className="break-words text-2xl font-bold leading-tight">
                                     Gestion des droits d'accès
                                 </h1>
                                 <p className="text-muted-foreground">
@@ -124,7 +124,7 @@ export default function AccessPeriodsIndex({
                             </div>
                             {canManageAccessPeriods && (
                                 <Button
-                                    className="flex items-center gap-2"
+                                    className="flex h-auto items-center gap-2 whitespace-normal text-left"
                                     onClick={() => {
                                         setEditingPeriod(null);
                                         setPeriodModalOpen(true);

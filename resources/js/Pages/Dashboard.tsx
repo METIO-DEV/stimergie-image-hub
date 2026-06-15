@@ -45,9 +45,9 @@ export default function Dashboard({
             <Head title="Tableau de bord administrateur" />
 
             <div className="container py-10">
-                <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                    <div>
-                        <h1 className="text-4xl font-bold tracking-normal text-foreground">
+                <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                    <div className="min-w-0">
+                        <h1 className="break-words text-3xl font-bold leading-tight tracking-normal text-foreground md:text-4xl">
                             Tableau de bord administrateur
                         </h1>
                         <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
@@ -97,7 +97,7 @@ export default function Dashboard({
 
                 <div className="mt-12 grid gap-7 lg:grid-cols-[1.1fr_0.9fr]">
                     <div>
-                        <h2 className="text-3xl font-bold tracking-normal text-foreground">
+                        <h2 className="break-words text-2xl font-bold leading-tight tracking-normal text-foreground md:text-3xl">
                             Imports dossiers
                         </h2>
                         <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
@@ -129,7 +129,7 @@ export default function Dashboard({
                     )}
                 </div>
 
-                <h2 className="mt-12 text-3xl font-bold tracking-normal text-foreground">
+                <h2 className="mt-12 break-words text-2xl font-bold leading-tight tracking-normal text-foreground md:text-3xl">
                     Fonctionnalités
                 </h2>
 

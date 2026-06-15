@@ -123,13 +123,14 @@ export default function ProjectsIndex({
                 title="Projets"
                 description="Pilotez les projets associés à vos entreprises et suivez le volume d'images disponible."
                 action={
-                    <div className="flex items-center gap-4">
+                    <div className="flex w-full flex-wrap items-center gap-3 md:w-auto md:justify-end">
                         <ViewToggle
                             currentView={viewMode}
                             onViewChange={setViewMode}
                         />
                         {canCreateProject && (
                             <Button
+                                className="h-auto whitespace-normal text-left"
                                 onClick={() => {
                                     setEditingProject(null);
                                     setProjectModalOpen(true);

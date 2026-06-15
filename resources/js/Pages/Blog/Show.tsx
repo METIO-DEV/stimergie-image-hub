@@ -52,7 +52,7 @@ export default function Show({ post, canEdit }: Props) {
                         )}
                     </div>
 
-                    <h1 className="text-4xl font-bold tracking-normal text-foreground md:text-5xl">
+                    <h1 className="break-words text-3xl font-bold leading-tight tracking-normal text-foreground md:text-5xl">
                         {post.title}
                     </h1>
                     <p className="mt-4 text-sm text-muted-foreground">

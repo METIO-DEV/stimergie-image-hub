@@ -47,7 +47,7 @@ function TabsList({
         <div
             role="tablist"
             className={cn(
-                "flex border-b border-border text-muted-foreground",
+                "flex overflow-x-auto border-b border-border text-muted-foreground",
                 className,
             )}
         >

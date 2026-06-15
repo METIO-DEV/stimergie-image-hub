@@ -244,7 +244,10 @@ export default function Authenticated({
                                 <span className="sr-only">Ouvrir le menu</span>
                             </Button>
                         </SheetTrigger>
-                        <SheetContent side="left" className="w-80 bg-[#f7f8f8]">
+                        <SheetContent
+                            side="left"
+                            className="w-[min(20rem,calc(100vw-2rem))] overflow-y-auto bg-[#f7f8f8]"
+                        >
                             <div className="mb-6 border-b pb-4">
                                 <img
                                     src="/logo_stimergie_header.png"
@@ -293,6 +296,17 @@ export default function Authenticated({
                                     );
                                 })}
                             </nav>
+                            <div className="mt-6 border-t pt-4">
+                                <Link
+                                    href={route("logout")}
+                                    method="post"
+                                    as="button"
+                                    className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-foreground transition-colors hover:bg-primary/5 hover:text-primary"
+                                >
+                                    <LogOut className="h-4 w-4" />
+                                    Déconnexion
+                                </Link>
+                            </div>
                         </SheetContent>
                     </Sheet>
 
@@ -313,7 +327,7 @@ export default function Authenticated({
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="rounded-full hover:bg-white/60"
+                                    className="hidden rounded-full hover:bg-white/60 md:inline-flex"
                                 >
                                     <Avatar className="h-9 w-9 border bg-background">
                                         <AvatarFallback className="bg-background text-sm font-semibold text-foreground">

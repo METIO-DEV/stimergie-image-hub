@@ -21,7 +21,7 @@ export default function PublicIndex({ posts, title, description }: Props) {
             <section className="border-b bg-muted/30">
                 <div className="container py-12 md:py-16">
                     <div className="max-w-3xl">
-                        <h1 className="text-4xl font-bold tracking-normal text-foreground">
+                        <h1 className="break-words text-3xl font-bold leading-tight tracking-normal text-foreground md:text-4xl">
                             {title}
                         </h1>
                         <p className="mt-4 text-base leading-7 text-muted-foreground">

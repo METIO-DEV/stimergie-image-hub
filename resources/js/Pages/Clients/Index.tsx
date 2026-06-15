@@ -93,7 +93,7 @@ export default function ClientsIndex({ clients, canCreateClient }: Props) {
                 description="Consultez et administrez les entreprises auxquelles vous avez un rôle de gestion."
                 action={
                     canCreateClient && (
-                        <Button asChild className="gap-2">
+                        <Button asChild className="h-auto gap-2 whitespace-normal text-left">
                             <Link href={route("clients.create")}>
                                 <PlusCircle size={18} />
                                 Ajouter une entreprise

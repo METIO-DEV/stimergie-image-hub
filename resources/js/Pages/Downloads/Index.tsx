@@ -46,9 +46,9 @@ export default function DownloadsIndex({
 
             <main className="container mx-auto max-w-7xl px-4 py-8">
                 <div className="flex flex-col space-y-8">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-3xl font-bold">
+                    <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                            <h1 className="break-words text-2xl font-bold leading-tight sm:text-3xl">
                                 Vos téléchargements
                             </h1>
                             <p className="mt-2 text-muted-foreground">
@@ -59,7 +59,7 @@ export default function DownloadsIndex({
                         <Button
                             variant="outline"
                             onClick={refresh}
-                            className="flex items-center gap-2"
+                            className="flex w-full items-center gap-2 sm:w-auto"
                             disabled={isRefreshing}
                         >
                             <RefreshCw

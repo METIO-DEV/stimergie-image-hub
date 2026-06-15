@@ -22,15 +22,15 @@ export default function Edit({
 
             <div className="container py-10">
                 <div className="mx-auto max-w-4xl">
-                    <h1 className="text-4xl font-bold tracking-normal">
+                    <h1 className="break-words text-3xl font-bold leading-tight tracking-normal md:text-4xl">
                         Mon Profil
                     </h1>
 
-                    <div className="mt-8 grid grid-cols-2 rounded-lg bg-muted p-1">
+                    <div className="mt-8 grid grid-cols-1 rounded-lg bg-muted p-1 sm:grid-cols-2">
                         <Button
                             type="button"
                             variant={tab === "info" ? "secondary" : "ghost"}
-                            className="justify-center"
+                            className="h-auto justify-center whitespace-normal py-2 text-center"
                             onClick={() => setTab("info")}
                         >
                             <User className="h-4 w-4" />
@@ -39,7 +39,7 @@ export default function Edit({
                         <Button
                             type="button"
                             variant={tab === "security" ? "secondary" : "ghost"}
-                            className="justify-center"
+                            className="h-auto justify-center whitespace-normal py-2 text-center"
                             onClick={() => setTab("security")}
                         >
                             <Shield className="h-4 w-4" />

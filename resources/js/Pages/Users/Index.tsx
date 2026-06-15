@@ -107,7 +107,7 @@ export default function UsersIndex({ users, clients, roles }: Props) {
                 description="Créez les comptes, attribuez leurs statuts et rattachez-les aux entreprises."
                 action={
                     <Button
-                        className="gap-2"
+                        className="h-auto gap-2 whitespace-normal text-left"
                         onClick={() => {
                             setEditingUser(null);
                             setUserModalOpen(true);

@@ -275,7 +275,7 @@ export default function GalleryIndex({
                 <section className="border-b border-border bg-[#dcd0bb]">
                     <div className="mx-auto max-w-7xl px-6 py-10">
                         <div className="mb-6 text-center">
-                            <h1 className="mb-3 text-3xl font-bold">
+                            <h1 className="mb-3 break-words text-2xl font-bold leading-tight sm:text-3xl">
                                 Banque d'images
                             </h1>
                             <p className="mx-auto max-w-2xl text-sm leading-6 text-[#150B0D]">

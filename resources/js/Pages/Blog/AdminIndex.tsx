@@ -62,7 +62,7 @@ export default function AdminIndex({
                 description="Gérez les contenus éditoriaux publiés dans les espaces Ressources et Ensemble."
                 action={
                     canCreatePost && (
-                        <Button asChild>
+                        <Button asChild className="h-auto whitespace-normal text-left">
                             <Link href={route("blog.create")}>
                                 <Plus className="h-4 w-4" />
                                 Nouvel article

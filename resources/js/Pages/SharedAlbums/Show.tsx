@@ -48,7 +48,9 @@ export default function SharedAlbumShow({
             </header>
             <main className="container flex-1 py-10">
                 <div className="mb-8 max-w-3xl">
-                    <h1 className="text-3xl font-bold">{album.name}</h1>
+                    <h1 className="break-words text-2xl font-bold leading-tight sm:text-3xl">
+                        {album.name}
+                    </h1>
                     {album.description && (
                         <p className="mt-3 text-muted-foreground">
                             {album.description}

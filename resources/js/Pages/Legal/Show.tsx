@@ -97,7 +97,7 @@ export default function LegalShow({
                                     <InputError message={errors.title} />
                                 </div>
                             ) : (
-                                <CardTitle className="text-3xl">
+                                <CardTitle className="break-words text-2xl leading-tight sm:text-3xl">
                                     {page.title}
                                 </CardTitle>
                             )}
