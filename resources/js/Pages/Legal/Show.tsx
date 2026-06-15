@@ -14,6 +14,7 @@ type LegalPage = {
     pageType: string;
     title: string;
     content: string;
+    safeContentHtml: string;
     updatedAt: string;
 };
 
@@ -163,7 +164,7 @@ export default function LegalShow({
                                 <div
                                     className="legal-content max-w-none space-y-4 text-base leading-7 text-muted-foreground [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l-4 [&_blockquote]:pl-4 [&_h2]:mt-8 [&_h2]:text-2xl [&_h2]:font-semibold [&_h2]:text-foreground [&_h3]:mt-6 [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:text-foreground [&_hr]:my-8 [&_li]:ml-5 [&_ol]:list-decimal [&_p]:my-3 [&_ul]:list-disc"
                                     dangerouslySetInnerHTML={{
-                                        __html: page.content,
+                                        __html: page.safeContentHtml,
                                     }}
                                 />
                                 <div className="border-t pt-4 text-sm text-muted-foreground">

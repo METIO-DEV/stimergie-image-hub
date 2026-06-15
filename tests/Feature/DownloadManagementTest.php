@@ -108,6 +108,37 @@ class DownloadManagementTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_client_member_cannot_prepare_mixed_download_with_inaccessible_image(): void
+    {
+        Storage::fake('scaleway');
+
+        $user = User::factory()->create(['status' => 'active']);
+        [$visibleClient, $visibleProject] = $this->clientAndProject('visible-downloads');
+        [$hiddenClient, $hiddenProject] = $this->clientAndProject('hidden-downloads');
+        $visibleImage = $this->image($visibleClient, $visibleProject, [
+            'object_key_web' => 'images/web/visible.jpg',
+        ]);
+        $hiddenImage = $this->image($hiddenClient, $hiddenProject, [
+            'object_key_web' => 'images/web/hidden.jpg',
+        ]);
+
+        ClientMembership::create([
+            'client_id' => $visibleClient->id,
+            'user_id' => $user->id,
+            'role' => 'viewer',
+            'status' => 'active',
+        ]);
+        Storage::disk('scaleway')->put('images/web/visible.jpg', 'visible');
+        Storage::disk('scaleway')->put('images/web/hidden.jpg', 'hidden');
+
+        $this->actingAs($user)->post(route('downloads.store'), [
+            'variant' => 'web',
+            'image_ids' => [$visibleImage->id, $hiddenImage->id],
+        ])->assertForbidden();
+
+        $this->assertDatabaseCount('download_jobs', 0);
+    }
+
     public function test_client_member_can_prepare_download_for_accessible_client_image(): void
     {
         Storage::fake('scaleway');
@@ -309,17 +340,17 @@ class DownloadManagementTest extends TestCase
     /**
      * @return array{Client, Project}
      */
-    private function clientAndProject(): array
+    private function clientAndProject(string $slug = 'client-downloads'): array
     {
         $client = Client::create([
-            'name' => 'Client Downloads',
-            'slug' => 'client-downloads',
+            'name' => str($slug)->replace('-', ' ')->title()->toString(),
+            'slug' => $slug,
             'status' => 'active',
         ]);
         $project = Project::create([
             'client_id' => $client->id,
-            'name' => 'Projet Downloads',
-            'slug' => 'projet-downloads',
+            'name' => 'Projet '.str($slug)->replace('-', ' ')->title()->toString(),
+            'slug' => 'projet-'.$slug,
             'status' => 'active',
         ]);
 

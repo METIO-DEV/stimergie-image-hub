@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\UpdateLegalPageRequest;
 use App\Models\LegalPage;
+use App\Support\SafeHtml;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -11,6 +12,8 @@ use Inertia\Response;
 
 class LegalPageController extends Controller
 {
+    public function __construct(private readonly SafeHtml $safeHtml) {}
+
     public function about(Request $request): Response
     {
         return $this->show($request, 'about');
@@ -37,7 +40,7 @@ class LegalPageController extends Controller
 
         $legalPage->update([
             'title' => $data['title'],
-            'content' => $data['content'],
+            'content' => $this->safeHtml->clean($data['content']),
             'updated_by' => $request->user()->id,
         ]);
 
@@ -56,6 +59,7 @@ class LegalPageController extends Controller
                 'pageType' => $page->page_type,
                 'title' => $page->title,
                 'content' => $page->content,
+                'safeContentHtml' => $this->safeHtml->clean($page->content),
                 'updatedAt' => $page->updated_at->toDateString(),
             ],
             'canEdit' => $request->user()?->isSuperAdmin() ?? false,

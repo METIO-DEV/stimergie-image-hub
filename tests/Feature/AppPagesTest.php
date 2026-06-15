@@ -342,6 +342,7 @@ class AppPagesTest extends TestCase
                     ->component('Legal/Show')
                     ->has('page.title')
                     ->has('page.content')
+                    ->has('page.safeContentHtml')
                     ->etc());
         }
     }
@@ -354,7 +355,7 @@ class AppPagesTest extends TestCase
                 ->component('Legal/Show')
                 ->where('page.title', 'À propos')
                 ->where('canEdit', false)
-                ->where('page.content', fn (string $content) => str_contains($content, 'Stimergie est une plateforme française'))
+                ->where('page.safeContentHtml', fn (string $content) => str_contains($content, 'Stimergie est une plateforme française'))
                 ->etc());
 
         $this->get(route('licenses'))
@@ -362,7 +363,7 @@ class AppPagesTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Legal/Show')
                 ->where('page.title', 'Licences')
-                ->where('page.content', fn (string $content) => str_contains($content, 'Licence standard'))
+                ->where('page.safeContentHtml', fn (string $content) => str_contains($content, 'Licence standard'))
                 ->etc());
     }
 
@@ -389,6 +390,42 @@ class AppPagesTest extends TestCase
             'content' => '<h2>Contenu modifié</h2><p>Texte administrable.</p>',
             'updated_by' => $admin->id,
         ]);
+    }
+
+    public function test_legal_page_content_is_sanitized_before_storage_and_rendering(): void
+    {
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $legalPage = LegalPage::query()
+            ->where('page_type', 'about')
+            ->firstOrFail();
+
+        $this->actingAs($admin)
+            ->patch(route('legal-pages.update', $legalPage), [
+                'title' => 'À propos sécurisé',
+                'content' => '<h2 onclick="alert(1)">Titre</h2><script>alert(1)</script><p><a href="javascript:alert(2)" onmouseover="alert(3)">Lien</a><a href="//evil.example">Protocol</a><a href="https://stimergie.fr" target="_blank">Stimergie</a></p><iframe src="https://example.com"></iframe>',
+            ])
+            ->assertRedirect();
+
+        $storedContent = $legalPage->fresh()->content;
+
+        $this->assertStringContainsString('<h2>Titre</h2>', $storedContent);
+        $this->assertStringContainsString('href="https://stimergie.fr"', $storedContent);
+        $this->assertStringContainsString('rel="noopener noreferrer"', $storedContent);
+        $this->assertStringNotContainsString('script', $storedContent);
+        $this->assertStringNotContainsString('javascript:', $storedContent);
+        $this->assertStringNotContainsString('//evil.example', $storedContent);
+        $this->assertStringNotContainsString('onmouseover', $storedContent);
+        $this->assertStringNotContainsString('onclick', $storedContent);
+        $this->assertStringNotContainsString('iframe', $storedContent);
+
+        $this->get(route('about'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('page.safeContentHtml', $storedContent)
+                ->etc());
     }
 
     public function test_standard_user_cannot_update_legal_page_content(): void
@@ -530,6 +567,84 @@ class AppPagesTest extends TestCase
                 ->where('activeFilters.clientId', (string) $targetClient->id)
                 ->where('activeFilters.projectId', (string) $targetProject->id)
                 ->where('activeFilters.tag', $targetTag->name)
+                ->etc());
+    }
+
+    public function test_gallery_filters_cannot_escape_client_visibility(): void
+    {
+        $user = User::factory()->create(['status' => 'active']);
+        $visibleClient = Client::create([
+            'name' => 'Client Visible',
+            'slug' => 'client-visible',
+            'status' => 'active',
+        ]);
+        $visibleProject = Project::create([
+            'client_id' => $visibleClient->id,
+            'name' => 'Projet Visible',
+            'slug' => 'projet-visible',
+            'status' => 'active',
+        ]);
+        $hiddenClient = Client::create([
+            'name' => 'Client Cache',
+            'slug' => 'client-cache',
+            'status' => 'active',
+        ]);
+        $hiddenProject = Project::create([
+            'client_id' => $hiddenClient->id,
+            'name' => 'Projet Cache',
+            'slug' => 'projet-cache',
+            'status' => 'active',
+        ]);
+        $visibleImage = Image::create([
+            'client_id' => $visibleClient->id,
+            'project_id' => $visibleProject->id,
+            'title' => 'Image visible',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/client-visible/source.jpg',
+        ]);
+        $hiddenImage = Image::create([
+            'client_id' => $hiddenClient->id,
+            'project_id' => $hiddenProject->id,
+            'title' => 'Image cachee',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/client-cache/source.jpg',
+        ]);
+        $sharedTag = Tag::create([
+            'name' => 'Selection client',
+            'slug' => 'selection-client',
+        ]);
+
+        $visibleImage->tags()->attach($sharedTag->id);
+        $hiddenImage->tags()->attach($sharedTag->id);
+        ClientMembership::create([
+            'client_id' => $visibleClient->id,
+            'user_id' => $user->id,
+            'role' => 'viewer',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('gallery.index', [
+                'client_id' => $hiddenClient->id,
+                'tag' => $sharedTag->name,
+            ]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Gallery/Index')
+                ->has('images', 0)
+                ->where('pagination.total', 0)
+                ->etc());
+
+        $this->actingAs($user)
+            ->get(route('gallery.index', ['tag' => $sharedTag->name]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Gallery/Index')
+                ->has('images', 1)
+                ->where('images.0.id', $visibleImage->id)
+                ->where('pagination.total', 1)
                 ->etc());
     }
 
@@ -716,6 +831,50 @@ class AppPagesTest extends TestCase
             'is_active' => true,
         ]);
         Storage::disk('scaleway')->put('images/web/expiree.jpg', 'web-content');
+
+        $this->actingAs($user)
+            ->get(route('images.download', ['image' => $image, 'variant' => 'web']))
+            ->assertForbidden();
+    }
+
+    public function test_image_download_route_cannot_reach_another_client_image(): void
+    {
+        Storage::fake('scaleway');
+
+        $user = User::factory()->create(['status' => 'active']);
+        $visibleClient = Client::create([
+            'name' => 'Client Direct Visible',
+            'slug' => 'client-direct-visible',
+            'status' => 'active',
+        ]);
+        $hiddenClient = Client::create([
+            'name' => 'Client Direct Cache',
+            'slug' => 'client-direct-cache',
+            'status' => 'active',
+        ]);
+        $hiddenProject = Project::create([
+            'client_id' => $hiddenClient->id,
+            'name' => 'Projet Direct Cache',
+            'slug' => 'projet-direct-cache',
+            'status' => 'active',
+        ]);
+        $image = Image::create([
+            'client_id' => $hiddenClient->id,
+            'project_id' => $hiddenProject->id,
+            'title' => 'Image autre client',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/client-direct-cache/source.jpg',
+            'object_key_web' => 'images/web/client-direct-cache.jpg',
+        ]);
+
+        ClientMembership::create([
+            'client_id' => $visibleClient->id,
+            'user_id' => $user->id,
+            'role' => 'viewer',
+            'status' => 'active',
+        ]);
+        Storage::disk('scaleway')->put('images/web/client-direct-cache.jpg', 'web-content');
 
         $this->actingAs($user)
             ->get(route('images.download', ['image' => $image, 'variant' => 'web']))
