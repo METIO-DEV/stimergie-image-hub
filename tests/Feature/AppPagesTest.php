@@ -496,6 +496,11 @@ class AppPagesTest extends TestCase
             'created_at' => now()->subDays(2),
             'updated_at' => now()->subDays(2),
         ]);
+        $targetTag = Tag::create([
+            'name' => 'Façade bois',
+            'slug' => 'facade-bois',
+        ]);
+        $targetImage->tags()->attach($targetTag->id);
 
         foreach (range(1, 101) as $index) {
             Image::create([
@@ -514,6 +519,7 @@ class AppPagesTest extends TestCase
             ->get(route('gallery.index', [
                 'client_id' => $targetClient->id,
                 'project_id' => $targetProject->id,
+                'tag' => $targetTag->name,
             ]))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -523,6 +529,7 @@ class AppPagesTest extends TestCase
                 ->where('pagination.total', 1)
                 ->where('activeFilters.clientId', (string) $targetClient->id)
                 ->where('activeFilters.projectId', (string) $targetProject->id)
+                ->where('activeFilters.tag', $targetTag->name)
                 ->etc());
     }
 

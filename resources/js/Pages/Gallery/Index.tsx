@@ -16,7 +16,14 @@ import {
 } from "@/Components/Legacy/LegacyDesign";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, router, usePage } from "@inertiajs/react";
-import { Download, FolderInput, Infinity, Share2, SquareCheck } from "lucide-react";
+import {
+    Download,
+    FolderInput,
+    Infinity,
+    Share2,
+    SquareCheck,
+    X,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type FilterOption = {
@@ -43,6 +50,7 @@ type Props = {
         orientation: string;
         clientId: string;
         projectId: string;
+        tag: string;
     };
     bulkProjects: FilterOption[];
     canBulkAssignImages: boolean;
@@ -70,6 +78,7 @@ export default function GalleryIndex({
     const [orientation, setOrientation] = useState(activeFilters.orientation);
     const [clientId, setClientId] = useState(activeFilters.clientId);
     const [projectId, setProjectId] = useState(activeFilters.projectId);
+    const [tag, setTag] = useState(activeFilters.tag);
     const [currentPage, setCurrentPage] = useState(pagination.currentPage);
     const [infiniteScroll, setInfiniteScroll] = useState(false);
     const didMount = useRef(false);
@@ -135,6 +144,7 @@ export default function GalleryIndex({
         orientation: orientation || undefined,
         client_id: clientId || undefined,
         project_id: projectId || undefined,
+        tag: tag.trim() || undefined,
         page: nextPage > 1 ? nextPage : undefined,
     });
 
@@ -143,12 +153,14 @@ export default function GalleryIndex({
         setOrientation(activeFilters.orientation);
         setClientId(activeFilters.clientId);
         setProjectId(activeFilters.projectId);
+        setTag(activeFilters.tag);
         setCurrentPage(pagination.currentPage);
     }, [
         activeFilters.clientId,
         activeFilters.orientation,
         activeFilters.projectId,
         activeFilters.search,
+        activeFilters.tag,
         pagination.currentPage,
     ]);
 
@@ -169,7 +181,7 @@ export default function GalleryIndex({
         }, 350);
 
         return () => window.clearTimeout(timeout);
-    }, [clientId, orientation, projectId, search]);
+    }, [clientId, orientation, projectId, search, tag]);
 
     const handlePageChange = (page: number) => {
         setCurrentPage(page);
@@ -185,6 +197,12 @@ export default function GalleryIndex({
                 ? current.filter((selectedId) => selectedId !== id)
                 : [...current, id],
         );
+    };
+
+    const filterByTag = (nextTag: string) => {
+        setTag(nextTag);
+        setCurrentPage(1);
+        setDetailImage(null);
     };
 
     const assignSelectionToProject = () => {
@@ -348,6 +366,22 @@ export default function GalleryIndex({
                 )}
 
                 <div className="mb-4 px-0">
+                    {tag && (
+                        <div className="mb-4 flex flex-wrap items-center gap-2 px-4 text-sm">
+                            <span className="text-muted-foreground">
+                                Filtre tag actif :
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => filterByTag("")}
+                                className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 font-medium text-primary transition hover:bg-primary/15"
+                                title="Retirer le filtre tag"
+                            >
+                                #{tag}
+                                <X className="h-3.5 w-3.5" />
+                            </button>
+                        </div>
+                    )}
                     <div className="mb-4 flex items-center justify-between px-0">
                         <Button
                             variant="outline"
@@ -437,6 +471,7 @@ export default function GalleryIndex({
             <ImageInfoSheet
                 image={detailImage}
                 onClose={() => setDetailImage(null)}
+                onTagClick={filterByTag}
             />
             <Dialog open={bulkProjectOpen} onOpenChange={setBulkProjectOpen}>
                 <DialogContent className="max-w-lg">

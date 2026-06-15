@@ -75,6 +75,7 @@ class AppPageController extends Controller
                 'orientation' => $galleryFilters['orientation'],
                 'clientId' => $galleryFilters['clientId'] ? (string) $galleryFilters['clientId'] : '',
                 'projectId' => $galleryFilters['projectId'] ? (string) $galleryFilters['projectId'] : '',
+                'tag' => $galleryFilters['tag'],
             ],
             'bulkProjects' => $this->manageableProjectOptions($user, $manageableClientIds),
             'canBulkAssignImages' => $this->canManageClientContent($user),
@@ -88,7 +89,7 @@ class AppPageController extends Controller
     }
 
     /**
-     * @return array{search: string, orientation: string, clientId: int|null, projectId: int|null}
+     * @return array{search: string, orientation: string, clientId: int|null, projectId: int|null, tag: string}
      */
     private function galleryFilters(Request $request): array
     {
@@ -99,6 +100,7 @@ class AppPageController extends Controller
             'orientation' => in_array($orientation, ['landscape', 'portrait', 'square'], true) ? $orientation : '',
             'clientId' => $request->query('client_id') ? max(1, (int) $request->query('client_id')) : null,
             'projectId' => $request->query('project_id') ? max(1, (int) $request->query('project_id')) : null,
+            'tag' => trim((string) $request->query('tag', '')),
         ];
     }
 
@@ -469,7 +471,7 @@ class AppPageController extends Controller
     }
 
     /**
-     * @param  array{search: string, orientation: string, clientId: int|null, projectId: int|null}  $filters
+     * @param  array{search: string, orientation: string, clientId: int|null, projectId: int|null, tag: string}  $filters
      */
     private function applyGalleryFilters($query, array $filters): void
     {
@@ -486,7 +488,12 @@ class AppPageController extends Controller
             })
             ->when($filters['orientation'] !== '', fn ($query) => $query->where('orientation', $filters['orientation']))
             ->when($filters['clientId'] !== null, fn ($query) => $query->where('client_id', $filters['clientId']))
-            ->when($filters['projectId'] !== null, fn ($query) => $query->where('project_id', $filters['projectId']));
+            ->when($filters['projectId'] !== null, fn ($query) => $query->where('project_id', $filters['projectId']))
+            ->when($filters['tag'] !== '', function ($query) use ($filters): void {
+                $tag = $filters['tag'];
+
+                $query->whereHas('tags', fn ($tags) => $tags->where('name', $tag));
+            });
     }
 
     /**

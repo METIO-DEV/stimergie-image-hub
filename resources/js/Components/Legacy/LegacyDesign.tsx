@@ -342,9 +342,11 @@ export function MasonryGrid({
 export function ImageInfoSheet({
     image,
     onClose,
+    onTagClick,
 }: {
     image: LegacyImage | null;
     onClose: () => void;
+    onTagClick?: (tag: string) => void;
 }) {
     const imageSrc = image?.imageUrl || image?.thumbUrl || null;
 
@@ -458,12 +460,28 @@ export function ImageInfoSheet({
                                     </div>
                                     <div className="mt-2 flex flex-wrap gap-2">
                                         {image.tags.map((tag) => (
-                                            <Badge
-                                                key={tag}
-                                                variant="secondary"
-                                            >
-                                                #{tag}
-                                            </Badge>
+                                            onTagClick ? (
+                                                <button
+                                                    key={tag}
+                                                    type="button"
+                                                    onClick={() =>
+                                                        onTagClick(tag)
+                                                    }
+                                                    className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                                    title={`Filtrer par ${tag}`}
+                                                >
+                                                    <Badge variant="secondary">
+                                                        #{tag}
+                                                    </Badge>
+                                                </button>
+                                            ) : (
+                                                <Badge
+                                                    key={tag}
+                                                    variant="secondary"
+                                                >
+                                                    #{tag}
+                                                </Badge>
+                                            )
                                         ))}
                                     </div>
                                 </div>
