@@ -795,7 +795,7 @@ function FolderImportModal({
                 onOpenChange(nextOpen);
             }}
         >
-            <DialogContent className="max-h-[90vh] max-w-2xl overflow-hidden">
+            <DialogContent className="max-h-[90vh] max-w-2xl overflow-x-hidden">
                 <DialogHeader>
                     <DialogTitle>Importer un dossier d'images</DialogTitle>
                     <DialogDescription>
@@ -805,7 +805,7 @@ function FolderImportModal({
                 </DialogHeader>
 
                 <form onSubmit={submit}>
-                    <div className="max-h-[calc(90vh-210px)] space-y-5 overflow-y-auto pr-2">
+                    <div className="max-h-[calc(90vh-210px)] space-y-5 overflow-y-auto px-1">
                         <div className="grid grid-cols-2 gap-2 rounded-md bg-muted p-1">
                             <button
                                 type="button"
@@ -878,7 +878,7 @@ function FolderImportModal({
                                 </>
                             ) : (
                                 <div className="grid gap-4 md:grid-cols-2">
-                                    <div className="space-y-2">
+                                    <div className="min-w-0 space-y-2">
                                         <Label htmlFor="folder-import-client">
                                             Entreprise
                                         </Label>
@@ -910,7 +910,7 @@ function FolderImportModal({
                                             ))}
                                         </select>
                                     </div>
-                                    <div className="space-y-2">
+                                    <div className="min-w-0 space-y-2">
                                         <Label htmlFor="folder-import-project-name">
                                             Nom du projet
                                         </Label>
@@ -928,7 +928,7 @@ function FolderImportModal({
                                             }
                                         />
                                     </div>
-                                    <div className="space-y-2">
+                                    <div className="min-w-0 space-y-2">
                                         <Label htmlFor="folder-import-project-type">
                                             Type de projet
                                         </Label>
@@ -946,7 +946,7 @@ function FolderImportModal({
                                             }
                                         />
                                     </div>
-                                    <div className="space-y-2">
+                                    <div className="min-w-0 space-y-2">
                                         <Label htmlFor="folder-import-source-folder">
                                             Nom du dossier
                                         </Label>

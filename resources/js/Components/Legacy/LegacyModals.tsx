@@ -108,8 +108,8 @@ export function ContactModal({
                 </DialogHeader>
 
                 <form onSubmit={submit} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="min-w-0">
                             <Label htmlFor="contact-first-name">Prénom</Label>
                             <Input
                                 id="contact-first-name"
@@ -118,7 +118,7 @@ export function ContactModal({
                                 readOnly
                             />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             <Label htmlFor="contact-last-name">Nom</Label>
                             <Input
                                 id="contact-last-name"
@@ -282,14 +282,14 @@ export function ProjectEditModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-3xl">
+            <DialogContent className="max-w-3xl overflow-x-hidden">
                 <DialogHeader>
                     <DialogTitle>
                         {project ? "Modifier le projet" : "Ajouter un projet"}
                     </DialogTitle>
                 </DialogHeader>
                 <form onSubmit={submit} className="space-y-6">
-                <div className="mx-auto w-full max-w-2xl rounded-lg border bg-card p-6">
+                <div className="mx-auto w-full max-w-2xl rounded-lg border bg-card p-4 sm:p-6">
                     <div className="space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="project-name">Nom du projet</Label>
@@ -422,6 +422,8 @@ export function ImageEditModal({
         description: "",
         orientation: "",
         status: "ready",
+        rights_starts_at: "",
+        rights_ends_at: "",
         tags: "",
         tag_source: "manual",
         file: null as File | null,
@@ -439,6 +441,8 @@ export function ImageEditModal({
             description: image?.description || "",
             orientation: image?.orientation || "",
             status: image?.status || "ready",
+            rights_starts_at: image?.rightsStartsAt || "",
+            rights_ends_at: image?.rightsEndsAt || "",
             tags: image?.tags?.join(", ") || "",
             tag_source: "manual",
             file: null,
@@ -562,7 +566,7 @@ export function ImageEditModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[90vh] max-w-xl overflow-hidden">
+            <DialogContent className="max-h-[90vh] max-w-xl overflow-x-hidden">
                 <DialogHeader>
                     <DialogTitle>
                         {image
@@ -577,7 +581,7 @@ export function ImageEditModal({
                 </DialogHeader>
 
                 <form onSubmit={submit}>
-                <div className="max-h-[calc(90vh-180px)] space-y-5 overflow-y-auto pr-2">
+                <div className="max-h-[calc(90vh-180px)] space-y-5 overflow-y-auto px-1">
                     <div>
                         {preview ? (
                             <img
@@ -605,7 +609,7 @@ export function ImageEditModal({
                         )}
                         <label className="mt-3 inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground">
                             <Upload className="h-4 w-4" />
-                            Changer l'image
+                            Charger l'image
                             <input
                                 type="file"
                                 accept="image/*"
@@ -643,7 +647,7 @@ export function ImageEditModal({
                         <InputError message={errors.description} />
                     </div>
                     <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
+                        <div className="min-w-0 space-y-2">
                             <Label>Entreprise</Label>
                             <Input
                                 value={
@@ -654,7 +658,7 @@ export function ImageEditModal({
                                 disabled
                             />
                         </div>
-                        <div className="space-y-2">
+                        <div className="min-w-0 space-y-2">
                             <Label htmlFor="image-project">Projet</Label>
                             <select
                                 id="image-project"
@@ -677,7 +681,7 @@ export function ImageEditModal({
                         </div>
                     </div>
                     <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
+                        <div className="min-w-0 space-y-2">
                             <Label htmlFor="image-orientation">
                                 Orientation
                             </Label>
@@ -696,7 +700,7 @@ export function ImageEditModal({
                             </select>
                             <InputError message={errors.orientation} />
                         </div>
-                        <div className="space-y-2">
+                        <div className="min-w-0 space-y-2">
                             <Label htmlFor="image-tags">Tags</Label>
                             <div className="flex gap-2">
                                 <Input
@@ -733,6 +737,42 @@ export function ImageEditModal({
                             )}
                         </div>
                     </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                        <div className="min-w-0 space-y-2">
+                            <Label htmlFor="image-rights-start">
+                                Début de cession
+                            </Label>
+                            <Input
+                                id="image-rights-start"
+                                type="date"
+                                value={data.rights_starts_at}
+                                onChange={(event) =>
+                                    setData(
+                                        "rights_starts_at",
+                                        event.target.value,
+                                    )
+                                }
+                            />
+                            <InputError message={errors.rights_starts_at} />
+                        </div>
+                        <div className="min-w-0 space-y-2">
+                            <Label htmlFor="image-rights-end">
+                                Fin de cession
+                            </Label>
+                            <Input
+                                id="image-rights-end"
+                                type="date"
+                                value={data.rights_ends_at}
+                                onChange={(event) =>
+                                    setData(
+                                        "rights_ends_at",
+                                        event.target.value,
+                                    )
+                                }
+                            />
+                            <InputError message={errors.rights_ends_at} />
+                        </div>
+                    </div>
                     {image?.canManage && (
                         <div className="space-y-3 rounded-md border p-4">
                             <div className="flex items-center gap-2 text-sm font-medium">
@@ -767,7 +807,7 @@ export function ImageEditModal({
                                     Aucun partage interne actif.
                                 </p>
                             )}
-                            <div className="grid gap-2 md:grid-cols-[1fr_150px_auto]">
+                            <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_150px_auto]">
                                 <select
                                     value={selectedShareClientId}
                                     onChange={(event) =>

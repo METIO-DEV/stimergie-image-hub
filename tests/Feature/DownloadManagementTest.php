@@ -139,6 +139,30 @@ class DownloadManagementTest extends TestCase
         $this->assertDatabaseCount('download_jobs', 0);
     }
 
+    public function test_download_archive_rejects_image_with_expired_rights(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        [$client, $project] = $this->clientAndProject('expired-rights-downloads');
+        $image = $this->image($client, $project, [
+            'object_key_web' => 'images/web/expired-rights.jpg',
+            'rights_ends_at' => now()->subDay()->toDateString(),
+        ]);
+
+        Storage::disk('scaleway')->put('images/web/expired-rights.jpg', 'expired-rights');
+
+        $this->actingAs($admin)->post(route('downloads.store'), [
+            'variant' => 'web',
+            'image_ids' => [$image->id],
+        ])->assertForbidden();
+
+        $this->assertDatabaseCount('download_jobs', 0);
+    }
+
     public function test_client_member_can_prepare_download_for_accessible_client_image(): void
     {
         Storage::fake('scaleway');
@@ -371,6 +395,8 @@ class DownloadManagementTest extends TestCase
             'object_key_original' => $overrides['object_key_original'] ?? null,
             'object_key_web' => $overrides['object_key_web'] ?? null,
             'object_key_hd' => $overrides['object_key_hd'] ?? null,
+            'rights_starts_at' => $overrides['rights_starts_at'] ?? null,
+            'rights_ends_at' => $overrides['rights_ends_at'] ?? null,
             'size_bytes' => $overrides['size_bytes'] ?? null,
         ]);
     }

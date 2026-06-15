@@ -59,6 +59,13 @@ export type LegacyImage = {
     hdDownloadUrl?: string | null;
     width?: number | null;
     height?: number | null;
+    rightsStartsAt?: string | null;
+    rightsEndsAt?: string | null;
+    rightsStatus?: "unlimited" | "active" | "expiring_soon" | "expired";
+    rightsStatusLabel?: string;
+    rightsExtensionRequestedAt?: string | null;
+    canRequestRightsExtension?: boolean;
+    rightsExtensionRequestUrl?: string;
     tags?: string[];
     sharedClients?: Array<{
         id: number;
@@ -161,12 +168,14 @@ export function LegacySearch({
     placeholder = "Recherchez des images...",
     suggestions = [],
     className,
+    onFocusChange,
 }: {
     value: string;
     onChange: (value: string) => void;
     placeholder?: string;
     suggestions?: string[];
     className?: string;
+    onFocusChange?: (focused: boolean) => void;
 }) {
     const suggestionsId = useId();
 
@@ -176,6 +185,8 @@ export function LegacySearch({
             <input
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
+                onFocus={() => onFocusChange?.(true)}
+                onBlur={() => onFocusChange?.(false)}
                 placeholder={placeholder}
                 list={suggestions.length > 0 ? suggestionsId : undefined}
                 className="h-11 w-full rounded-full border border-border bg-muted px-11 text-sm outline-none focus:ring-2 focus:ring-primary/30"
@@ -244,6 +255,10 @@ export function MasonryGrid({
                         const imageId = image.id;
                         const isSelected = selectedIds?.includes(imageId);
                         const src = image.thumbUrl || image.imageUrl;
+                        const rightsExpired =
+                            image.rightsStatus === "expired";
+                        const rightsWarning =
+                            image.rightsStatus === "expiring_soon";
 
                         return (
                             <div
@@ -251,6 +266,7 @@ export function MasonryGrid({
                                 className={cn(
                                     "group relative overflow-hidden bg-card",
                                     onImageClick && "cursor-pointer",
+                                    rightsExpired && "bg-muted",
                                     isSelected &&
                                         "ring-2 ring-primary ring-offset-1",
                                 )}
@@ -289,6 +305,8 @@ export function MasonryGrid({
                                         className={cn(
                                             "w-full object-cover",
                                             imageClassName(image),
+                                            rightsExpired &&
+                                                "grayscale opacity-45",
                                         )}
                                     />
                                 ) : (
@@ -296,8 +314,22 @@ export function MasonryGrid({
                                         className={cn(
                                             "w-full bg-muted",
                                             imageClassName(image),
+                                            rightsExpired && "opacity-45",
                                         )}
                                     />
+                                )}
+
+                                {(rightsExpired || rightsWarning) && (
+                                    <div
+                                        className={cn(
+                                            "pointer-events-none absolute left-3 right-3 top-14 z-10 rounded-md px-2 py-1 text-xs font-semibold shadow-sm",
+                                            rightsExpired
+                                                ? "bg-destructive text-destructive-foreground"
+                                                : "bg-amber-100 text-amber-900",
+                                        )}
+                                    >
+                                        {image.rightsStatusLabel}
+                                    </div>
                                 )}
 
                                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4 opacity-0 transition-opacity group-hover:opacity-100">
@@ -343,12 +375,16 @@ export function ImageInfoSheet({
     image,
     onClose,
     onTagClick,
+    onRightsExtensionRequest,
 }: {
     image: LegacyImage | null;
     onClose: () => void;
     onTagClick?: (tag: string) => void;
+    onRightsExtensionRequest?: (image: LegacyImage) => void;
 }) {
     const imageSrc = image?.imageUrl || image?.thumbUrl || null;
+    const rightsExpired = image?.rightsStatus === "expired";
+    const rightsWarning = image?.rightsStatus === "expiring_soon";
 
     return (
         <Sheet
@@ -374,7 +410,11 @@ export function ImageInfoSheet({
                                     <img
                                         src={imageSrc}
                                         alt={image.title}
-                                        className="max-h-[70vh] w-full object-contain"
+                                        className={cn(
+                                            "max-h-[70vh] w-full object-contain",
+                                            rightsExpired &&
+                                                "grayscale opacity-60",
+                                        )}
                                     />
                                 </div>
                             ) : (
@@ -424,7 +464,65 @@ export function ImageInfoSheet({
                                         {image.projectName}
                                     </Badge>
                                 )}
+                                {image.rightsStatusLabel && (
+                                    <Badge
+                                        variant={
+                                            rightsExpired
+                                                ? "destructive"
+                                                : rightsWarning
+                                                  ? "secondary"
+                                                  : "outline"
+                                        }
+                                        className="gap-1.5 px-3 py-1.5"
+                                    >
+                                        <Shield className="h-3.5 w-3.5" />
+                                        {image.rightsStatusLabel}
+                                    </Badge>
+                                )}
                             </div>
+
+                            {(rightsExpired || rightsWarning) && (
+                                <div
+                                    className={cn(
+                                        "rounded-md border p-4 text-sm",
+                                        rightsExpired
+                                            ? "border-destructive/40 bg-destructive/10 text-destructive"
+                                            : "border-amber-200 bg-amber-50 text-amber-900",
+                                    )}
+                                >
+                                    <div className="font-semibold">
+                                        {rightsExpired
+                                            ? "La cession de droits de cette image est dépassée."
+                                            : "La cession de droits de cette image arrive bientôt à expiration."}
+                                    </div>
+                                    <p className="mt-1">
+                                        {rightsExpired
+                                            ? "Le téléchargement est bloqué jusqu'à extension de la cession."
+                                            : "Vous pouvez demander une extension si l'image doit rester exploitable au-delà de la date prévue."}
+                                    </p>
+                                    {image.rightsExtensionRequestedAt ? (
+                                        <p className="mt-3 font-medium">
+                                            Demande d'extension déjà envoyée le{" "}
+                                            {formatLegacyDate(
+                                                image.rightsExtensionRequestedAt,
+                                            )}
+                                            .
+                                        </p>
+                                    ) : image.canRequestRightsExtension &&
+                                      onRightsExtensionRequest ? (
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            className="mt-3"
+                                            onClick={() =>
+                                                onRightsExtensionRequest(image)
+                                            }
+                                        >
+                                            Étendre la cession de droits
+                                        </Button>
+                                    ) : null}
+                                </div>
+                            )}
 
                             <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
                                 <InfoBlock label="Titre" value={image.title} />
@@ -443,6 +541,18 @@ export function ImageInfoSheet({
                                 <InfoBlock
                                     label="Date d'ajout"
                                     value={formatLegacyDate(image.createdAt)}
+                                />
+                                <InfoBlock
+                                    label="Début de cession"
+                                    value={formatLegacyDate(
+                                        image.rightsStartsAt || undefined,
+                                    )}
+                                />
+                                <InfoBlock
+                                    label="Fin de cession"
+                                    value={formatLegacyDate(
+                                        image.rightsEndsAt || undefined,
+                                    )}
                                 />
                             </div>
 

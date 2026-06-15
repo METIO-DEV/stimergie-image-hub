@@ -46,7 +46,7 @@ class AppPageController extends Controller
                 'client' => fn ($query) => $query
                     ->select('id', 'name', 'slug', 'logo_object_key', 'status')
                     ->withCount(['projects', 'images', 'memberships']),
-                'project:id,name',
+                'project:id,name,client_id',
                 'tags:id,name',
                 'sharedClients:id,name',
             ])
@@ -182,7 +182,7 @@ class AppPageController extends Controller
                 'client' => fn ($query) => $query
                     ->select('id', 'name', 'slug', 'logo_object_key', 'status')
                     ->withCount(['projects', 'images', 'memberships']),
-                'project:id,name',
+                'project:id,name,client_id',
                 'tags:id,name',
                 'sharedClients:id,name',
             ])
@@ -423,6 +423,9 @@ class AppPageController extends Controller
      */
     private function imageSummary(Image $image, User $user, ?array $manageableClientIds): array
     {
+        $rightsStatus = $image->rightsStatus();
+        $canDownload = ! $image->rightsAreExpired();
+
         return [
             'id' => $image->id,
             'title' => $image->title,
@@ -445,11 +448,18 @@ class AppPageController extends Controller
             'projectId' => $image->project_id,
             'thumbUrl' => $this->imageUrls->thumbnailUrl($image),
             'imageUrl' => $this->imageUrls->displayUrl($image),
-            'downloadUrl' => route('images.download', ['image' => $image, 'variant' => 'hd']),
-            'webDownloadUrl' => route('images.download', ['image' => $image, 'variant' => 'web']),
-            'hdDownloadUrl' => route('images.download', ['image' => $image, 'variant' => 'hd']),
+            'downloadUrl' => $canDownload ? route('images.download', ['image' => $image, 'variant' => 'hd']) : null,
+            'webDownloadUrl' => $canDownload ? route('images.download', ['image' => $image, 'variant' => 'web']) : null,
+            'hdDownloadUrl' => $canDownload ? route('images.download', ['image' => $image, 'variant' => 'hd']) : null,
             'width' => $image->width,
             'height' => $image->height,
+            'rightsStartsAt' => $image->rights_starts_at?->toDateString(),
+            'rightsEndsAt' => $image->rights_ends_at?->toDateString(),
+            'rightsStatus' => $rightsStatus,
+            'rightsStatusLabel' => $this->rightsStatusLabel($rightsStatus),
+            'rightsExtensionRequestedAt' => $image->rights_extension_requested_at?->toIso8601String(),
+            'canRequestRightsExtension' => $this->canRequestRightsExtension($image, $user),
+            'rightsExtensionRequestUrl' => route('images.rights-extension', $image),
             'tags' => $image->tags->pluck('name')->values(),
             'sharedClients' => $image->sharedClients
                 ->map(fn (Client $client) => [
@@ -461,6 +471,22 @@ class AppPageController extends Controller
             'createdAt' => $image->created_at->toIso8601String(),
             'canManage' => $this->canManageClientId($image->client_id, $manageableClientIds),
         ];
+    }
+
+    private function rightsStatusLabel(string $status): string
+    {
+        return match ($status) {
+            'expired' => 'Cession expirée',
+            'expiring_soon' => 'Cession bientôt expirée',
+            'active' => 'Cession active',
+            default => 'Cession non limitée',
+        };
+    }
+
+    private function canRequestRightsExtension(Image $image, User $user): bool
+    {
+        return $image->canRequestRightsExtension()
+            && $this->projectAccess->userCanViewImage($user, $image);
     }
 
     private function applyPhotoBucketFilter($query): void

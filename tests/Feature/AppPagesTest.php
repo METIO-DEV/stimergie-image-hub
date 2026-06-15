@@ -648,6 +648,102 @@ class AppPagesTest extends TestCase
                 ->etc());
     }
 
+    public function test_gallery_exposes_expired_image_rights_and_extension_action(): void
+    {
+        $user = User::factory()->create(['status' => 'active']);
+        $client = Client::create([
+            'name' => 'Client Droits',
+            'slug' => 'client-droits',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Droits',
+            'slug' => 'projet-droits',
+            'status' => 'active',
+        ]);
+        $image = Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Image droits expires',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/client-droits/source.jpg',
+            'rights_starts_at' => now()->subYear()->toDateString(),
+            'rights_ends_at' => now()->subDay()->toDateString(),
+        ]);
+
+        ClientMembership::create([
+            'client_id' => $client->id,
+            'user_id' => $user->id,
+            'role' => 'viewer',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('gallery.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Gallery/Index')
+                ->has('images', 1)
+                ->where('images.0.id', $image->id)
+                ->where('images.0.rightsStatus', 'expired')
+                ->where('images.0.rightsStatusLabel', 'Cession expirée')
+                ->where('images.0.downloadUrl', null)
+                ->where('images.0.webDownloadUrl', null)
+                ->where('images.0.hdDownloadUrl', null)
+                ->where('images.0.canRequestRightsExtension', true)
+                ->where('images.0.rightsExtensionRequestUrl', route('images.rights-extension', $image))
+                ->etc());
+    }
+
+    public function test_visible_user_can_request_image_rights_extension(): void
+    {
+        $user = User::factory()->create(['status' => 'active']);
+        $client = Client::create([
+            'name' => 'Client Extension',
+            'slug' => 'client-extension',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Extension',
+            'slug' => 'projet-extension',
+            'status' => 'active',
+        ]);
+        $image = Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Image extension',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/client-extension/source.jpg',
+            'rights_ends_at' => now()->addDays(10)->toDateString(),
+        ]);
+
+        ClientMembership::create([
+            'client_id' => $client->id,
+            'user_id' => $user->id,
+            'role' => 'viewer',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('images.rights-extension', $image))
+            ->assertRedirect();
+
+        $image->refresh();
+
+        $this->assertNotNull($image->rights_extension_requested_at);
+        $this->assertSame($user->id, $image->rights_extension_requested_by);
+        $this->assertDatabaseHas('audit_logs', [
+            'actor_id' => $user->id,
+            'action' => 'image.rights_extension_requested',
+            'subject_type' => Image::class,
+            'subject_id' => $image->id,
+        ]);
+    }
+
     public function test_client_logos_are_resolved_from_scaleway_object_keys(): void
     {
         Storage::fake('scaleway');
@@ -877,6 +973,43 @@ class AppPagesTest extends TestCase
         Storage::disk('scaleway')->put('images/web/client-direct-cache.jpg', 'web-content');
 
         $this->actingAs($user)
+            ->get(route('images.download', ['image' => $image, 'variant' => 'web']))
+            ->assertForbidden();
+    }
+
+    public function test_image_download_route_blocks_expired_rights(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $client = Client::create([
+            'name' => 'Client Droits Download',
+            'slug' => 'client-droits-download',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Droits Download',
+            'slug' => 'projet-droits-download',
+            'status' => 'active',
+        ]);
+        $image = Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Image droits expirés',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/client-droits-download/source.jpg',
+            'object_key_web' => 'images/web/client-droits-download.jpg',
+            'rights_ends_at' => now()->subDay()->toDateString(),
+        ]);
+
+        Storage::disk('scaleway')->put('images/web/client-droits-download.jpg', 'web-content');
+
+        $this->actingAs($admin)
             ->get(route('images.download', ['image' => $image, 'variant' => 'web']))
             ->assertForbidden();
     }

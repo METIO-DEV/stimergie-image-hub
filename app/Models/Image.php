@@ -15,8 +15,39 @@ class Image extends Model
     {
         return [
             'processed_at' => 'datetime',
+            'rights_starts_at' => 'date',
+            'rights_ends_at' => 'date',
+            'rights_extension_requested_at' => 'datetime',
             'metadata' => 'array',
         ];
+    }
+
+    public function rightsStatus(): string
+    {
+        if (! $this->rights_ends_at) {
+            return 'unlimited';
+        }
+
+        if ($this->rights_ends_at->lt(today())) {
+            return 'expired';
+        }
+
+        if ($this->rights_ends_at->lte(now()->addDays(30))) {
+            return 'expiring_soon';
+        }
+
+        return 'active';
+    }
+
+    public function rightsAreExpired(): bool
+    {
+        return $this->rightsStatus() === 'expired';
+    }
+
+    public function canRequestRightsExtension(): bool
+    {
+        return in_array($this->rightsStatus(), ['expired', 'expiring_soon'], true)
+            && $this->rights_extension_requested_at === null;
     }
 
     public function client(): BelongsTo

@@ -50,8 +50,8 @@ export default function ContactIndex() {
 
                     <div className="space-y-4">
                         <form onSubmit={submit} className="space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <div className="min-w-0">
                                     <Label htmlFor="firstName">Prénom</Label>
                                     <Input
                                         id="firstName"
@@ -60,7 +60,7 @@ export default function ContactIndex() {
                                         readOnly
                                     />
                                 </div>
-                                <div>
+                                <div className="min-w-0">
                                     <Label htmlFor="lastName">Nom</Label>
                                     <Input
                                         id="lastName"

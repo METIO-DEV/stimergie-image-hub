@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\BulkAssignImagesProjectRequest;
 use App\Http\Requests\StoreImageRequest;
 use App\Http\Requests\UpdateImageRequest;
+use App\Models\AuditLog;
 use App\Models\Image;
 use App\Models\Project;
 use App\Support\ImageTagSyncer;
@@ -62,6 +63,8 @@ class ImageController extends Controller
                 'title' => $data['title'],
                 'description' => $data['description'] ?? null,
                 'orientation' => $data['orientation'] ?: $fileData['orientation'],
+                'rights_starts_at' => $data['rights_starts_at'] ?? null,
+                'rights_ends_at' => $data['rights_ends_at'] ?? null,
                 'width' => $fileData['width'],
                 'height' => $fileData['height'],
                 'mime_type' => $fileData['mime_type'],
@@ -102,6 +105,8 @@ class ImageController extends Controller
                 'description' => $data['description'] ?? null,
                 'orientation' => $data['orientation'] ?: $image->orientation,
                 'status' => $data['status'],
+                'rights_starts_at' => $data['rights_starts_at'] ?? null,
+                'rights_ends_at' => $data['rights_ends_at'] ?? null,
                 'metadata' => [
                     ...($image->metadata ?? []),
                     'tag_source' => $data['tag_source'] ?? 'manual',
@@ -149,6 +154,7 @@ class ImageController extends Controller
     public function download(Request $request, Image $image)
     {
         abort_unless($this->projectAccess->userCanViewImage($request->user(), $image), 403);
+        abort_if($image->rightsAreExpired(), 403);
 
         $variant = (string) $request->query('variant', 'hd');
         abort_unless(in_array($variant, ['web', 'hd'], true), 404);
@@ -170,5 +176,31 @@ class ImageController extends Controller
         $name = Str::slug($image->title) ?: "image-{$image->id}";
 
         return "{$name}-{$variant}.{$extension}";
+    }
+
+    public function requestRightsExtension(Request $request, Image $image): RedirectResponse
+    {
+        abort_unless($this->projectAccess->userCanViewImage($request->user(), $image), 403);
+        abort_unless($image->canRequestRightsExtension(), 422);
+
+        $image->forceFill([
+            'rights_extension_requested_at' => now(),
+            'rights_extension_requested_by' => $request->user()->id,
+        ])->save();
+
+        AuditLog::create([
+            'actor_id' => $request->user()->id,
+            'action' => 'image.rights_extension_requested',
+            'subject_type' => Image::class,
+            'subject_id' => $image->id,
+            'properties' => [
+                'image_title' => $image->title,
+                'rights_ends_at' => $image->rights_ends_at?->toDateString(),
+            ],
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        return back()->with('success', 'Demande d’extension de cession envoyée.');
     }
 }

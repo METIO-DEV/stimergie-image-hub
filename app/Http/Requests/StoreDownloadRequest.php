@@ -26,10 +26,6 @@ class StoreDownloadRequest extends FormRequest
             return false;
         }
 
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
         $projectAccess = app(ProjectAccess::class);
         $images = Image::query()
             ->with(['client', 'project.accessPeriods'])
@@ -38,6 +34,14 @@ class StoreDownloadRequest extends FormRequest
 
         if ($images->count() !== count(array_unique($imageIds))) {
             return false;
+        }
+
+        if ($images->contains(fn (Image $image) => $image->rightsAreExpired())) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
         }
 
         return $images->every(fn (Image $image) => $projectAccess->userCanViewImage($user, $image));

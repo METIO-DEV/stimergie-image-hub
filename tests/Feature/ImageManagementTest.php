@@ -41,6 +41,8 @@ class ImageManagementTest extends TestCase
             'description' => 'Image de test',
             'orientation' => '',
             'status' => 'ready',
+            'rights_starts_at' => '2026-01-01',
+            'rights_ends_at' => '2026-12-31',
             'tags' => 'matcha, boisson',
             'tag_source' => 'ai',
             'file' => UploadedFile::fake()->image('matcha.jpg', 800, 600),
@@ -58,6 +60,8 @@ class ImageManagementTest extends TestCase
         $this->assertNotSame($image->object_key_original, $image->object_key_web);
         $this->assertSame('scaleway', $image->storage_provider);
         $this->assertSame('landscape', $image->orientation);
+        $this->assertSame('2026-01-01', $image->rights_starts_at->toDateString());
+        $this->assertSame('2026-12-31', $image->rights_ends_at->toDateString());
         $this->assertSame('ai', $image->metadata['tag_source']);
         $this->assertNotNull($image->metadata['ai_tags_applied_at']);
         $this->assertDatabaseHas('image_variants', [
@@ -79,6 +83,8 @@ class ImageManagementTest extends TestCase
             'description' => 'Image modifiee',
             'orientation' => 'portrait',
             'status' => 'archived',
+            'rights_starts_at' => '2026-02-01',
+            'rights_ends_at' => '2026-11-30',
             'tags' => 'matcha, archive',
             'file' => UploadedFile::fake()->image('matcha-hd.jpg', 600, 900),
         ])->assertRedirect();
@@ -88,6 +94,8 @@ class ImageManagementTest extends TestCase
         $this->assertSame('Matcha Latte HD', $image->title);
         $this->assertSame('portrait', $image->orientation);
         $this->assertSame('archived', $image->status);
+        $this->assertSame('2026-02-01', $image->rights_starts_at->toDateString());
+        $this->assertSame('2026-11-30', $image->rights_ends_at->toDateString());
         $this->assertSame('scaleway', $image->storage_provider);
         Storage::disk('scaleway')->assertExists($image->object_key_original);
         $this->assertStringStartsWith('photos/projet-image/', $image->object_key_original);

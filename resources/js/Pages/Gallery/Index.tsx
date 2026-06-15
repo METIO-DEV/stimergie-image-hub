@@ -80,6 +80,7 @@ export default function GalleryIndex({
     const [projectId, setProjectId] = useState(activeFilters.projectId);
     const [tag, setTag] = useState(activeFilters.tag);
     const [currentPage, setCurrentPage] = useState(pagination.currentPage);
+    const [searchFocused, setSearchFocused] = useState(false);
     const [infiniteScroll, setInfiniteScroll] = useState(false);
     const didMount = useRef(false);
     const [selectedImages, setSelectedImages] = useState<
@@ -109,6 +110,9 @@ export default function GalleryIndex({
     const selectedImageItems = images.filter((image) =>
         selectedImages.includes(image.id),
     );
+    const selectionHasExpiredRights = selectedImageItems.some(
+        (image) => image.rightsStatus === "expired",
+    );
     const selectionCanBeAssigned =
         canBulkAssignImages &&
         selectedImageItems.length === selectedImages.length &&
@@ -120,10 +124,6 @@ export default function GalleryIndex({
                 ...filters.clients.map((client) => client.name),
                 ...filters.projects.map((project) => project.name),
                 ...filters.tags.map((tag) => tag.name),
-                ...images.flatMap((image) => [
-                    image.title,
-                    ...(image.tags || []),
-                ]),
             ]
                 .filter(Boolean)
                 .filter(
@@ -134,7 +134,7 @@ export default function GalleryIndex({
                         ) === index,
                 )
                 .slice(0, 120),
-        [filters.clients, filters.projects, filters.tags, images],
+        [filters.clients, filters.projects, filters.tags],
     );
 
     const filterParams = (
@@ -149,7 +149,9 @@ export default function GalleryIndex({
     });
 
     useEffect(() => {
-        setSearch(activeFilters.search);
+        if (!searchFocused) {
+            setSearch(activeFilters.search);
+        }
         setOrientation(activeFilters.orientation);
         setClientId(activeFilters.clientId);
         setProjectId(activeFilters.projectId);
@@ -162,6 +164,7 @@ export default function GalleryIndex({
         activeFilters.search,
         activeFilters.tag,
         pagination.currentPage,
+        searchFocused,
     ]);
 
     useEffect(() => {
@@ -177,6 +180,7 @@ export default function GalleryIndex({
                 preserveScroll: true,
                 preserveState: true,
                 replace: true,
+                only: ["images", "activeFilters", "pagination"],
             });
         }, 350);
 
@@ -188,6 +192,7 @@ export default function GalleryIndex({
         router.get(route("gallery.index"), filterParams(page), {
             preserveScroll: true,
             preserveState: false,
+            only: ["images", "activeFilters", "pagination"],
         });
     };
 
@@ -224,6 +229,10 @@ export default function GalleryIndex({
     };
 
     const requestDownload = (variant: "web" | "hd") => {
+        if (selectionHasExpiredRights) {
+            return;
+        }
+
         router.post(
             route("downloads.store"),
             {
@@ -234,6 +243,35 @@ export default function GalleryIndex({
                 preserveScroll: true,
                 onSuccess: () => {
                     setSelectedImages([]);
+                },
+            },
+        );
+    };
+
+    const requestRightsExtension = (image: LegacyImage) => {
+        if (!image.rightsExtensionRequestUrl) {
+            return;
+        }
+
+        router.post(
+            image.rightsExtensionRequestUrl,
+            {},
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setDetailImage((current) =>
+                        current?.id === image.id
+                            ? {
+                                  ...current,
+                                  rightsExtensionRequestedAt:
+                                      new Date().toISOString(),
+                                  canRequestRightsExtension: false,
+                              }
+                            : current,
+                    );
+                    router.reload({
+                        only: ["images"],
+                    });
                 },
             },
         );
@@ -295,6 +333,7 @@ export default function GalleryIndex({
                                 }}
                                 suggestions={searchSuggestions}
                                 className="md:max-w-sm"
+                                onFocusChange={setSearchFocused}
                             />
                             <div className="flex w-full flex-col gap-4 md:ml-auto md:flex-row">
                                 <LegacySelect
@@ -403,6 +442,12 @@ export default function GalleryIndex({
                                     size="sm"
                                     className="gap-2"
                                     onClick={() => requestDownload("web")}
+                                    disabled={selectionHasExpiredRights}
+                                    title={
+                                        selectionHasExpiredRights
+                                            ? "Une image sélectionnée a une cession expirée"
+                                            : "Télécharger la sélection en version web"
+                                    }
                                 >
                                     <Download className="h-4 w-4" />
                                     Version web
@@ -412,6 +457,12 @@ export default function GalleryIndex({
                                     size="sm"
                                     className="gap-2"
                                     onClick={() => requestDownload("hd")}
+                                    disabled={selectionHasExpiredRights}
+                                    title={
+                                        selectionHasExpiredRights
+                                            ? "Une image sélectionnée a une cession expirée"
+                                            : "Télécharger la sélection en HD"
+                                    }
                                 >
                                     <Download className="h-4 w-4" />
                                     HD impression
@@ -432,6 +483,12 @@ export default function GalleryIndex({
                                         variant="outline"
                                         size="sm"
                                         className="gap-2"
+                                        disabled={selectionHasExpiredRights}
+                                        title={
+                                            selectionHasExpiredRights
+                                                ? "Une image sélectionnée a une cession expirée"
+                                                : "Créer un album partagé"
+                                        }
                                         onClick={() => {
                                             setShareName(
                                                 selectedImageItems.length === 1
@@ -472,6 +529,7 @@ export default function GalleryIndex({
                 image={detailImage}
                 onClose={() => setDetailImage(null)}
                 onTagClick={filterByTag}
+                onRightsExtensionRequest={requestRightsExtension}
             />
             <Dialog open={bulkProjectOpen} onOpenChange={setBulkProjectOpen}>
                 <DialogContent className="max-w-lg">

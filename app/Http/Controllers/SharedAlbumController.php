@@ -35,6 +35,7 @@ class SharedAlbumController extends Controller
 
         abort_unless($images->count() === count(array_unique($data['image_ids'])), 422);
         abort_unless($images->every(fn (Image $image) => $this->projectAccess->userCanViewImage($request->user(), $image)), 403);
+        abort_if($images->contains(fn (Image $image) => $image->rightsAreExpired()), 422);
 
         $album = SharedAlbum::create([
             'client_id' => $this->singleClientId($images),
@@ -115,7 +116,13 @@ class SharedAlbumController extends Controller
         $zip = new ZipArchive;
         abort_unless($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true, 500);
 
-        $album->images->each(function (Image $image, int $index) use ($zip): void {
+        $added = 0;
+
+        $album->images->each(function (Image $image, int $index) use ($zip, &$added): void {
+            if ($image->rightsAreExpired()) {
+                return;
+            }
+
             $source = $this->imageUrls->downloadSource($image, 'web');
             $objectKey = $source['objectKey'];
 
@@ -135,9 +142,11 @@ class SharedAlbumController extends Controller
                 .'.'.$extension;
 
             $zip->addFromString($filename, $disk->get($objectKey));
+            $added++;
         });
 
         $zip->close();
+        abort_if($added === 0, 404);
 
         return response()
             ->download($zipPath, (Str::slug($album->name) ?: 'album-partage').'.zip')

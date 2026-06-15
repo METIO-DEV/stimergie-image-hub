@@ -87,6 +87,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/images', [AppPageController::class, 'images'])->name('images.index');
     Route::get('/imports', [AppPageController::class, 'imports'])->name('imports.index');
     Route::get('/images/{image}/download', [ImageController::class, 'download'])->name('images.download');
+    Route::post('/images/{image}/rights-extension', [ImageController::class, 'requestRightsExtension'])->name('images.rights-extension');
     Route::post('/images/analyze-tags', [ImageAnalysisController::class, 'upload'])->name('images.analyze-tags');
     Route::post('/images/{image}/analyze-tags', [ImageAnalysisController::class, 'image'])->name('images.analyze-tags.existing');
     Route::post('/images', [ImageController::class, 'store'])->name('images.store');
