@@ -309,9 +309,9 @@ export default function GalleryIndex({
         <AuthenticatedLayout>
             <Head title="Banque d'images" />
 
-            <main className="w-screen flex-grow px-0">
+            <main className="min-w-0 flex-grow overflow-x-hidden px-0">
                 <section className="border-b border-border bg-[#dcd0bb]">
-                    <div className="mx-auto max-w-7xl px-6 py-10">
+                    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
                         <div className="mb-6 text-center">
                             <h1 className="mb-3 break-words text-2xl font-bold leading-tight sm:text-3xl">
                                 Banque d'images
@@ -324,7 +324,7 @@ export default function GalleryIndex({
                             </p>
                         </div>
 
-                        <div className="flex flex-col gap-4 md:flex-row md:items-center">
+                        <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(18rem,1fr)_minmax(0,2fr)] lg:items-center">
                             <LegacySearch
                                 value={search}
                                 onChange={(value) => {
@@ -332,10 +332,10 @@ export default function GalleryIndex({
                                     setCurrentPage(1);
                                 }}
                                 suggestions={searchSuggestions}
-                                className="md:max-w-sm"
+                                className="min-w-0 lg:max-w-sm"
                                 onFocusChange={setSearchFocused}
                             />
-                            <div className="flex w-full flex-col gap-4 md:ml-auto md:flex-row">
+                            <div className="grid w-full min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                                 <LegacySelect
                                     value={orientation}
                                     onChange={(value) => {
@@ -348,7 +348,7 @@ export default function GalleryIndex({
                                         { id: "portrait", name: "Portrait" },
                                         { id: "square", name: "Carré" },
                                     ]}
-                                    className="w-full md:w-64"
+                                    className="min-w-0"
                                 />
                                 <LegacySelect
                                     value={clientId}
@@ -359,7 +359,7 @@ export default function GalleryIndex({
                                     }}
                                     allLabel="Toutes les entreprises"
                                     options={filters.clients}
-                                    className="w-full md:w-64"
+                                    className="min-w-0"
                                 />
                                 <LegacySelect
                                     value={projectId}
@@ -369,14 +369,14 @@ export default function GalleryIndex({
                                     }}
                                     allLabel="Tous les projets"
                                     options={projects}
-                                    className="w-full md:w-64"
+                                    className="min-w-0 sm:col-span-2 xl:col-span-1"
                                 />
                             </div>
                         </div>
                     </div>
                 </section>
 
-                <div className="flex items-center justify-between px-4 pb-2 pt-[10px]">
+                <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-2 pt-[10px]">
                     <div className="flex items-center gap-2">
                         <button
                             type="button"
@@ -421,7 +421,7 @@ export default function GalleryIndex({
                             </button>
                         </div>
                     )}
-                    <div className="mb-4 flex items-center justify-between px-0">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 px-4">
                         <Button
                             variant="outline"
                             size="sm"
@@ -430,13 +430,13 @@ export default function GalleryIndex({
                                     paginatedImages.map((image) => image.id),
                                 )
                             }
-                            className="gap-2 rounded-r-md rounded-l-none"
+                            className="gap-2"
                         >
                             <SquareCheck className="h-4 w-4" />
                             Tout sélectionner
                         </Button>
                         {selectedImages.length > 0 && (
-                            <div className="flex flex-wrap items-center justify-end gap-2">
+                            <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
                                 <Button
                                     variant="outline"
                                     size="sm"
