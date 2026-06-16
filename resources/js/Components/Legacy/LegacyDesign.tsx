@@ -172,6 +172,7 @@ export function LegacySearch({
     value,
     onChange,
     placeholder = "Recherchez des images...",
+    suggestions = [],
     className,
     onFocusChange,
     onSubmit,
@@ -179,24 +180,63 @@ export function LegacySearch({
     value: string;
     onChange: (value: string) => void;
     placeholder?: string;
+    suggestions?: string[];
     className?: string;
     onFocusChange?: (focused: boolean) => void;
     onSubmit?: (value: string) => void;
 }) {
+    const [open, setOpen] = useState(false);
+    const trimmedValue = value.trim().toLowerCase();
+    const visibleSuggestions = useMemo(
+        () =>
+            trimmedValue
+                ? suggestions
+                      .filter((suggestion) =>
+                          suggestion.toLowerCase().includes(trimmedValue),
+                      )
+                      .filter(
+                          (suggestion) =>
+                              suggestion.toLowerCase() !== trimmedValue,
+                      )
+                      .slice(0, 6)
+                : [],
+        [suggestions, trimmedValue],
+    );
+    const showSuggestions = open && visibleSuggestions.length > 0;
+
+    const chooseSuggestion = (suggestion: string) => {
+        onChange(suggestion);
+        setOpen(false);
+        onFocusChange?.(false);
+        onSubmit?.(suggestion);
+    };
+
     return (
         <div className={cn("relative w-full", className)}>
             <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
                 value={value}
-                onChange={(event) => onChange(event.target.value)}
-                onFocus={() => onFocusChange?.(true)}
-                onBlur={() => onFocusChange?.(false)}
+                onChange={(event) => {
+                    onChange(event.target.value);
+                    setOpen(true);
+                }}
+                onFocus={() => {
+                    setOpen(true);
+                    onFocusChange?.(true);
+                }}
+                onBlur={() => {
+                    window.setTimeout(() => setOpen(false), 120);
+                    onFocusChange?.(false);
+                }}
                 placeholder={placeholder}
                 autoComplete="off"
                 onKeyDown={(event) => {
                     if (event.key === "Enter") {
                         event.preventDefault();
+                        setOpen(false);
                         onSubmit?.(value);
+                    } else if (event.key === "Escape") {
+                        setOpen(false);
                     }
                 }}
                 className="h-10 w-full rounded-full border border-border/60 bg-background/85 px-11 text-base outline-none transition focus:border-primary/40 focus:bg-background focus:ring-2 focus:ring-primary/20 sm:text-sm"
@@ -210,6 +250,21 @@ export function LegacySearch({
             >
                 <Search className="h-4 w-4" />
             </Button>
+            {showSuggestions && (
+                <div className="absolute left-0 right-0 top-full z-40 mt-2 overflow-hidden rounded-md border border-border bg-background text-sm shadow-lg">
+                    {visibleSuggestions.map((suggestion) => (
+                        <button
+                            key={suggestion}
+                            type="button"
+                            className="block w-full truncate px-4 py-2 text-left font-medium text-foreground transition hover:bg-muted focus:bg-muted focus:outline-none"
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => chooseSuggestion(suggestion)}
+                        >
+                            {suggestion}
+                        </button>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

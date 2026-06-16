@@ -149,6 +149,24 @@ export default function GalleryIndex({
         tag.trim() !== "" ||
         dateFrom !== "" ||
         dateTo !== "";
+    const searchSuggestions = useMemo(
+        () =>
+            [
+                ...filters.clients.map((client) => client.name),
+                ...filters.projects.map((project) => project.name),
+                ...filters.tags.map((tag) => tag.name),
+            ]
+                .filter(Boolean)
+                .filter(
+                    (value, index, values) =>
+                        values.findIndex(
+                            (candidate) =>
+                                candidate.toLowerCase() === value.toLowerCase(),
+                        ) === index,
+                )
+                .slice(0, 120),
+        [filters.clients, filters.projects, filters.tags],
+    );
     const resetFilters = () => {
         setSearch("");
         setOrientation("");
@@ -519,6 +537,7 @@ export default function GalleryIndex({
                                         setSearch(value);
                                         setCurrentPage(1);
                                     }}
+                                    suggestions={searchSuggestions}
                                     className="min-w-0"
                                     onFocusChange={setSearchFocused}
                                     onSubmit={submitSearch}
