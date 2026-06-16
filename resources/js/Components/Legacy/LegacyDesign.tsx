@@ -151,7 +151,7 @@ export function LegacySelect({
             )}
             <div className="relative min-w-0">
                 <select
-                    className="h-10 w-full truncate rounded-full border border-border/60 bg-background/80 px-4 pr-10 text-base outline-none appearance-none transition focus:border-primary/40 focus:bg-background focus:ring-2 focus:ring-primary/20 sm:text-sm"
+                    className="h-10 w-full truncate rounded-full border border-border/60 bg-background/80 bg-none px-4 pr-10 text-base outline-none appearance-none transition [background-image:none] focus:border-primary/40 focus:bg-background focus:ring-2 focus:ring-primary/20 sm:text-sm"
                     value={value}
                     onChange={(event) => onChange(event.target.value)}
                 >
