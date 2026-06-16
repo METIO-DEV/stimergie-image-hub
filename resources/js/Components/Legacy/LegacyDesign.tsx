@@ -37,7 +37,6 @@ import {
     ReactNode,
     memo,
     useEffect,
-    useId,
     useMemo,
     useRef,
     useState,
@@ -173,19 +172,17 @@ export function LegacySearch({
     value,
     onChange,
     placeholder = "Recherchez des images...",
-    suggestions = [],
     className,
     onFocusChange,
+    onSubmit,
 }: {
     value: string;
     onChange: (value: string) => void;
     placeholder?: string;
-    suggestions?: string[];
     className?: string;
     onFocusChange?: (focused: boolean) => void;
+    onSubmit?: (value: string) => void;
 }) {
-    const suggestionsId = useId();
-
     return (
         <div className={cn("relative w-full", className)}>
             <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -195,20 +192,21 @@ export function LegacySearch({
                 onFocus={() => onFocusChange?.(true)}
                 onBlur={() => onFocusChange?.(false)}
                 placeholder={placeholder}
-                list={suggestions.length > 0 ? suggestionsId : undefined}
+                autoComplete="off"
+                onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                        event.preventDefault();
+                        onSubmit?.(value);
+                    }
+                }}
                 className="h-11 w-full rounded-full border border-border bg-muted px-11 text-sm outline-none focus:ring-2 focus:ring-primary/30"
             />
-            {suggestions.length > 0 && (
-                <datalist id={suggestionsId}>
-                    {suggestions.map((suggestion) => (
-                        <option key={suggestion} value={suggestion} />
-                    ))}
-                </datalist>
-            )}
             <Button
                 type="button"
                 size="icon"
                 className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2 rounded-full"
+                onClick={() => onSubmit?.(value)}
+                title="Rechercher"
             >
                 <Search className="h-4 w-4" />
             </Button>

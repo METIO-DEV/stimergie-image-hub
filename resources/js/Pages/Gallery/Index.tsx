@@ -69,6 +69,8 @@ type Props = {
 };
 
 const PAGE_SIZE = 100;
+const SEARCH_DEBOUNCE_MS = 700;
+const FILTER_DEBOUNCE_MS = 350;
 
 export default function GalleryIndex({
     images,
@@ -107,6 +109,16 @@ export default function GalleryIndex({
     const [shareMessage, setShareMessage] = useState("");
     const [shareStartsAt, setShareStartsAt] = useState("");
     const [shareExpiresAt, setShareExpiresAt] = useState("");
+    const pendingFilterRequest = useRef<number | null>(null);
+    const previousFilterState = useRef({
+        search,
+        orientation,
+        clientId,
+        projectId,
+        tag,
+        dateFrom,
+        dateTo,
+    });
 
     const projects = useMemo(
         () =>
@@ -137,25 +149,6 @@ export default function GalleryIndex({
         tag.trim() !== "" ||
         dateFrom !== "" ||
         dateTo !== "";
-    const searchSuggestions = useMemo(
-        () =>
-            [
-                ...filters.clients.map((client) => client.name),
-                ...filters.projects.map((project) => project.name),
-                ...filters.tags.map((tag) => tag.name),
-            ]
-                .filter(Boolean)
-                .filter(
-                    (value, index, values) =>
-                        values.findIndex(
-                            (candidate) =>
-                                candidate.toLowerCase() === value.toLowerCase(),
-                        ) === index,
-                )
-                .slice(0, 120),
-        [filters.clients, filters.projects, filters.tags],
-    );
-
     const resetFilters = () => {
         setSearch("");
         setOrientation("");
@@ -169,16 +162,48 @@ export default function GalleryIndex({
 
     const filterParams = (
         nextPage = 1,
+        overrides: Partial<{
+            search: string;
+            orientation: string;
+            clientId: string;
+            projectId: string;
+            tag: string;
+            dateFrom: string;
+            dateTo: string;
+        }> = {},
     ): Record<string, string | number | undefined> => ({
-        search: search.trim() || undefined,
-        orientation: orientation || undefined,
-        client_id: clientId || undefined,
-        project_id: projectId || undefined,
-        tag: tag.trim() || undefined,
-        date_from: dateFrom || undefined,
-        date_to: dateTo || undefined,
+        search: (overrides.search ?? search).trim() || undefined,
+        orientation: (overrides.orientation ?? orientation) || undefined,
+        client_id: (overrides.clientId ?? clientId) || undefined,
+        project_id: (overrides.projectId ?? projectId) || undefined,
+        tag: (overrides.tag ?? tag).trim() || undefined,
+        date_from: (overrides.dateFrom ?? dateFrom) || undefined,
+        date_to: (overrides.dateTo ?? dateTo) || undefined,
         page: nextPage > 1 ? nextPage : undefined,
     });
+
+    const clearPendingFilterRequest = () => {
+        if (pendingFilterRequest.current !== null) {
+            window.clearTimeout(pendingFilterRequest.current);
+            pendingFilterRequest.current = null;
+        }
+    };
+
+    const submitSearch = (nextSearch = search) => {
+        clearPendingFilterRequest();
+        setSearch(nextSearch);
+        setCurrentPage(1);
+        router.get(
+            route("gallery.index"),
+            filterParams(1, { search: nextSearch }),
+            {
+                preserveScroll: true,
+                preserveState: true,
+                replace: true,
+                only: ["images", "activeFilters", "pagination"],
+            },
+        );
+    };
 
     useEffect(() => {
         if (!searchFocused) {
@@ -210,7 +235,22 @@ export default function GalleryIndex({
             return;
         }
 
+        const nextFilterState = {
+            search,
+            orientation,
+            clientId,
+            projectId,
+            tag,
+            dateFrom,
+            dateTo,
+        };
+        const searchChanged =
+            previousFilterState.current.search !== nextFilterState.search;
+
+        previousFilterState.current = nextFilterState;
+
         const timeout = window.setTimeout(() => {
+            pendingFilterRequest.current = null;
             setCurrentPage(1);
             router.get(route("gallery.index"), filterParams(), {
                 preserveScroll: true,
@@ -218,9 +258,16 @@ export default function GalleryIndex({
                 replace: true,
                 only: ["images", "activeFilters", "pagination"],
             });
-        }, 350);
+        }, searchChanged ? SEARCH_DEBOUNCE_MS : FILTER_DEBOUNCE_MS);
 
-        return () => window.clearTimeout(timeout);
+        pendingFilterRequest.current = timeout;
+
+        return () => {
+            if (pendingFilterRequest.current === timeout) {
+                pendingFilterRequest.current = null;
+            }
+            window.clearTimeout(timeout);
+        };
     }, [clientId, dateFrom, dateTo, orientation, projectId, search, tag]);
 
     const handlePageChange = (page: number) => {
@@ -472,9 +519,9 @@ export default function GalleryIndex({
                                         setSearch(value);
                                         setCurrentPage(1);
                                     }}
-                                    suggestions={searchSuggestions}
                                     className="min-w-0"
                                     onFocusChange={setSearchFocused}
+                                    onSubmit={submitSearch}
                                 />
                                 <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
                                     <LegacySelect
