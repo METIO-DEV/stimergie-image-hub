@@ -22,6 +22,7 @@ import {
     Image,
     LayoutDashboard,
     LogOut,
+    Mail,
     Menu,
     Shield,
     User,
@@ -84,6 +85,7 @@ export default function Authenticated({
         {
             href: route("contact.index"),
             label: "Contacter",
+            icon: Mail,
             active: route().current("contact.index"),
         },
     ];
@@ -204,7 +206,6 @@ export default function Authenticated({
 
                         <nav className="flex items-center gap-7">
                             {primaryNav.map((item) => {
-                                const Icon = item.icon;
                                 const isContact =
                                     item.href === route("contact.index");
 
@@ -222,7 +223,7 @@ export default function Authenticated({
                                         key={item.label}
                                         href={item.href}
                                         className={cn(
-                                            "inline-flex items-center gap-3 text-base font-semibold transition-colors hover:text-primary",
+                                            "inline-flex items-center text-base font-semibold transition-colors hover:text-primary",
                                             item.active
                                                 ? "text-primary"
                                                 : "text-foreground",
@@ -230,7 +231,6 @@ export default function Authenticated({
                                                 "pointer-events-none",
                                         )}
                                     >
-                                        {Icon && <Icon className="h-5 w-5" />}
                                         <span>{item.label}</span>
                                     </Link>
                                 );
@@ -276,6 +276,7 @@ export default function Authenticated({
                                             }}
                                             className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-foreground transition-colors hover:bg-primary/5 hover:text-primary"
                                         >
+                                            {Icon && <Icon className="h-4 w-4" />}
                                             {item.label}
                                         </button>
                                     ) : (
