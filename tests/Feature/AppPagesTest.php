@@ -572,6 +572,71 @@ class AppPagesTest extends TestCase
                 ->etc());
     }
 
+    public function test_gallery_can_filter_images_by_creation_date_range(): void
+    {
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $client = Client::create([
+            'name' => 'Client Dates',
+            'slug' => 'client-dates',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Dates',
+            'slug' => 'projet-dates',
+            'status' => 'active',
+        ]);
+
+        Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Image trop ancienne',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/client-dates/ancienne.jpg',
+            'created_at' => '2026-05-20 10:00:00',
+            'updated_at' => '2026-05-20 10:00:00',
+        ]);
+        $matchingImage = Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Image dans la periode',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/client-dates/periode.jpg',
+            'created_at' => '2026-06-10 10:00:00',
+            'updated_at' => '2026-06-10 10:00:00',
+        ]);
+        Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Image trop recente',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/client-dates/recente.jpg',
+            'created_at' => '2026-06-20 10:00:00',
+            'updated_at' => '2026-06-20 10:00:00',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('gallery.index', [
+                'date_from' => '2026-06-01',
+                'date_to' => '2026-06-15',
+            ]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Gallery/Index')
+                ->where('activeFilters.dateFrom', '2026-06-01')
+                ->where('activeFilters.dateTo', '2026-06-15')
+                ->where('pagination.total', 1)
+                ->has('images', 1)
+                ->where('images.0.id', $matchingImage->id)
+                ->etc());
+    }
+
     public function test_gallery_filters_cannot_escape_client_visibility(): void
     {
         $user = User::factory()->create(['status' => 'active']);

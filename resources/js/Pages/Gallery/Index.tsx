@@ -53,6 +53,8 @@ type Props = {
         clientId: string;
         projectId: string;
         tag: string;
+        dateFrom: string;
+        dateTo: string;
     };
     bulkProjects: FilterOption[];
     canAddImages: boolean;
@@ -83,6 +85,8 @@ export default function GalleryIndex({
     const [clientId, setClientId] = useState(activeFilters.clientId);
     const [projectId, setProjectId] = useState(activeFilters.projectId);
     const [tag, setTag] = useState(activeFilters.tag);
+    const [dateFrom, setDateFrom] = useState(activeFilters.dateFrom);
+    const [dateTo, setDateTo] = useState(activeFilters.dateTo);
     const [currentPage, setCurrentPage] = useState(pagination.currentPage);
     const [searchFocused, setSearchFocused] = useState(false);
     const [infiniteScroll, setInfiniteScroll] = useState(false);
@@ -151,6 +155,8 @@ export default function GalleryIndex({
         client_id: clientId || undefined,
         project_id: projectId || undefined,
         tag: tag.trim() || undefined,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
         page: nextPage > 1 ? nextPage : undefined,
     });
 
@@ -162,9 +168,13 @@ export default function GalleryIndex({
         setClientId(activeFilters.clientId);
         setProjectId(activeFilters.projectId);
         setTag(activeFilters.tag);
+        setDateFrom(activeFilters.dateFrom);
+        setDateTo(activeFilters.dateTo);
         setCurrentPage(pagination.currentPage);
     }, [
         activeFilters.clientId,
+        activeFilters.dateFrom,
+        activeFilters.dateTo,
         activeFilters.orientation,
         activeFilters.projectId,
         activeFilters.search,
@@ -191,7 +201,7 @@ export default function GalleryIndex({
         }, 350);
 
         return () => window.clearTimeout(timeout);
-    }, [clientId, orientation, projectId, search, tag]);
+    }, [clientId, dateFrom, dateTo, orientation, projectId, search, tag]);
 
     const handlePageChange = (page: number) => {
         setCurrentPage(page);
@@ -350,7 +360,7 @@ export default function GalleryIndex({
                                 className="min-w-0 lg:max-w-sm"
                                 onFocusChange={setSearchFocused}
                             />
-                            <div className="grid w-full min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                            <div className="grid w-full min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
                                 <LegacySelect
                                     value={orientation}
                                     onChange={(value) => {
@@ -386,6 +396,42 @@ export default function GalleryIndex({
                                     options={projects}
                                     className="min-w-0 sm:col-span-2 xl:col-span-1"
                                 />
+                                <div className="min-w-0">
+                                    <label
+                                        htmlFor="gallery-date-from"
+                                        className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[#150B0D]/70"
+                                    >
+                                        Depuis
+                                    </label>
+                                    <input
+                                        id="gallery-date-from"
+                                        type="date"
+                                        value={dateFrom}
+                                        onChange={(event) => {
+                                            setDateFrom(event.target.value);
+                                            setCurrentPage(1);
+                                        }}
+                                        className="h-11 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                                    />
+                                </div>
+                                <div className="min-w-0">
+                                    <label
+                                        htmlFor="gallery-date-to"
+                                        className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[#150B0D]/70"
+                                    >
+                                        Jusqu'au
+                                    </label>
+                                    <input
+                                        id="gallery-date-to"
+                                        type="date"
+                                        value={dateTo}
+                                        onChange={(event) => {
+                                            setDateTo(event.target.value);
+                                            setCurrentPage(1);
+                                        }}
+                                        className="h-11 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>

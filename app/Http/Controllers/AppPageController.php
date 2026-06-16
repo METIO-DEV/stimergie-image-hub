@@ -76,6 +76,8 @@ class AppPageController extends Controller
                 'clientId' => $galleryFilters['clientId'] ? (string) $galleryFilters['clientId'] : '',
                 'projectId' => $galleryFilters['projectId'] ? (string) $galleryFilters['projectId'] : '',
                 'tag' => $galleryFilters['tag'],
+                'dateFrom' => $galleryFilters['dateFrom'],
+                'dateTo' => $galleryFilters['dateTo'],
             ],
             'bulkProjects' => $this->manageableProjectOptions($user, $manageableClientIds),
             'canAddImages' => $this->canManageClientContent($user),
@@ -90,7 +92,7 @@ class AppPageController extends Controller
     }
 
     /**
-     * @return array{search: string, orientation: string, clientId: int|null, projectId: int|null, tag: string}
+     * @return array{search: string, orientation: string, clientId: int|null, projectId: int|null, tag: string, dateFrom: string, dateTo: string}
      */
     private function galleryFilters(Request $request): array
     {
@@ -102,6 +104,8 @@ class AppPageController extends Controller
             'clientId' => $request->query('client_id') ? max(1, (int) $request->query('client_id')) : null,
             'projectId' => $request->query('project_id') ? max(1, (int) $request->query('project_id')) : null,
             'tag' => trim((string) $request->query('tag', '')),
+            'dateFrom' => $this->dateFilter($request->query('date_from')),
+            'dateTo' => $this->dateFilter($request->query('date_to')),
         ];
     }
 
@@ -498,7 +502,7 @@ class AppPageController extends Controller
     }
 
     /**
-     * @param  array{search: string, orientation: string, clientId: int|null, projectId: int|null, tag: string}  $filters
+     * @param  array{search: string, orientation: string, clientId: int|null, projectId: int|null, tag: string, dateFrom: string, dateTo: string}  $filters
      */
     private function applyGalleryFilters($query, array $filters): void
     {
@@ -520,7 +524,16 @@ class AppPageController extends Controller
                 $tag = $filters['tag'];
 
                 $query->whereHas('tags', fn ($tags) => $tags->where('name', $tag));
-            });
+            })
+            ->when($filters['dateFrom'] !== '', fn ($query) => $query->whereDate('created_at', '>=', $filters['dateFrom']))
+            ->when($filters['dateTo'] !== '', fn ($query) => $query->whereDate('created_at', '<=', $filters['dateTo']));
+    }
+
+    private function dateFilter(mixed $value): string
+    {
+        $value = trim((string) $value);
+
+        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) ? $value : '';
     }
 
     /**
