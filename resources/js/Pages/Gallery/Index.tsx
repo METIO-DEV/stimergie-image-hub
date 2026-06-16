@@ -781,7 +781,7 @@ export default function GalleryIndex({
 
                 <div
                     className={`mb-4 px-0 ${
-                        selectedImages.length > 0 ? "pb-28 md:pb-0" : ""
+                        selectedImages.length > 0 ? "pb-28 md:pb-24" : ""
                     }`}
                 >
                     {paginatedImages.length > 0 ? (
@@ -884,6 +884,92 @@ export default function GalleryIndex({
                             Lier la sélection à un projet
                         </Button>
                     )}
+                </div>
+            )}
+            {selectedImages.length > 0 && (
+                <div className="fixed inset-x-0 bottom-0 z-50 hidden border-t border-border bg-background/95 px-6 py-3 shadow-[0_-12px_30px_rgba(0,0,0,0.12)] backdrop-blur md:block">
+                    <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
+                        <div className="min-w-0">
+                            <div className="text-sm font-semibold">
+                                {selectedImages.length} image
+                                {selectedImages.length > 1 ? "s" : ""}{" "}
+                                sélectionnée
+                                {selectedImages.length > 1 ? "s" : ""}
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="gap-2"
+                                onClick={() => requestDownload("web")}
+                                disabled={selectionHasExpiredRights}
+                                title={
+                                    selectionHasExpiredRights
+                                        ? "Une image sélectionnée a une cession expirée"
+                                        : "Télécharger la sélection en version web"
+                                }
+                            >
+                                <Download className="h-4 w-4" />
+                                Version web
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="gap-2"
+                                onClick={() => requestDownload("hd")}
+                                disabled={selectionHasExpiredRights}
+                                title={
+                                    selectionHasExpiredRights
+                                        ? "Une image sélectionnée a une cession expirée"
+                                        : "Télécharger la sélection en HD"
+                                }
+                            >
+                                <Download className="h-4 w-4" />
+                                HD impression
+                            </Button>
+                            {selectionCanBeAssigned && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-2"
+                                    onClick={() => setBulkProjectOpen(true)}
+                                >
+                                    <FolderInput className="h-4 w-4" />
+                                    Lier à un projet
+                                </Button>
+                            )}
+                            {canCreateSharedAlbums && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-2"
+                                    disabled={selectionHasExpiredRights}
+                                    title={
+                                        selectionHasExpiredRights
+                                            ? "Une image sélectionnée a une cession expirée"
+                                            : "Créer un album partagé"
+                                    }
+                                    onClick={openShareDialog}
+                                >
+                                    <Share2 className="h-4 w-4" />
+                                    Partager
+                                </Button>
+                            )}
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setSelectedImages([])}
+                            >
+                                Effacer la sélection
+                            </Button>
+                        </div>
+                    </div>
                 </div>
             )}
 
