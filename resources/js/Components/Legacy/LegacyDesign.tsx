@@ -245,7 +245,10 @@ export function LegacySearch({
                 type="button"
                 size="icon"
                 className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 rounded-full"
-                onClick={() => onSubmit?.(value)}
+                onClick={() => {
+                    setOpen(false);
+                    onSubmit?.(value);
+                }}
                 title="Rechercher"
             >
                 <Search className="h-4 w-4" />

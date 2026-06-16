@@ -69,7 +69,6 @@ type Props = {
 };
 
 const PAGE_SIZE = 100;
-const SEARCH_DEBOUNCE_MS = 700;
 const FILTER_DEBOUNCE_MS = 350;
 
 export default function GalleryIndex({
@@ -110,15 +109,7 @@ export default function GalleryIndex({
     const [shareStartsAt, setShareStartsAt] = useState("");
     const [shareExpiresAt, setShareExpiresAt] = useState("");
     const pendingFilterRequest = useRef<number | null>(null);
-    const previousFilterState = useRef({
-        search,
-        orientation,
-        clientId,
-        projectId,
-        tag,
-        dateFrom,
-        dateTo,
-    });
+    const submittedSearch = useRef(activeFilters.search);
 
     const projects = useMemo(
         () =>
@@ -168,6 +159,8 @@ export default function GalleryIndex({
         [filters.clients, filters.projects, filters.tags],
     );
     const resetFilters = () => {
+        clearPendingFilterRequest();
+        submittedSearch.current = "";
         setSearch("");
         setOrientation("");
         setClientId("");
@@ -176,6 +169,24 @@ export default function GalleryIndex({
         setDateFrom("");
         setDateTo("");
         setCurrentPage(1);
+        router.get(
+            route("gallery.index"),
+            filterParams(1, {
+                search: "",
+                orientation: "",
+                clientId: "",
+                projectId: "",
+                tag: "",
+                dateFrom: "",
+                dateTo: "",
+            }),
+            {
+                preserveScroll: true,
+                preserveState: true,
+                replace: true,
+                only: ["images", "activeFilters", "pagination"],
+            },
+        );
     };
 
     const filterParams = (
@@ -190,7 +201,8 @@ export default function GalleryIndex({
             dateTo: string;
         }> = {},
     ): Record<string, string | number | undefined> => ({
-        search: (overrides.search ?? search).trim() || undefined,
+        search:
+            (overrides.search ?? submittedSearch.current).trim() || undefined,
         orientation: (overrides.orientation ?? orientation) || undefined,
         client_id: (overrides.clientId ?? clientId) || undefined,
         project_id: (overrides.projectId ?? projectId) || undefined,
@@ -209,6 +221,7 @@ export default function GalleryIndex({
 
     const submitSearch = (nextSearch = search) => {
         clearPendingFilterRequest();
+        submittedSearch.current = nextSearch;
         setSearch(nextSearch);
         setCurrentPage(1);
         router.get(
@@ -224,6 +237,8 @@ export default function GalleryIndex({
     };
 
     useEffect(() => {
+        submittedSearch.current = activeFilters.search;
+
         if (!searchFocused) {
             setSearch(activeFilters.search);
         }
@@ -253,20 +268,6 @@ export default function GalleryIndex({
             return;
         }
 
-        const nextFilterState = {
-            search,
-            orientation,
-            clientId,
-            projectId,
-            tag,
-            dateFrom,
-            dateTo,
-        };
-        const searchChanged =
-            previousFilterState.current.search !== nextFilterState.search;
-
-        previousFilterState.current = nextFilterState;
-
         const timeout = window.setTimeout(() => {
             pendingFilterRequest.current = null;
             setCurrentPage(1);
@@ -276,7 +277,7 @@ export default function GalleryIndex({
                 replace: true,
                 only: ["images", "activeFilters", "pagination"],
             });
-        }, searchChanged ? SEARCH_DEBOUNCE_MS : FILTER_DEBOUNCE_MS);
+        }, FILTER_DEBOUNCE_MS);
 
         pendingFilterRequest.current = timeout;
 
@@ -286,7 +287,7 @@ export default function GalleryIndex({
             }
             window.clearTimeout(timeout);
         };
-    }, [clientId, dateFrom, dateTo, orientation, projectId, search, tag]);
+    }, [clientId, dateFrom, dateTo, orientation, projectId, tag]);
 
     const handlePageChange = (page: number) => {
         setCurrentPage(page);
@@ -533,10 +534,7 @@ export default function GalleryIndex({
                             <div className="grid gap-1.5 lg:grid-cols-[minmax(16rem,1fr)_minmax(0,2fr)_auto] lg:items-center">
                                 <LegacySearch
                                     value={search}
-                                    onChange={(value) => {
-                                        setSearch(value);
-                                        setCurrentPage(1);
-                                    }}
+                                    onChange={setSearch}
                                     suggestions={searchSuggestions}
                                     className="min-w-0"
                                     onFocusChange={setSearchFocused}
