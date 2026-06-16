@@ -421,12 +421,12 @@ export default function GalleryIndex({
                                     </h1>
                                     <details className="group relative shrink-0">
                                         <summary
-                                            className="flex h-7 w-7 cursor-pointer list-none items-center justify-center rounded-full border border-[#150B0D]/20 bg-background/70 text-[#150B0D]/70 transition hover:bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 [&::-webkit-details-marker]:hidden"
+                                            className="flex h-5 w-5 cursor-pointer list-none items-center justify-center rounded-full text-[#150B0D]/45 transition hover:bg-[#150B0D]/5 hover:text-[#150B0D]/75 focus:outline-none focus:ring-2 focus:ring-primary/25 [&::-webkit-details-marker]:hidden"
                                             aria-label="Aide sur la banque d'images"
                                         >
-                                            <Info className="h-4 w-4" />
+                                            <Info className="h-3.5 w-3.5" />
                                         </summary>
-                                        <div className="absolute left-0 z-30 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-md border border-border bg-background p-3 text-sm leading-6 text-foreground shadow-lg sm:left-auto sm:right-0">
+                                        <div className="absolute left-1/2 z-30 mt-2 w-[min(20rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] origin-top -translate-x-1/2 break-words rounded-md border border-border bg-background p-3 text-sm leading-6 text-foreground shadow-lg motion-safe:group-open:animate-in motion-safe:group-open:fade-in-0 motion-safe:group-open:zoom-in-95 motion-safe:group-open:slide-in-from-top-1 motion-safe:group-open:duration-150 sm:left-auto sm:right-0 sm:translate-x-0">
                                             Bonjour {user?.name}, cette galerie
                                             vous propose l'ensemble des photos
                                             créées pour vos projets. Filtrez,

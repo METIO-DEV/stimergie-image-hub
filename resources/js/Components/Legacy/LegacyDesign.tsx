@@ -199,7 +199,7 @@ export function LegacySearch({
                         onSubmit?.(value);
                     }
                 }}
-                className="h-11 w-full rounded-full border border-border bg-muted px-11 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                className="h-11 w-full rounded-full border border-border bg-muted px-11 text-base outline-none focus:ring-2 focus:ring-primary/30 sm:text-sm"
             />
             <Button
                 type="button"
