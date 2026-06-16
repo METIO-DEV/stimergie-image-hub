@@ -669,7 +669,7 @@ export default function GalleryIndex({
                                         </button>
                                     )}
                                     {selectedImages.length > 0 && (
-                                        <span className="inline-flex items-center rounded-full border border-border bg-background px-3 py-1 text-sm font-medium md:hidden">
+                                        <span className="inline-flex items-center rounded-full border border-border bg-background px-3 py-1 text-sm font-medium">
                                             {selectedImages.length} image
                                             {selectedImages.length > 1
                                                 ? "s"
@@ -679,90 +679,6 @@ export default function GalleryIndex({
                                                 ? "s"
                                                 : ""}
                                         </span>
-                                    )}
-                                    {selectedImages.length > 0 && (
-                                        <div className="ml-auto hidden flex-wrap items-center justify-end gap-2 md:flex">
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="gap-2"
-                                                onClick={() =>
-                                                    requestDownload("web")
-                                                }
-                                                disabled={
-                                                    selectionHasExpiredRights
-                                                }
-                                                title={
-                                                    selectionHasExpiredRights
-                                                        ? "Une image sélectionnée a une cession expirée"
-                                                        : "Télécharger la sélection en version web"
-                                                }
-                                            >
-                                                <Download className="h-4 w-4" />
-                                                Version web
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="gap-2"
-                                                onClick={() =>
-                                                    requestDownload("hd")
-                                                }
-                                                disabled={
-                                                    selectionHasExpiredRights
-                                                }
-                                                title={
-                                                    selectionHasExpiredRights
-                                                        ? "Une image sélectionnée a une cession expirée"
-                                                        : "Télécharger la sélection en HD"
-                                                }
-                                            >
-                                                <Download className="h-4 w-4" />
-                                                HD impression
-                                            </Button>
-                                            {selectionCanBeAssigned && (
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="gap-2"
-                                                    onClick={() =>
-                                                        setBulkProjectOpen(true)
-                                                    }
-                                                >
-                                                    <FolderInput className="h-4 w-4" />
-                                                    Lier à un projet
-                                                </Button>
-                                            )}
-                                            {canCreateSharedAlbums && (
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="gap-2"
-                                                    disabled={
-                                                        selectionHasExpiredRights
-                                                    }
-                                                    title={
-                                                        selectionHasExpiredRights
-                                                            ? "Une image sélectionnée a une cession expirée"
-                                                            : "Créer un album partagé"
-                                                    }
-                                                    onClick={openShareDialog}
-                                                >
-                                                    <Share2 className="h-4 w-4" />
-                                                    Partager
-                                                </Button>
-                                            )}
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() =>
-                                                    setSelectedImages([])
-                                                }
-                                            >
-                                                Effacer (
-                                                {selectedImages.length})
-                                            </Button>
-                                        </div>
                                     )}
                                 </div>
                             )}
