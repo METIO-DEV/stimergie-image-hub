@@ -808,7 +808,7 @@ export default function GalleryIndex({
                 )}
             </main>
             {selectedImages.length > 0 && (
-                <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/95 px-3 py-2 shadow-[0_-12px_30px_rgba(0,0,0,0.12)] backdrop-blur md:hidden">
+                <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/95 px-3 py-2 shadow-[0_-12px_30px_rgba(0,0,0,0.12)] backdrop-blur motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-4 motion-safe:duration-200 md:hidden">
                     <div className="mx-auto flex max-w-md items-center gap-2">
                         <div className="flex h-12 min-w-12 flex-col items-center justify-center rounded-md bg-primary text-primary-foreground">
                             <span className="text-base font-bold leading-none">
@@ -887,7 +887,7 @@ export default function GalleryIndex({
                 </div>
             )}
             {selectedImages.length > 0 && (
-                <div className="fixed inset-x-0 bottom-0 z-50 hidden border-t border-border bg-background/95 px-6 py-3 shadow-[0_-12px_30px_rgba(0,0,0,0.12)] backdrop-blur md:block">
+                <div className="fixed inset-x-0 bottom-0 z-50 hidden border-t border-border bg-background/95 px-6 py-3 shadow-[0_-12px_30px_rgba(0,0,0,0.12)] backdrop-blur motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-4 motion-safe:duration-200 md:block">
                     <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
                         <div className="min-w-0">
                             <div className="text-sm font-semibold">
