@@ -96,6 +96,9 @@ export default function GalleryIndex({
     const [selectedImages, setSelectedImages] = useState<
         Array<string | number>
     >([]);
+    const [selectionDockVisible, setSelectionDockVisible] = useState(false);
+    const [selectionDockClosing, setSelectionDockClosing] = useState(false);
+    const [selectionDockCount, setSelectionDockCount] = useState(0);
     const [detailImage, setDetailImage] = useState<LegacyImage | null>(null);
     const [editingImage, setEditingImage] = useState<LegacyImage | null>(null);
     const [imageModalOpen, setImageModalOpen] = useState(false);
@@ -128,6 +131,7 @@ export default function GalleryIndex({
         (image) => image.rightsStatus === "expired",
     );
     const selectionCanBeAssigned =
+        selectedImages.length > 0 &&
         canBulkAssignImages &&
         selectedImageItems.length === selectedImages.length &&
         selectedImageItems.every((image) => image.canManage);
@@ -260,6 +264,30 @@ export default function GalleryIndex({
         pagination.currentPage,
         searchFocused,
     ]);
+
+    useEffect(() => {
+        if (selectedImages.length > 0) {
+            setSelectionDockCount(selectedImages.length);
+            setSelectionDockVisible(true);
+            setSelectionDockClosing(false);
+
+            return;
+        }
+
+        if (!selectionDockVisible) {
+            return;
+        }
+
+        setSelectionDockClosing(true);
+
+        const timeout = window.setTimeout(() => {
+            setSelectionDockVisible(false);
+            setSelectionDockClosing(false);
+            setSelectionDockCount(0);
+        }, 300);
+
+        return () => window.clearTimeout(timeout);
+    }, [selectedImages.length, selectionDockVisible]);
 
     useEffect(() => {
         if (!didMount.current) {
@@ -424,6 +452,12 @@ export default function GalleryIndex({
             },
         );
     };
+
+    const selectionDockAnimationClass = selectionDockClosing
+        ? "pointer-events-none motion-safe:animate-out motion-safe:fade-out-0 motion-safe:slide-out-to-bottom-4 motion-safe:duration-300"
+        : "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-4 motion-safe:duration-300";
+    const selectionDisplayCount =
+        selectedImages.length > 0 ? selectedImages.length : selectionDockCount;
 
     return (
         <AuthenticatedLayout>
@@ -697,7 +731,7 @@ export default function GalleryIndex({
 
                 <div
                     className={`mb-4 px-0 ${
-                        selectedImages.length > 0 ? "pb-28 md:pb-24" : ""
+                        selectionDockVisible ? "pb-28 md:pb-24" : ""
                     }`}
                 >
                     {paginatedImages.length > 0 ? (
@@ -723,12 +757,14 @@ export default function GalleryIndex({
                     </div>
                 )}
             </main>
-            {selectedImages.length > 0 && (
-                <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/95 px-3 py-2 shadow-[0_-12px_30px_rgba(0,0,0,0.12)] backdrop-blur motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-4 motion-safe:duration-200 md:hidden">
+            {selectionDockVisible && (
+                <div
+                    className={`fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/95 px-3 py-2 shadow-[0_-12px_30px_rgba(0,0,0,0.12)] backdrop-blur md:hidden ${selectionDockAnimationClass}`}
+                >
                     <div className="mx-auto flex max-w-md items-center gap-2">
                         <div className="flex h-12 min-w-12 flex-col items-center justify-center rounded-md bg-primary text-primary-foreground">
                             <span className="text-base font-bold leading-none">
-                                {selectedImages.length}
+                                {selectionDisplayCount}
                             </span>
                             <span className="text-[0.65rem] font-medium leading-none">
                                 img
@@ -802,15 +838,17 @@ export default function GalleryIndex({
                     )}
                 </div>
             )}
-            {selectedImages.length > 0 && (
-                <div className="fixed inset-x-0 bottom-0 z-50 hidden border-t border-border bg-background/95 px-6 py-3 shadow-[0_-12px_30px_rgba(0,0,0,0.12)] backdrop-blur motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-4 motion-safe:duration-200 md:block">
+            {selectionDockVisible && (
+                <div
+                    className={`fixed inset-x-0 bottom-0 z-50 hidden border-t border-border bg-background/95 px-6 py-3 shadow-[0_-12px_30px_rgba(0,0,0,0.12)] backdrop-blur md:block ${selectionDockAnimationClass}`}
+                >
                     <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
                         <div className="min-w-0">
                             <div className="text-sm font-semibold">
-                                {selectedImages.length} image
-                                {selectedImages.length > 1 ? "s" : ""}{" "}
+                                {selectionDisplayCount} image
+                                {selectionDisplayCount > 1 ? "s" : ""}{" "}
                                 sélectionnée
-                                {selectedImages.length > 1 ? "s" : ""}
+                                {selectionDisplayCount > 1 ? "s" : ""}
                             </div>
                         </div>
                         <div className="flex flex-wrap items-center justify-end gap-2">
