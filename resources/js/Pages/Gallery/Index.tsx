@@ -16,11 +16,12 @@ import {
 } from "@/Components/Legacy/LegacyDesign";
 import { ImageEditModal } from "@/Components/Legacy/LegacyModals";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import { Head, router } from "@inertiajs/react";
+import { Head, router, usePage } from "@inertiajs/react";
 import {
     Download,
     FolderInput,
     Infinity,
+    Info,
     Plus,
     Share2,
     SquareCheck,
@@ -79,6 +80,7 @@ export default function GalleryIndex({
     canCreateSharedAlbums,
     pagination,
 }: Props) {
+    const user = usePage().props.auth.user;
     const [search, setSearch] = useState(activeFilters.search);
     const [orientation, setOrientation] = useState(activeFilters.orientation);
     const [clientId, setClientId] = useState(activeFilters.clientId);
@@ -366,9 +368,26 @@ export default function GalleryIndex({
                     <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6">
                         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                             <div className="min-w-0">
-                                <h1 className="break-words text-xl font-bold leading-tight sm:text-2xl">
-                                    Banque d'images
-                                </h1>
+                                <div className="flex min-w-0 items-center gap-2">
+                                    <h1 className="break-words text-xl font-bold leading-tight sm:text-2xl">
+                                        Banque d'images
+                                    </h1>
+                                    <details className="group relative shrink-0">
+                                        <summary
+                                            className="flex h-7 w-7 cursor-pointer list-none items-center justify-center rounded-full border border-[#150B0D]/20 bg-background/70 text-[#150B0D]/70 transition hover:bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 [&::-webkit-details-marker]:hidden"
+                                            aria-label="Aide sur la banque d'images"
+                                        >
+                                            <Info className="h-4 w-4" />
+                                        </summary>
+                                        <div className="absolute left-0 z-30 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-md border border-border bg-background p-3 text-sm leading-6 text-foreground shadow-lg sm:left-auto sm:right-0">
+                                            Bonjour {user?.name}, cette galerie
+                                            vous propose l'ensemble des photos
+                                            créées pour vos projets. Filtrez,
+                                            prévisualisez et téléchargez les
+                                            visuels disponibles.
+                                        </div>
+                                    </details>
+                                </div>
                                 <p className="mt-1 text-sm text-[#150B0D]/75">
                                     {pagination.total} image
                                     {pagination.total > 1 ? "s" : ""} visible
