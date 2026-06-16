@@ -90,6 +90,64 @@ class DownloadManagementTest extends TestCase
         $this->assertTrue($job->is_hd);
     }
 
+    public function test_download_archive_keeps_available_images_and_records_missing_sources(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        [$client, $project] = $this->clientAndProject('mixed-downloads');
+        $firstImage = $this->image($client, $project, [
+            'object_key_web' => 'images/web/first.jpg',
+        ]);
+        $missingImage = $this->image($client, $project, [
+            'object_key_web' => 'images/web/missing.jpg',
+        ]);
+        $lastImage = $this->image($client, $project, [
+            'object_key_web' => 'images/web/last.jpg',
+        ]);
+
+        Storage::disk('scaleway')->put('images/web/first.jpg', 'first-content');
+        Storage::disk('scaleway')->put('images/web/last.jpg', 'last-content');
+
+        $this->actingAs($admin)->post(route('downloads.store'), [
+            'variant' => 'web',
+            'image_ids' => [$firstImage->id, $missingImage->id, $lastImage->id],
+        ])->assertRedirect(route('downloads.index'));
+
+        $job = DownloadJob::query()->firstOrFail();
+        $tempZip = tempnam(sys_get_temp_dir(), 'download-test-');
+
+        file_put_contents($tempZip, Storage::disk('scaleway')->get($job->object_key));
+
+        $zip = new ZipArchive;
+        $zipOpened = false;
+
+        try {
+            $this->assertTrue($zip->open($tempZip));
+            $zipOpened = true;
+            $this->assertSame(2, $zip->numFiles);
+            $this->assertSame('001-matcha-latte.jpg', $zip->getNameIndex(0));
+            $this->assertSame('first-content', $zip->getFromIndex(0));
+            $this->assertSame('002-matcha-latte.jpg', $zip->getNameIndex(1));
+            $this->assertSame('last-content', $zip->getFromIndex(1));
+        } finally {
+            if ($zipOpened) {
+                $zip->close();
+            }
+
+            @unlink($tempZip);
+        }
+
+        $this->assertSame('ready', $job->status);
+        $this->assertSame(2, $job->image_count);
+        $this->assertSame([
+            ['id' => $missingImage->id, 'title' => 'Matcha Latte'],
+        ], $job->payload['skipped_images']);
+    }
+
     public function test_user_cannot_prepare_download_for_inaccessible_client_image(): void
     {
         Storage::fake('scaleway');

@@ -77,69 +77,150 @@ class PrepareDownloadArchive implements ShouldQueue
     ): array {
         $tempPath = tempnam(sys_get_temp_dir(), 'stimergie-download-');
         $zip = new ZipArchive;
+        $zipIsOpen = false;
+        $temporaryImagePaths = [];
 
         if ($tempPath === false || $zip->open($tempPath, ZipArchive::OVERWRITE) !== true) {
             throw new RuntimeException('Impossible de creer l archive ZIP.');
         }
 
-        $added = 0;
-        $skipped = [];
+        $zipIsOpen = true;
 
-        foreach ($images as $image) {
-            $source = $imageUrls->downloadSource($image, $variant);
+        try {
+            $added = 0;
+            $skipped = [];
 
-            if (! $source['objectKey'] || ! Storage::disk($source['disk'])->exists($source['objectKey'])) {
-                $skipped[] = ['id' => $image->id, 'title' => $image->title];
+            foreach ($images as $image) {
+                $source = $imageUrls->downloadSource($image, $variant);
 
-                continue;
+                if (! $source['objectKey'] || ! Storage::disk($source['disk'])->exists($source['objectKey'])) {
+                    $skipped[] = ['id' => $image->id, 'title' => $image->title];
+
+                    continue;
+                }
+
+                $temporaryImagePath = $this->copyObjectToTemporaryFile(
+                    $source['disk'],
+                    $source['objectKey'],
+                );
+                $temporaryImagePaths[] = $temporaryImagePath;
+
+                $addedToArchive = $zip->addFile(
+                    $temporaryImagePath,
+                    $this->archiveFilename($image, $variant, $added + 1, $imageUrls),
+                );
+
+                if (! $addedToArchive) {
+                    throw new RuntimeException("Impossible d ajouter l image {$image->id} a l archive ZIP.");
+                }
+
+                $added++;
             }
 
-            $zip->addFromString(
-                $this->archiveFilename($image, $variant, $added + 1, $imageUrls),
-                Storage::disk($source['disk'])->get($source['objectKey']),
+            if ($added === 0) {
+                throw new RuntimeException('Aucune image telechargeable trouvee.');
+            }
+
+            $archiveWasClosed = $zip->close();
+
+            $zipIsOpen = false;
+
+            if (! $archiveWasClosed) {
+                throw new RuntimeException('Impossible de finaliser l archive ZIP.');
+            }
+
+            $disk = (string) config('filesystems.image_disk', 'scaleway');
+            $objectKey = sprintf(
+                'downloads/%d/%s-%s.zip',
+                $job->user_id,
+                $variant,
+                Str::uuid(),
             );
-            $added++;
-        }
 
-        $zip->close();
+            $this->putArchive($disk, $objectKey, $tempPath);
 
-        if ($added === 0) {
+            return [
+                'objectKey' => $objectKey,
+                'downloadUrl' => $this->temporaryDownloadUrl($disk, $objectKey, now()->addDays(7)),
+                'imageCount' => $added,
+                'skippedImages' => $skipped,
+            ];
+        } finally {
+            if ($zipIsOpen) {
+                $zip->close();
+            }
+
+            foreach ($temporaryImagePaths as $temporaryImagePath) {
+                @unlink($temporaryImagePath);
+            }
+
             @unlink($tempPath);
-            throw new RuntimeException('Aucune image telechargeable trouvee.');
+        }
+    }
+
+    private function copyObjectToTemporaryFile(string $disk, string $objectKey): string
+    {
+        $sourceStream = Storage::disk($disk)->readStream($objectKey);
+
+        if ($sourceStream === false) {
+            throw new RuntimeException("Impossible de lire l image {$objectKey}.");
         }
 
-        $disk = (string) config('filesystems.image_disk', 'scaleway');
-        $objectKey = sprintf(
-            'downloads/%d/%s-%s.zip',
-            $job->user_id,
-            $variant,
-            Str::uuid(),
-        );
+        $temporaryImagePath = tempnam(sys_get_temp_dir(), 'stimergie-download-image-');
 
+        if ($temporaryImagePath === false) {
+            if (is_resource($sourceStream)) {
+                fclose($sourceStream);
+            }
+
+            throw new RuntimeException('Impossible de creer un fichier temporaire image.');
+        }
+
+        $targetStream = fopen($temporaryImagePath, 'w');
+
+        if ($targetStream === false) {
+            if (is_resource($sourceStream)) {
+                fclose($sourceStream);
+            }
+
+            @unlink($temporaryImagePath);
+
+            throw new RuntimeException('Impossible d ouvrir le fichier temporaire image.');
+        }
+
+        try {
+            if (stream_copy_to_stream($sourceStream, $targetStream) === false) {
+                throw new RuntimeException("Impossible de copier l image {$objectKey}.");
+            }
+        } finally {
+            if (is_resource($sourceStream)) {
+                fclose($sourceStream);
+            }
+
+            fclose($targetStream);
+        }
+
+        return $temporaryImagePath;
+    }
+
+    private function putArchive(string $disk, string $objectKey, string $tempPath): void
+    {
         $stream = fopen($tempPath, 'r');
 
         if ($stream === false) {
-            @unlink($tempPath);
             throw new RuntimeException('Impossible de lire l archive ZIP.');
         }
 
-        Storage::disk($disk)->put($objectKey, $stream, [
-            'visibility' => 'private',
-            'ContentType' => 'application/zip',
-        ]);
-
-        if (is_resource($stream)) {
-            fclose($stream);
+        try {
+            Storage::disk($disk)->put($objectKey, $stream, [
+                'visibility' => 'private',
+                'ContentType' => 'application/zip',
+            ]);
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
         }
-
-        @unlink($tempPath);
-
-        return [
-            'objectKey' => $objectKey,
-            'downloadUrl' => $this->temporaryDownloadUrl($disk, $objectKey, now()->addDays(7)),
-            'imageCount' => $added,
-            'skippedImages' => $skipped,
-        ];
     }
 
     private function archiveFilename(Image $image, string $variant, int $index, ImageUrlResolver $imageUrls): string
