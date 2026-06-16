@@ -321,6 +321,15 @@ export default function GalleryIndex({
         setImageModalOpen(true);
     };
 
+    const openShareDialog = () => {
+        setShareName(
+            selectedImageItems.length === 1
+                ? selectedImageItems[0].title
+                : `Sélection de ${selectedImages.length} images`,
+        );
+        setShareOpen(true);
+    };
+
     const createSharedAlbum = () => {
         router.post(
             route("shared-albums.store"),
@@ -533,7 +542,11 @@ export default function GalleryIndex({
                     />
                 )}
 
-                <div className="mb-4 px-0">
+                <div
+                    className={`mb-4 px-0 ${
+                        selectedImages.length > 0 ? "pb-28 md:pb-0" : ""
+                    }`}
+                >
                     {tag && (
                         <div className="mb-4 flex flex-wrap items-center gap-2 px-4 text-sm">
                             <span className="text-muted-foreground">
@@ -569,7 +582,7 @@ export default function GalleryIndex({
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    className="gap-2"
+                                    className="hidden gap-2 md:inline-flex"
                                     onClick={() => requestDownload("web")}
                                     disabled={selectionHasExpiredRights}
                                     title={
@@ -584,7 +597,7 @@ export default function GalleryIndex({
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    className="gap-2"
+                                    className="hidden gap-2 md:inline-flex"
                                     onClick={() => requestDownload("hd")}
                                     disabled={selectionHasExpiredRights}
                                     title={
@@ -600,7 +613,7 @@ export default function GalleryIndex({
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        className="gap-2"
+                                        className="hidden gap-2 md:inline-flex"
                                         onClick={() => setBulkProjectOpen(true)}
                                     >
                                         <FolderInput className="h-4 w-4" />
@@ -611,21 +624,14 @@ export default function GalleryIndex({
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        className="gap-2"
+                                        className="hidden gap-2 md:inline-flex"
                                         disabled={selectionHasExpiredRights}
                                         title={
                                             selectionHasExpiredRights
                                                 ? "Une image sélectionnée a une cession expirée"
                                                 : "Créer un album partagé"
                                         }
-                                        onClick={() => {
-                                            setShareName(
-                                                selectedImageItems.length === 1
-                                                    ? selectedImageItems[0].title
-                                                    : `Sélection de ${selectedImages.length} images`,
-                                            );
-                                            setShareOpen(true);
-                                        }}
+                                        onClick={openShareDialog}
                                     >
                                         <Share2 className="h-4 w-4" />
                                         Partager
@@ -634,6 +640,7 @@ export default function GalleryIndex({
                                 <Button
                                     variant="ghost"
                                     size="sm"
+                                    className="hidden md:inline-flex"
                                     onClick={() => setSelectedImages([])}
                                 >
                                     Effacer la sélection (
@@ -665,6 +672,86 @@ export default function GalleryIndex({
                     </div>
                 )}
             </main>
+            {selectedImages.length > 0 && (
+                <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/95 px-3 py-2 shadow-[0_-12px_30px_rgba(0,0,0,0.12)] backdrop-blur md:hidden">
+                    <div className="mx-auto flex max-w-md items-center gap-2">
+                        <div className="flex h-12 min-w-12 flex-col items-center justify-center rounded-md bg-primary text-primary-foreground">
+                            <span className="text-base font-bold leading-none">
+                                {selectedImages.length}
+                            </span>
+                            <span className="text-[0.65rem] font-medium leading-none">
+                                img
+                            </span>
+                        </div>
+                        <div className="grid flex-1 grid-cols-4 gap-1">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-12 flex-col gap-1 px-1 text-[0.65rem]"
+                                onClick={() => requestDownload("web")}
+                                disabled={selectionHasExpiredRights}
+                                title="Télécharger la sélection en version web"
+                            >
+                                <Download className="h-4 w-4" />
+                                Web
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-12 flex-col gap-1 px-1 text-[0.65rem]"
+                                onClick={() => requestDownload("hd")}
+                                disabled={selectionHasExpiredRights}
+                                title="Télécharger la sélection en HD"
+                            >
+                                <Download className="h-4 w-4" />
+                                HD
+                            </Button>
+                            {canCreateSharedAlbums ? (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-12 flex-col gap-1 px-1 text-[0.65rem]"
+                                    onClick={openShareDialog}
+                                    disabled={selectionHasExpiredRights}
+                                    title="Créer un album partagé"
+                                >
+                                    <Share2 className="h-4 w-4" />
+                                    Partage
+                                </Button>
+                            ) : (
+                                <span />
+                            )}
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-12 flex-col gap-1 px-1 text-[0.65rem]"
+                                onClick={() => setSelectedImages([])}
+                                title="Effacer la sélection"
+                            >
+                                <X className="h-4 w-4" />
+                                Fermer
+                            </Button>
+                        </div>
+                    </div>
+                    {selectionCanBeAssigned && (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="mx-auto mt-2 flex h-9 w-full max-w-md gap-2"
+                            onClick={() => setBulkProjectOpen(true)}
+                        >
+                            <FolderInput className="h-4 w-4" />
+                            Lier la sélection à un projet
+                        </Button>
+                    )}
+                </div>
+            )}
+
             <ImageInfoSheet
                 image={detailImage}
                 onClose={() => setDetailImage(null)}
