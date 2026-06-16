@@ -128,6 +128,14 @@ export default function GalleryIndex({
         selectedImageItems.length === selectedImages.length &&
         selectedImageItems.every((image) => image.canManage);
     const paginatedImages = images;
+    const hasActiveFilters =
+        search.trim() !== "" ||
+        orientation !== "" ||
+        clientId !== "" ||
+        projectId !== "" ||
+        tag.trim() !== "" ||
+        dateFrom !== "" ||
+        dateTo !== "";
     const searchSuggestions = useMemo(
         () =>
             [
@@ -146,6 +154,17 @@ export default function GalleryIndex({
                 .slice(0, 120),
         [filters.clients, filters.projects, filters.tags],
     );
+
+    const resetFilters = () => {
+        setSearch("");
+        setOrientation("");
+        setClientId("");
+        setProjectId("");
+        setTag("");
+        setDateFrom("");
+        setDateTo("");
+        setCurrentPage(1);
+    };
 
     const filterParams = (
         nextPage = 1,
@@ -349,18 +368,33 @@ export default function GalleryIndex({
                             </p>
                         </div>
 
-                        <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(18rem,1fr)_minmax(0,2fr)] lg:items-center">
-                            <LegacySearch
-                                value={search}
-                                onChange={(value) => {
-                                    setSearch(value);
-                                    setCurrentPage(1);
-                                }}
-                                suggestions={searchSuggestions}
-                                className="min-w-0 lg:max-w-sm"
-                                onFocusChange={setSearchFocused}
-                            />
-                            <div className="grid w-full min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                        <div className="mx-auto max-w-6xl space-y-4">
+                            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                                <LegacySearch
+                                    value={search}
+                                    onChange={(value) => {
+                                        setSearch(value);
+                                        setCurrentPage(1);
+                                    }}
+                                    suggestions={searchSuggestions}
+                                    className="min-w-0"
+                                    onFocusChange={setSearchFocused}
+                                />
+                                {hasActiveFilters && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-10 justify-center gap-2 lg:w-auto"
+                                        onClick={resetFilters}
+                                    >
+                                        <X className="h-4 w-4" />
+                                        Réinitialiser
+                                    </Button>
+                                )}
+                            </div>
+
+                            <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
                                 <LegacySelect
                                     value={orientation}
                                     onChange={(value) => {
@@ -373,7 +407,7 @@ export default function GalleryIndex({
                                         { id: "portrait", name: "Portrait" },
                                         { id: "square", name: "Carré" },
                                     ]}
-                                    className="min-w-0"
+                                    className="min-w-0 lg:col-span-2 xl:col-span-1"
                                 />
                                 <LegacySelect
                                     value={clientId}
@@ -384,7 +418,7 @@ export default function GalleryIndex({
                                     }}
                                     allLabel="Toutes les entreprises"
                                     options={filters.clients}
-                                    className="min-w-0"
+                                    className="min-w-0 lg:col-span-2 xl:col-span-1"
                                 />
                                 <LegacySelect
                                     value={projectId}
@@ -394,43 +428,45 @@ export default function GalleryIndex({
                                     }}
                                     allLabel="Tous les projets"
                                     options={projects}
-                                    className="min-w-0 sm:col-span-2 xl:col-span-1"
+                                    className="min-w-0 sm:col-span-2 lg:col-span-2 xl:col-span-2"
                                 />
-                                <div className="min-w-0">
-                                    <label
-                                        htmlFor="gallery-date-from"
-                                        className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[#150B0D]/70"
-                                    >
-                                        Depuis
-                                    </label>
-                                    <input
-                                        id="gallery-date-from"
-                                        type="date"
-                                        value={dateFrom}
-                                        onChange={(event) => {
-                                            setDateFrom(event.target.value);
-                                            setCurrentPage(1);
-                                        }}
-                                        className="h-11 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-                                    />
-                                </div>
-                                <div className="min-w-0">
-                                    <label
-                                        htmlFor="gallery-date-to"
-                                        className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[#150B0D]/70"
-                                    >
-                                        Jusqu'au
-                                    </label>
-                                    <input
-                                        id="gallery-date-to"
-                                        type="date"
-                                        value={dateTo}
-                                        onChange={(event) => {
-                                            setDateTo(event.target.value);
-                                            setCurrentPage(1);
-                                        }}
-                                        className="h-11 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-                                    />
+                                <div className="grid min-w-0 grid-cols-1 gap-3 sm:col-span-2 sm:grid-cols-2 lg:col-span-6 xl:col-span-2">
+                                    <div className="min-w-0">
+                                        <label
+                                            htmlFor="gallery-date-from"
+                                            className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[#150B0D]/70"
+                                        >
+                                            Depuis
+                                        </label>
+                                        <input
+                                            id="gallery-date-from"
+                                            type="date"
+                                            value={dateFrom}
+                                            onChange={(event) => {
+                                                setDateFrom(event.target.value);
+                                                setCurrentPage(1);
+                                            }}
+                                            className="h-11 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                                        />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <label
+                                            htmlFor="gallery-date-to"
+                                            className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[#150B0D]/70"
+                                        >
+                                            Jusqu'au
+                                        </label>
+                                        <input
+                                            id="gallery-date-to"
+                                            type="date"
+                                            value={dateTo}
+                                            onChange={(event) => {
+                                                setDateTo(event.target.value);
+                                                setCurrentPage(1);
+                                            }}
+                                            className="h-11 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         </div>
