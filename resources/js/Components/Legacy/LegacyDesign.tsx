@@ -28,6 +28,9 @@ import {
     Trash2,
     UserRound,
     Users,
+    RotateCcw,
+    ZoomIn,
+    ZoomOut,
 } from "lucide-react";
 import {
     ReactNode,
@@ -387,6 +390,14 @@ export function ImageInfoSheet({
     const imageSrc = image?.imageUrl || image?.thumbUrl || null;
     const rightsExpired = image?.rightsStatus === "expired";
     const rightsWarning = image?.rightsStatus === "expiring_soon";
+    const [zoom, setZoom] = useState(1);
+
+    useEffect(() => {
+        setZoom(1);
+    }, [image?.id]);
+
+    const zoomOut = () => setZoom((current) => Math.max(1, current - 0.25));
+    const zoomIn = () => setZoom((current) => Math.min(3, current + 0.25));
 
     return (
         <Sheet
@@ -408,16 +419,59 @@ export function ImageInfoSheet({
                     {image && (
                         <div className="mx-auto mt-8 max-w-6xl space-y-6">
                             {imageSrc ? (
-                                <div className="overflow-hidden rounded-md bg-muted">
-                                    <img
-                                        src={imageSrc}
-                                        alt={image.title}
-                                        className={cn(
-                                            "max-h-[70vh] w-full object-contain",
-                                            rightsExpired &&
-                                                "grayscale opacity-60",
-                                        )}
-                                    />
+                                <div className="space-y-2">
+                                    <div className="flex justify-end gap-1">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="icon"
+                                            className="h-8 w-8"
+                                            onClick={zoomOut}
+                                            disabled={zoom <= 1}
+                                            title="Réduire le zoom"
+                                            aria-label="Réduire le zoom"
+                                        >
+                                            <ZoomOut className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="icon"
+                                            className="h-8 w-8"
+                                            onClick={() => setZoom(1)}
+                                            disabled={zoom === 1}
+                                            title="Réinitialiser le zoom"
+                                            aria-label="Réinitialiser le zoom"
+                                        >
+                                            <RotateCcw className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="icon"
+                                            className="h-8 w-8"
+                                            onClick={zoomIn}
+                                            disabled={zoom >= 3}
+                                            title="Agrandir l'image"
+                                            aria-label="Agrandir l'image"
+                                        >
+                                            <ZoomIn className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                    <div className="max-h-[70vh] overflow-auto rounded-md bg-muted">
+                                        <img
+                                            src={imageSrc}
+                                            alt={image.title}
+                                            className={cn(
+                                                "mx-auto block h-auto max-w-none object-contain transition-[width]",
+                                                rightsExpired &&
+                                                    "grayscale opacity-60",
+                                            )}
+                                            style={{
+                                                width: `${zoom * 100}%`,
+                                            }}
+                                        />
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="flex h-72 items-center justify-center rounded-md bg-muted">
