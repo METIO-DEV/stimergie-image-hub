@@ -434,38 +434,56 @@ export default function GalleryIndex({
                                     <div className="min-w-0">
                                         <label
                                             htmlFor="gallery-date-from"
-                                            className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[#150B0D]/70"
+                                            className="sr-only"
                                         >
                                             Depuis
                                         </label>
-                                        <input
-                                            id="gallery-date-from"
-                                            type="date"
-                                            value={dateFrom}
-                                            onChange={(event) => {
-                                                setDateFrom(event.target.value);
-                                                setCurrentPage(1);
-                                            }}
-                                            className="h-11 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-                                        />
+                                        <div className="relative">
+                                            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                                                Depuis
+                                            </span>
+                                            <input
+                                                id="gallery-date-from"
+                                                type="date"
+                                                aria-label="Date de début"
+                                                title="Date de début"
+                                                value={dateFrom}
+                                                onChange={(event) => {
+                                                    setDateFrom(
+                                                        event.target.value,
+                                                    );
+                                                    setCurrentPage(1);
+                                                }}
+                                                className="h-11 w-full rounded-md border border-input bg-card px-3 pl-20 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                                            />
+                                        </div>
                                     </div>
                                     <div className="min-w-0">
                                         <label
                                             htmlFor="gallery-date-to"
-                                            className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[#150B0D]/70"
+                                            className="sr-only"
                                         >
                                             Jusqu'au
                                         </label>
-                                        <input
-                                            id="gallery-date-to"
-                                            type="date"
-                                            value={dateTo}
-                                            onChange={(event) => {
-                                                setDateTo(event.target.value);
-                                                setCurrentPage(1);
-                                            }}
-                                            className="h-11 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-                                        />
+                                        <div className="relative">
+                                            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                                                Jusqu'au
+                                            </span>
+                                            <input
+                                                id="gallery-date-to"
+                                                type="date"
+                                                aria-label="Date de fin"
+                                                title="Date de fin"
+                                                value={dateTo}
+                                                onChange={(event) => {
+                                                    setDateTo(
+                                                        event.target.value,
+                                                    );
+                                                    setCurrentPage(1);
+                                                }}
+                                                className="h-11 w-full rounded-md border border-input bg-card px-3 pl-24 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -635,6 +653,17 @@ export default function GalleryIndex({
                         <MasonryGrid images={[]} loadingSlots />
                     )}
                 </div>
+
+                {!infiniteScroll && (
+                    <div className="pb-8">
+                        <LegacyPagination
+                            totalCount={pagination.total}
+                            currentPage={currentPage}
+                            onPageChange={handlePageChange}
+                            pageSize={PAGE_SIZE}
+                        />
+                    </div>
+                )}
             </main>
             <ImageInfoSheet
                 image={detailImage}

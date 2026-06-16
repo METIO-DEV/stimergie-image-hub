@@ -16,6 +16,7 @@ import {
     ChevronLast,
     ChevronLeft,
     ChevronRight,
+    ChevronDown,
     Download,
     Folder,
     Grid2X2,
@@ -149,18 +150,21 @@ export function LegacySelect({
                     {label}
                 </label>
             )}
-            <select
-                className="h-11 w-full rounded-md border border-input bg-card px-3 text-base outline-none focus:ring-2 focus:ring-primary/30"
-                value={value}
-                onChange={(event) => onChange(event.target.value)}
-            >
-                <option value="">{allLabel}</option>
-                {options.map((option) => (
-                    <option key={option.id} value={String(option.id)}>
-                        {option.name}
-                    </option>
-                ))}
-            </select>
+            <div className="relative min-w-0">
+                <select
+                    className="h-11 w-full truncate rounded-md border border-input bg-card px-3 pr-10 text-base outline-none appearance-none focus:ring-2 focus:ring-primary/30"
+                    value={value}
+                    onChange={(event) => onChange(event.target.value)}
+                >
+                    <option value="">{allLabel}</option>
+                    {options.map((option) => (
+                        <option key={option.id} value={String(option.id)}>
+                            {option.name}
+                        </option>
+                    ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            </div>
         </div>
     );
 }
