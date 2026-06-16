@@ -101,4 +101,57 @@ class ImageManagementTest extends TestCase
         $this->assertStringStartsWith('photos/projet-image/', $image->object_key_original);
         $this->assertSame(['archive', 'matcha'], $image->tags()->orderBy('slug')->pluck('slug')->all());
     }
+
+    public function test_super_admin_can_update_image_tags_without_replacing_file(): void
+    {
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $client = Client::create([
+            'name' => 'Client Tags',
+            'slug' => 'client-tags',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Tags',
+            'slug' => 'projet-tags',
+            'status' => 'active',
+        ]);
+        $image = Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'created_by' => $admin->id,
+            'title' => 'Image a taguer',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/projet-tags/source.jpg',
+            'object_key_web' => 'photos/projet-tags/JPG/source.jpg',
+            'object_key_hd' => 'photos/projet-tags/source.jpg',
+        ]);
+
+        $this->actingAs($admin)->post(route('images.update', $image), [
+            'project_id' => $project->id,
+            'title' => $image->title,
+            'description' => '',
+            'orientation' => '',
+            'status' => 'ready',
+            'rights_starts_at' => '',
+            'rights_ends_at' => '',
+            'tags' => 'manuel, publication, client',
+            'tag_source' => 'manual',
+        ])->assertRedirect();
+
+        $image->refresh();
+
+        $this->assertSame('Image a taguer', $image->title);
+        $this->assertSame('manual', $image->metadata['tag_source']);
+        $this->assertSame([
+            'client',
+            'manuel',
+            'publication',
+        ], $image->tags()->orderBy('slug')->pluck('slug')->all());
+        $this->assertSame('photos/projet-tags/source.jpg', $image->object_key_original);
+    }
 }

@@ -375,11 +375,13 @@ export function ImageInfoSheet({
     image,
     onClose,
     onTagClick,
+    onEditTags,
     onRightsExtensionRequest,
 }: {
     image: LegacyImage | null;
     onClose: () => void;
     onTagClick?: (tag: string) => void;
+    onEditTags?: (image: LegacyImage) => void;
     onRightsExtensionRequest?: (image: LegacyImage) => void;
 }) {
     const imageSrc = image?.imageUrl || image?.thumbUrl || null;
@@ -565,8 +567,23 @@ export function ImageInfoSheet({
 
                             {image.tags && image.tags.length > 0 && (
                                 <div>
-                                    <div className="font-medium text-foreground">
-                                        Tags
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="font-medium text-foreground">
+                                            Tags
+                                        </div>
+                                        {image.canManage && onEditTags && (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() =>
+                                                    onEditTags(image)
+                                                }
+                                            >
+                                                <Pencil className="mr-2 h-4 w-4" />
+                                                Modifier les tags
+                                            </Button>
+                                        )}
                                     </div>
                                     <div className="mt-2 flex flex-wrap gap-2">
                                         {image.tags.map((tag) => (
@@ -596,6 +613,30 @@ export function ImageInfoSheet({
                                     </div>
                                 </div>
                             )}
+
+                            {(!image.tags || image.tags.length === 0) &&
+                                image.canManage &&
+                                onEditTags && (
+                                    <div className="rounded-md border border-dashed p-4">
+                                        <div className="font-medium text-foreground">
+                                            Tags
+                                        </div>
+                                        <p className="mt-1 text-sm text-muted-foreground">
+                                            Aucun tag n'est encore associé à
+                                            cette image.
+                                        </p>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="mt-3"
+                                            onClick={() => onEditTags(image)}
+                                        >
+                                            <Pencil className="mr-2 h-4 w-4" />
+                                            Ajouter des tags
+                                        </Button>
+                                    </div>
+                                )}
                         </div>
                     )}
                 </div>

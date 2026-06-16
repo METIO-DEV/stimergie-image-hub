@@ -14,6 +14,7 @@ import {
     LegacySelect,
     MasonryGrid,
 } from "@/Components/Legacy/LegacyDesign";
+import { ImageEditModal } from "@/Components/Legacy/LegacyModals";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, router, usePage } from "@inertiajs/react";
 import {
@@ -87,6 +88,8 @@ export default function GalleryIndex({
         Array<string | number>
     >([]);
     const [detailImage, setDetailImage] = useState<LegacyImage | null>(null);
+    const [editingImage, setEditingImage] = useState<LegacyImage | null>(null);
+    const [imageModalOpen, setImageModalOpen] = useState(false);
     const [bulkProjectOpen, setBulkProjectOpen] = useState(false);
     const [bulkProjectId, setBulkProjectId] = useState("");
     const [shareOpen, setShareOpen] = useState(false);
@@ -275,6 +278,15 @@ export default function GalleryIndex({
                 },
             },
         );
+    };
+
+    const editImageTags = (image: LegacyImage) => {
+        if (!image.canManage) {
+            return;
+        }
+
+        setEditingImage(image);
+        setImageModalOpen(true);
     };
 
     const createSharedAlbum = () => {
@@ -529,7 +541,21 @@ export default function GalleryIndex({
                 image={detailImage}
                 onClose={() => setDetailImage(null)}
                 onTagClick={filterByTag}
+                onEditTags={editImageTags}
                 onRightsExtensionRequest={requestRightsExtension}
+            />
+            <ImageEditModal
+                image={editingImage}
+                open={imageModalOpen}
+                projects={filters.projects}
+                clients={filters.clients}
+                onOpenChange={(open) => {
+                    setImageModalOpen(open);
+
+                    if (!open) {
+                        setEditingImage(null);
+                    }
+                }}
             />
             <Dialog open={bulkProjectOpen} onOpenChange={setBulkProjectOpen}>
                 <DialogContent className="max-w-lg">
