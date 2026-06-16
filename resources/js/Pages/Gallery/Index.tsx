@@ -16,7 +16,7 @@ import {
 } from "@/Components/Legacy/LegacyDesign";
 import { ImageEditModal } from "@/Components/Legacy/LegacyModals";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import { Head, router, usePage } from "@inertiajs/react";
+import { Head, router } from "@inertiajs/react";
 import {
     Download,
     FolderInput,
@@ -79,7 +79,6 @@ export default function GalleryIndex({
     canCreateSharedAlbums,
     pagination,
 }: Props) {
-    const user = usePage().props.auth.user;
     const [search, setSearch] = useState(activeFilters.search);
     const [orientation, setOrientation] = useState(activeFilters.orientation);
     const [clientId, setClientId] = useState(activeFilters.clientId);
@@ -364,21 +363,90 @@ export default function GalleryIndex({
 
             <main className="min-w-0 flex-grow overflow-x-hidden px-0">
                 <section className="border-b border-border bg-[#dcd0bb]">
-                    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
-                        <div className="mb-6 text-center">
-                            <h1 className="mb-3 break-words text-2xl font-bold leading-tight sm:text-3xl">
-                                Banque d'images
-                            </h1>
-                            <p className="mx-auto max-w-2xl text-sm leading-6 text-[#150B0D]">
-                                Bonjour {user?.name},
-                                cette galerie vous propose l'ensemble des photos
-                                créées pour vos projets. Filtrez, prévisualisez
-                                et téléchargez les visuels disponibles.
-                            </p>
+                    <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                            <div className="min-w-0">
+                                <h1 className="break-words text-xl font-bold leading-tight sm:text-2xl">
+                                    Banque d'images
+                                </h1>
+                                <p className="mt-1 text-sm text-[#150B0D]/75">
+                                    {pagination.total} image
+                                    {pagination.total > 1 ? "s" : ""} visible
+                                    {pagination.total > 1 ? "s" : ""} pour vos
+                                    projets
+                                </p>
+                            </div>
+                            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setInfiniteScroll(!infiniteScroll)
+                                    }
+                                    className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-medium shadow-sm transition hover:bg-muted sm:flex-none"
+                                    aria-pressed={infiniteScroll}
+                                >
+                                    <span
+                                        className={`relative h-5 w-9 rounded-full shadow-inner transition ${
+                                            infiniteScroll
+                                                ? "bg-primary"
+                                                : "bg-muted"
+                                        }`}
+                                    >
+                                        <span
+                                            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${
+                                                infiniteScroll
+                                                    ? "left-4"
+                                                    : "left-0.5"
+                                            }`}
+                                        />
+                                    </span>
+                                    <Infinity className="h-4 w-4" />
+                                    <span className="hidden sm:inline">
+                                        Défilement infini
+                                    </span>
+                                </button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={paginatedImages.length === 0}
+                                    onClick={() =>
+                                        setSelectedImages(
+                                            paginatedImages.map(
+                                                (image) => image.id,
+                                            ),
+                                        )
+                                    }
+                                    className="h-9 flex-1 gap-2 sm:flex-none"
+                                    title="Tout sélectionner"
+                                >
+                                    <SquareCheck className="h-4 w-4" />
+                                    <span className="sm:hidden">
+                                        Sélection
+                                    </span>
+                                    <span className="hidden sm:inline">
+                                        Tout sélectionner
+                                    </span>
+                                </Button>
+                                {canAddImages && (
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        className="h-9 flex-1 gap-2 sm:flex-none"
+                                        onClick={() => {
+                                            setEditingImage(null);
+                                            setImageModalOpen(true);
+                                        }}
+                                    >
+                                        <Plus className="h-4 w-4" />
+                                        Ajouter
+                                    </Button>
+                                )}
+                            </div>
                         </div>
 
-                        <div className="mx-auto max-w-6xl space-y-4">
-                            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                        <div className="rounded-md border border-border/70 bg-background/80 p-2 shadow-sm sm:p-3">
+                            <div className="grid gap-2 lg:grid-cols-[minmax(16rem,1fr)_minmax(0,2fr)_auto] lg:items-center">
                                 <LegacySearch
                                     value={search}
                                     onChange={(value) => {
@@ -389,149 +457,235 @@ export default function GalleryIndex({
                                     className="min-w-0"
                                     onFocusChange={setSearchFocused}
                                 />
+                                <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                                    <LegacySelect
+                                        value={orientation}
+                                        onChange={(value) => {
+                                            setOrientation(value);
+                                            setCurrentPage(1);
+                                        }}
+                                        allLabel="Toutes les orientations"
+                                        options={[
+                                            {
+                                                id: "landscape",
+                                                name: "Paysage",
+                                            },
+                                            {
+                                                id: "portrait",
+                                                name: "Portrait",
+                                            },
+                                            { id: "square", name: "Carré" },
+                                        ]}
+                                        className="min-w-0"
+                                    />
+                                    <LegacySelect
+                                        value={clientId}
+                                        onChange={(value) => {
+                                            setClientId(value);
+                                            setProjectId("");
+                                            setCurrentPage(1);
+                                        }}
+                                        allLabel="Toutes les entreprises"
+                                        options={filters.clients}
+                                        className="min-w-0"
+                                    />
+                                    <LegacySelect
+                                        value={projectId}
+                                        onChange={(value) => {
+                                            setProjectId(value);
+                                            setCurrentPage(1);
+                                        }}
+                                        allLabel="Tous les projets"
+                                        options={projects}
+                                        className="min-w-0 sm:col-span-2 lg:col-span-1"
+                                    />
+                                    <div className="grid min-w-0 grid-cols-1 gap-2 sm:col-span-2 sm:grid-cols-2 lg:col-span-2">
+                                        <div className="min-w-0">
+                                            <label
+                                                htmlFor="gallery-date-from"
+                                                className="sr-only"
+                                            >
+                                                Depuis
+                                            </label>
+                                            <div className="relative">
+                                                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                                                    Depuis
+                                                </span>
+                                                <input
+                                                    id="gallery-date-from"
+                                                    type="date"
+                                                    aria-label="Date de début"
+                                                    title="Date de début"
+                                                    value={dateFrom}
+                                                    onChange={(event) => {
+                                                        setDateFrom(
+                                                            event.target.value,
+                                                        );
+                                                        setCurrentPage(1);
+                                                    }}
+                                                    className="h-11 w-full rounded-md border border-input bg-card px-3 pl-20 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="min-w-0">
+                                            <label
+                                                htmlFor="gallery-date-to"
+                                                className="sr-only"
+                                            >
+                                                Jusqu'au
+                                            </label>
+                                            <div className="relative">
+                                                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                                                    Jusqu'au
+                                                </span>
+                                                <input
+                                                    id="gallery-date-to"
+                                                    type="date"
+                                                    aria-label="Date de fin"
+                                                    title="Date de fin"
+                                                    value={dateTo}
+                                                    onChange={(event) => {
+                                                        setDateTo(
+                                                            event.target.value,
+                                                        );
+                                                        setCurrentPage(1);
+                                                    }}
+                                                    className="h-11 w-full rounded-md border border-input bg-card px-3 pl-24 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                                 {hasActiveFilters && (
                                     <Button
                                         type="button"
                                         variant="outline"
                                         size="sm"
-                                        className="h-10 justify-center gap-2 lg:w-auto"
+                                        className="h-11 justify-center gap-2"
                                         onClick={resetFilters}
+                                        title="Réinitialiser les filtres"
                                     >
                                         <X className="h-4 w-4" />
-                                        Réinitialiser
+                                        <span className="lg:sr-only">
+                                            Réinitialiser
+                                        </span>
                                     </Button>
                                 )}
                             </div>
-
-                            <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
-                                <LegacySelect
-                                    value={orientation}
-                                    onChange={(value) => {
-                                        setOrientation(value);
-                                        setCurrentPage(1);
-                                    }}
-                                    allLabel="Toutes les orientations"
-                                    options={[
-                                        { id: "landscape", name: "Paysage" },
-                                        { id: "portrait", name: "Portrait" },
-                                        { id: "square", name: "Carré" },
-                                    ]}
-                                    className="min-w-0 lg:col-span-2 xl:col-span-1"
-                                />
-                                <LegacySelect
-                                    value={clientId}
-                                    onChange={(value) => {
-                                        setClientId(value);
-                                        setProjectId("");
-                                        setCurrentPage(1);
-                                    }}
-                                    allLabel="Toutes les entreprises"
-                                    options={filters.clients}
-                                    className="min-w-0 lg:col-span-2 xl:col-span-1"
-                                />
-                                <LegacySelect
-                                    value={projectId}
-                                    onChange={(value) => {
-                                        setProjectId(value);
-                                        setCurrentPage(1);
-                                    }}
-                                    allLabel="Tous les projets"
-                                    options={projects}
-                                    className="min-w-0 sm:col-span-2 lg:col-span-2 xl:col-span-2"
-                                />
-                                <div className="grid min-w-0 grid-cols-1 gap-3 sm:col-span-2 sm:grid-cols-2 lg:col-span-6 xl:col-span-2">
-                                    <div className="min-w-0">
-                                        <label
-                                            htmlFor="gallery-date-from"
-                                            className="sr-only"
+                            {(tag || selectedImages.length > 0) && (
+                                <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-border/60 pt-2">
+                                    {tag && (
+                                        <button
+                                            type="button"
+                                            onClick={() => filterByTag("")}
+                                            className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-sm font-medium text-primary transition hover:bg-primary/15"
+                                            title="Retirer le filtre tag"
                                         >
-                                            Depuis
-                                        </label>
-                                        <div className="relative">
-                                            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
-                                                Depuis
-                                            </span>
-                                            <input
-                                                id="gallery-date-from"
-                                                type="date"
-                                                aria-label="Date de début"
-                                                title="Date de début"
-                                                value={dateFrom}
-                                                onChange={(event) => {
-                                                    setDateFrom(
-                                                        event.target.value,
-                                                    );
-                                                    setCurrentPage(1);
-                                                }}
-                                                className="h-11 w-full rounded-md border border-input bg-card px-3 pl-20 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-                                            />
+                                            #{tag}
+                                            <X className="h-3.5 w-3.5" />
+                                        </button>
+                                    )}
+                                    {selectedImages.length > 0 && (
+                                        <span className="inline-flex items-center rounded-full border border-border bg-background px-3 py-1 text-sm font-medium md:hidden">
+                                            {selectedImages.length} image
+                                            {selectedImages.length > 1
+                                                ? "s"
+                                                : ""}{" "}
+                                            sélectionnée
+                                            {selectedImages.length > 1
+                                                ? "s"
+                                                : ""}
+                                        </span>
+                                    )}
+                                    {selectedImages.length > 0 && (
+                                        <div className="ml-auto hidden flex-wrap items-center justify-end gap-2 md:flex">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="gap-2"
+                                                onClick={() =>
+                                                    requestDownload("web")
+                                                }
+                                                disabled={
+                                                    selectionHasExpiredRights
+                                                }
+                                                title={
+                                                    selectionHasExpiredRights
+                                                        ? "Une image sélectionnée a une cession expirée"
+                                                        : "Télécharger la sélection en version web"
+                                                }
+                                            >
+                                                <Download className="h-4 w-4" />
+                                                Version web
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="gap-2"
+                                                onClick={() =>
+                                                    requestDownload("hd")
+                                                }
+                                                disabled={
+                                                    selectionHasExpiredRights
+                                                }
+                                                title={
+                                                    selectionHasExpiredRights
+                                                        ? "Une image sélectionnée a une cession expirée"
+                                                        : "Télécharger la sélection en HD"
+                                                }
+                                            >
+                                                <Download className="h-4 w-4" />
+                                                HD impression
+                                            </Button>
+                                            {selectionCanBeAssigned && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="gap-2"
+                                                    onClick={() =>
+                                                        setBulkProjectOpen(true)
+                                                    }
+                                                >
+                                                    <FolderInput className="h-4 w-4" />
+                                                    Lier à un projet
+                                                </Button>
+                                            )}
+                                            {canCreateSharedAlbums && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="gap-2"
+                                                    disabled={
+                                                        selectionHasExpiredRights
+                                                    }
+                                                    title={
+                                                        selectionHasExpiredRights
+                                                            ? "Une image sélectionnée a une cession expirée"
+                                                            : "Créer un album partagé"
+                                                    }
+                                                    onClick={openShareDialog}
+                                                >
+                                                    <Share2 className="h-4 w-4" />
+                                                    Partager
+                                                </Button>
+                                            )}
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                    setSelectedImages([])
+                                                }
+                                            >
+                                                Effacer (
+                                                {selectedImages.length})
+                                            </Button>
                                         </div>
-                                    </div>
-                                    <div className="min-w-0">
-                                        <label
-                                            htmlFor="gallery-date-to"
-                                            className="sr-only"
-                                        >
-                                            Jusqu'au
-                                        </label>
-                                        <div className="relative">
-                                            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
-                                                Jusqu'au
-                                            </span>
-                                            <input
-                                                id="gallery-date-to"
-                                                type="date"
-                                                aria-label="Date de fin"
-                                                title="Date de fin"
-                                                value={dateTo}
-                                                onChange={(event) => {
-                                                    setDateTo(
-                                                        event.target.value,
-                                                    );
-                                                    setCurrentPage(1);
-                                                }}
-                                                className="h-11 w-full rounded-md border border-input bg-card px-3 pl-24 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-                                            />
-                                        </div>
-                                    </div>
+                                    )}
                                 </div>
-                            </div>
+                            )}
                         </div>
                     </div>
                 </section>
-
-                <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-2 pt-[10px]">
-                    <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={() => setInfiniteScroll(!infiniteScroll)}
-                            className="relative h-7 w-12 rounded-full bg-muted shadow-inner"
-                            aria-pressed={infiniteScroll}
-                        >
-                            <span
-                                className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition ${
-                                    infiniteScroll ? "left-6" : "left-1"
-                                }`}
-                            />
-                        </button>
-                        <Infinity className="h-4 w-4" />
-                        <span className="font-semibold">Défilement infini</span>
-                    </div>
-                    {canAddImages && (
-                        <Button
-                            type="button"
-                            size="sm"
-                            className="gap-2"
-                            onClick={() => {
-                                setEditingImage(null);
-                                setImageModalOpen(true);
-                            }}
-                        >
-                            <Plus className="h-4 w-4" />
-                            Ajouter une image
-                        </Button>
-                    )}
-                </div>
 
                 {!infiniteScroll && (
                     <LegacyPagination
@@ -547,108 +701,6 @@ export default function GalleryIndex({
                         selectedImages.length > 0 ? "pb-28 md:pb-0" : ""
                     }`}
                 >
-                    {tag && (
-                        <div className="mb-4 flex flex-wrap items-center gap-2 px-4 text-sm">
-                            <span className="text-muted-foreground">
-                                Filtre tag actif :
-                            </span>
-                            <button
-                                type="button"
-                                onClick={() => filterByTag("")}
-                                className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 font-medium text-primary transition hover:bg-primary/15"
-                                title="Retirer le filtre tag"
-                            >
-                                #{tag}
-                                <X className="h-3.5 w-3.5" />
-                            </button>
-                        </div>
-                    )}
-                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 px-4">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                                setSelectedImages(
-                                    paginatedImages.map((image) => image.id),
-                                )
-                            }
-                            className="gap-2"
-                        >
-                            <SquareCheck className="h-4 w-4" />
-                            Tout sélectionner
-                        </Button>
-                        {selectedImages.length > 0 && (
-                            <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="hidden gap-2 md:inline-flex"
-                                    onClick={() => requestDownload("web")}
-                                    disabled={selectionHasExpiredRights}
-                                    title={
-                                        selectionHasExpiredRights
-                                            ? "Une image sélectionnée a une cession expirée"
-                                            : "Télécharger la sélection en version web"
-                                    }
-                                >
-                                    <Download className="h-4 w-4" />
-                                    Version web
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="hidden gap-2 md:inline-flex"
-                                    onClick={() => requestDownload("hd")}
-                                    disabled={selectionHasExpiredRights}
-                                    title={
-                                        selectionHasExpiredRights
-                                            ? "Une image sélectionnée a une cession expirée"
-                                            : "Télécharger la sélection en HD"
-                                    }
-                                >
-                                    <Download className="h-4 w-4" />
-                                    HD impression
-                                </Button>
-                                {selectionCanBeAssigned && (
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="hidden gap-2 md:inline-flex"
-                                        onClick={() => setBulkProjectOpen(true)}
-                                    >
-                                        <FolderInput className="h-4 w-4" />
-                                        Lier à un projet
-                                    </Button>
-                                )}
-                                {canCreateSharedAlbums && (
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="hidden gap-2 md:inline-flex"
-                                        disabled={selectionHasExpiredRights}
-                                        title={
-                                            selectionHasExpiredRights
-                                                ? "Une image sélectionnée a une cession expirée"
-                                                : "Créer un album partagé"
-                                        }
-                                        onClick={openShareDialog}
-                                    >
-                                        <Share2 className="h-4 w-4" />
-                                        Partager
-                                    </Button>
-                                )}
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="hidden md:inline-flex"
-                                    onClick={() => setSelectedImages([])}
-                                >
-                                    Effacer la sélection (
-                                    {selectedImages.length})
-                                </Button>
-                            </div>
-                        )}
-                    </div>
                     {paginatedImages.length > 0 ? (
                         <MasonryGrid
                             images={paginatedImages}
