@@ -28,7 +28,7 @@ export default function AppFooter() {
                                 href: route("gallery.index"),
                             },
                             { label: "À propos", href: route("about") },
-                            { label: "Contact", href: route("contact.index") },
+                            { label: "Contacter", href: route("contact.index") },
                         ]}
                     />
                     <FooterColumn

@@ -22,7 +22,6 @@ import {
     Image,
     LayoutDashboard,
     LogOut,
-    Mail,
     Menu,
     Shield,
     User,
@@ -33,7 +32,7 @@ import { PropsWithChildren, ReactNode, useMemo, useState } from "react";
 type MenuItem = {
     href: string;
     label: string;
-    icon: typeof Image;
+    icon?: typeof Image;
     active?: boolean;
     disabled?: boolean;
 };
@@ -84,8 +83,7 @@ export default function Authenticated({
         },
         {
             href: route("contact.index"),
-            label: "Contact",
-            icon: Mail,
+            label: "Contacter",
             active: route().current("contact.index"),
         },
     ];
@@ -181,6 +179,11 @@ export default function Authenticated({
 
               return false;
           });
+    const mobileNav = [
+        ...primaryNav,
+        ...userMenu.filter((item) => item.href !== route("gallery.index")),
+        ...visibleAdminMenu,
+    ];
     const breadcrumbs = breadcrumbItems();
 
     return (
@@ -202,15 +205,16 @@ export default function Authenticated({
                         <nav className="flex items-center gap-7">
                             {primaryNav.map((item) => {
                                 const Icon = item.icon;
+                                const isContact =
+                                    item.href === route("contact.index");
 
-                                return item.label === "Contact" ? (
+                                return isContact ? (
                                     <button
                                         key={item.label}
                                         type="button"
                                         onClick={() => setContactOpen(true)}
-                                        className="inline-flex items-center gap-3 text-base font-semibold text-foreground transition-colors hover:text-primary"
+                                        className="inline-flex items-center text-base font-semibold text-foreground transition-colors hover:text-primary"
                                     >
-                                        <Icon className="h-5 w-5" />
                                         <span>{item.label}</span>
                                     </button>
                                 ) : (
@@ -226,6 +230,7 @@ export default function Authenticated({
                                                 "pointer-events-none",
                                         )}
                                     >
+                                        {Icon && <Icon className="h-5 w-5" />}
                                         <span>{item.label}</span>
                                     </Link>
                                 );
@@ -256,14 +261,12 @@ export default function Authenticated({
                                 />
                             </div>
                             <nav className="space-y-1">
-                                {[
-                                    ...primaryNav,
-                                    ...userMenu,
-                                    ...visibleAdminMenu,
-                                ].map((item) => {
+                                {mobileNav.map((item) => {
                                     const Icon = item.icon;
+                                    const isContact =
+                                        item.href === route("contact.index");
 
-                                    return item.label === "Contact" ? (
+                                    return isContact ? (
                                         <button
                                             key={item.label}
                                             type="button"
@@ -273,7 +276,6 @@ export default function Authenticated({
                                             }}
                                             className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-foreground transition-colors hover:bg-primary/5 hover:text-primary"
                                         >
-                                            <Icon className="h-4 w-4" />
                                             {item.label}
                                         </button>
                                     ) : (
@@ -290,7 +292,7 @@ export default function Authenticated({
                                                     "pointer-events-none text-muted-foreground",
                                             )}
                                         >
-                                            <Icon className="h-4 w-4" />
+                                            {Icon && <Icon className="h-4 w-4" />}
                                             {item.label}
                                         </Link>
                                     );
@@ -475,7 +477,7 @@ function breadcrumbItems(): BreadcrumbItem[] {
     }
 
     if (route().current("contact.index")) {
-        return [home, { label: "Contact" }];
+        return [home, { label: "Contacter" }];
     }
 
     if (route().current("downloads.index")) {
@@ -557,7 +559,7 @@ function UserMenuItem({ item }: { item: MenuItem }) {
                     item.disabled && "pointer-events-none",
                 )}
             >
-                <Icon className="h-5 w-5" />
+                {Icon && <Icon className="h-5 w-5" />}
                 {item.label}
             </Link>
         </DropdownMenuItem>

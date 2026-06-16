@@ -151,7 +151,7 @@ export function LegacySelect({
             )}
             <div className="relative min-w-0">
                 <select
-                    className="h-11 w-full truncate rounded-md border border-input bg-card px-3 pr-10 text-base outline-none appearance-none focus:ring-2 focus:ring-primary/30"
+                    className="h-10 w-full truncate rounded-full border border-border/60 bg-background/80 px-4 pr-10 text-base outline-none appearance-none transition focus:border-primary/40 focus:bg-background focus:ring-2 focus:ring-primary/20 sm:text-sm"
                     value={value}
                     onChange={(event) => onChange(event.target.value)}
                 >
@@ -162,7 +162,7 @@ export function LegacySelect({
                         </option>
                     ))}
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             </div>
         </div>
     );
@@ -199,12 +199,12 @@ export function LegacySearch({
                         onSubmit?.(value);
                     }
                 }}
-                className="h-11 w-full rounded-full border border-border bg-muted px-11 text-base outline-none focus:ring-2 focus:ring-primary/30 sm:text-sm"
+                className="h-10 w-full rounded-full border border-border/60 bg-background/85 px-11 text-base outline-none transition focus:border-primary/40 focus:bg-background focus:ring-2 focus:ring-primary/20 sm:text-sm"
             />
             <Button
                 type="button"
                 size="icon"
-                className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2 rounded-full"
+                className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 rounded-full"
                 onClick={() => onSubmit?.(value)}
                 title="Rechercher"
             >

@@ -511,8 +511,8 @@ export default function GalleryIndex({
                             </div>
                         </div>
 
-                        <div className="rounded-md border border-border/70 bg-background/80 p-2 shadow-sm sm:p-3">
-                            <div className="grid gap-2 lg:grid-cols-[minmax(16rem,1fr)_minmax(0,2fr)_auto] lg:items-center">
+                        <div className="rounded-2xl bg-background/55 p-1.5 ring-1 ring-border/45 backdrop-blur-sm sm:p-2">
+                            <div className="grid gap-1.5 lg:grid-cols-[minmax(16rem,1fr)_minmax(0,2fr)_auto] lg:items-center">
                                 <LegacySearch
                                     value={search}
                                     onChange={(value) => {
@@ -523,7 +523,7 @@ export default function GalleryIndex({
                                     onFocusChange={setSearchFocused}
                                     onSubmit={submitSearch}
                                 />
-                                <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                                <div className="grid min-w-0 grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-5">
                                     <LegacySelect
                                         value={orientation}
                                         onChange={(value) => {
@@ -565,7 +565,7 @@ export default function GalleryIndex({
                                         options={projects}
                                         className="min-w-0 sm:col-span-2 lg:col-span-1"
                                     />
-                                    <div className="grid min-w-0 grid-cols-1 gap-2 sm:col-span-2 sm:grid-cols-2 lg:col-span-2">
+                                    <div className="grid min-w-0 grid-cols-1 gap-1.5 sm:col-span-2 sm:grid-cols-2 lg:col-span-2">
                                         <div className="min-w-0">
                                             <label
                                                 htmlFor="gallery-date-from"
@@ -589,7 +589,7 @@ export default function GalleryIndex({
                                                         );
                                                         setCurrentPage(1);
                                                     }}
-                                                    className="h-11 w-full rounded-md border border-input bg-card px-3 pl-20 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                                                    className="h-10 w-full rounded-full border border-border/60 bg-background/80 px-4 pl-20 text-base outline-none transition focus:border-primary/40 focus:bg-background focus:ring-2 focus:ring-primary/20 sm:text-sm"
                                                 />
                                             </div>
                                         </div>
@@ -616,7 +616,7 @@ export default function GalleryIndex({
                                                         );
                                                         setCurrentPage(1);
                                                     }}
-                                                    className="h-11 w-full rounded-md border border-input bg-card px-3 pl-24 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                                                    className="h-10 w-full rounded-full border border-border/60 bg-background/80 px-4 pl-24 text-base outline-none transition focus:border-primary/40 focus:bg-background focus:ring-2 focus:ring-primary/20 sm:text-sm"
                                                 />
                                             </div>
                                         </div>
@@ -627,7 +627,7 @@ export default function GalleryIndex({
                                         type="button"
                                         variant="outline"
                                         size="sm"
-                                        className="h-11 justify-center gap-2"
+                                        className="h-10 rounded-full border-border/60 bg-background/80 px-4 justify-center gap-2"
                                         onClick={resetFilters}
                                         title="Réinitialiser les filtres"
                                     >
