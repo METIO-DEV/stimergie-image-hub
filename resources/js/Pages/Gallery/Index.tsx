@@ -21,6 +21,7 @@ import {
     Download,
     FolderInput,
     Infinity,
+    Plus,
     Share2,
     SquareCheck,
     X,
@@ -54,6 +55,7 @@ type Props = {
         tag: string;
     };
     bulkProjects: FilterOption[];
+    canAddImages: boolean;
     canBulkAssignImages: boolean;
     canCreateSharedAlbums: boolean;
     pagination: {
@@ -70,6 +72,7 @@ export default function GalleryIndex({
     filters,
     activeFilters,
     bulkProjects,
+    canAddImages,
     canBulkAssignImages,
     canCreateSharedAlbums,
     pagination,
@@ -405,6 +408,20 @@ export default function GalleryIndex({
                         <Infinity className="h-4 w-4" />
                         <span className="font-semibold">Défilement infini</span>
                     </div>
+                    {canAddImages && (
+                        <Button
+                            type="button"
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => {
+                                setEditingImage(null);
+                                setImageModalOpen(true);
+                            }}
+                        >
+                            <Plus className="h-4 w-4" />
+                            Ajouter une image
+                        </Button>
+                    )}
                 </div>
 
                 {!infiniteScroll && (

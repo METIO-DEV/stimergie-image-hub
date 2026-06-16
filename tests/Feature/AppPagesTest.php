@@ -123,6 +123,7 @@ class AppPagesTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Gallery/Index')
+                ->where('canAddImages', false)
                 ->where('canBulkAssignImages', false)
                 ->has('bulkProjects', 0)
                 ->where('images.0.id', $image->id)
@@ -187,6 +188,7 @@ class AppPagesTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Gallery/Index')
+                ->where('canAddImages', true)
                 ->where('canBulkAssignImages', true)
                 ->has('bulkProjects', 1)
                 ->where('bulkProjects.0.id', $project->id)

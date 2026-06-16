@@ -78,6 +78,7 @@ class AppPageController extends Controller
                 'tag' => $galleryFilters['tag'],
             ],
             'bulkProjects' => $this->manageableProjectOptions($user, $manageableClientIds),
+            'canAddImages' => $this->canManageClientContent($user),
             'canBulkAssignImages' => $this->canManageClientContent($user),
             'canCreateSharedAlbums' => $this->canManageClientContent($user),
             'pagination' => [
