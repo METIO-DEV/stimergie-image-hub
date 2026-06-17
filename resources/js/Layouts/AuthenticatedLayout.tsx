@@ -26,10 +26,11 @@ import {
     Menu,
     ServerCog,
     Shield,
+    ShoppingBasket,
     User,
     Users,
 } from "lucide-react";
-import { PropsWithChildren, ReactNode, useMemo, useState } from "react";
+import { PropsWithChildren, ReactNode, useEffect, useMemo, useState } from "react";
 
 type MenuItem = {
     href: string;
@@ -46,13 +47,19 @@ type BreadcrumbItem = {
 
 export default function Authenticated({
     header,
+    basketAction,
     navActions,
     children,
-}: PropsWithChildren<{ header?: ReactNode; navActions?: ReactNode }>) {
+}: PropsWithChildren<{
+    header?: ReactNode;
+    basketAction?: ReactNode;
+    navActions?: ReactNode;
+}>) {
     const { abilities, user } = usePage().props.auth;
     const { flash } = usePage().props;
     const [mobileOpen, setMobileOpen] = useState(false);
     const [contactOpen, setContactOpen] = useState(false);
+    const [basketCount, setBasketCount] = useState(0);
 
     const isSuperAdmin = abilities.isSuperAdmin;
     const initials = useMemo(
@@ -72,6 +79,42 @@ export default function Authenticated({
         },
         [user],
     );
+
+    useEffect(() => {
+        if (!user) {
+            return;
+        }
+
+        const readBasketCount = () => {
+            try {
+                const storedSelection = window.localStorage.getItem(
+                    gallerySelectionStorageKey(user.id),
+                );
+                const parsed = storedSelection ? JSON.parse(storedSelection) : null;
+                const ids = Array.isArray(parsed)
+                    ? parsed
+                    : Array.isArray(parsed?.ids)
+                      ? parsed.ids
+                      : [];
+
+                setBasketCount(ids.length);
+            } catch {
+                setBasketCount(0);
+            }
+        };
+
+        readBasketCount();
+        window.addEventListener("storage", readBasketCount);
+        window.addEventListener("stimergie:gallery-selection", readBasketCount);
+
+        return () => {
+            window.removeEventListener("storage", readBasketCount);
+            window.removeEventListener(
+                "stimergie:gallery-selection",
+                readBasketCount,
+            );
+        };
+    }, [user]);
 
     if (!user) {
         return null;
@@ -333,11 +376,34 @@ export default function Authenticated({
                             />
                         </Link>
 
-                        {navActions && (
-                            <div className="hidden items-center md:flex">
-                                {navActions}
+                        <div className="flex items-center gap-2">
+                            {navActions && (
+                                <div className="hidden items-center md:flex">
+                                    {navActions}
+                                </div>
+                            )}
+
+                            <div className="flex items-center">
+                                {basketAction ?? (
+                                    <Link
+                                        href={route("gallery.index")}
+                                        className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-background/80 px-3 text-sm font-medium shadow-sm transition hover:bg-white"
+                                        title="Ouvrir le panier"
+                                        aria-label={`Ouvrir le panier, ${basketCount} image${basketCount > 1 ? "s" : ""} sélectionnée${basketCount > 1 ? "s" : ""}`}
+                                    >
+                                        <span className="relative inline-flex">
+                                            <ShoppingBasket className="h-4 w-4" />
+                                            <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[0.65rem] font-bold leading-none text-primary-foreground">
+                                                {basketCount}
+                                            </span>
+                                        </span>
+                                        <span className="hidden sm:inline">
+                                            Panier
+                                        </span>
+                                    </Link>
+                                )}
                             </div>
-                        )}
+                        </div>
 
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -473,6 +539,10 @@ export default function Authenticated({
             <ContactModal open={contactOpen} onOpenChange={setContactOpen} />
         </div>
     );
+}
+
+function gallerySelectionStorageKey(userId: number | string): string {
+    return `stimergie.gallery.selection.${userId}`;
 }
 
 function breadcrumbItems(): BreadcrumbItem[] {

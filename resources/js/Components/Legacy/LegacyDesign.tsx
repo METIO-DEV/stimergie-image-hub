@@ -151,7 +151,7 @@ export function LegacySelect({
             )}
             <div className="relative min-w-0">
                 <select
-                    className="h-10 w-full truncate rounded-full border border-border/60 bg-background/80 bg-none px-4 pr-10 text-base outline-none appearance-none transition [background-image:none] focus:border-primary/40 focus:bg-background focus:ring-2 focus:ring-primary/20 sm:text-sm"
+                    className="h-10 w-full truncate rounded-full border border-border/60 bg-background bg-none px-4 pr-10 text-base outline-none appearance-none transition [background-image:none] focus:border-primary/40 focus:bg-background focus:ring-2 focus:ring-primary/20 sm:text-sm"
                     value={value}
                     onChange={(event) => onChange(event.target.value)}
                 >
@@ -239,7 +239,7 @@ export function LegacySearch({
                         setOpen(false);
                     }
                 }}
-                className="h-10 w-full rounded-full border border-border/60 bg-background/85 px-11 text-base outline-none transition focus:border-primary/40 focus:bg-background focus:ring-2 focus:ring-primary/20 sm:text-sm"
+                className="h-10 w-full rounded-full border border-border/60 bg-background px-11 text-base outline-none transition focus:border-primary/40 focus:bg-background focus:ring-2 focus:ring-primary/20 sm:text-sm"
             />
             <Button
                 type="button"
@@ -278,20 +278,29 @@ export function MasonryGrid({
     onToggle,
     onImageClick,
     loadingSlots = false,
+    mobileColumns = 3,
 }: {
     images: LegacyImage[];
     selectedIds?: Array<string | number>;
     onToggle?: (id: string | number) => void;
     onImageClick?: (image: LegacyImage) => void;
     loadingSlots?: boolean;
+    mobileColumns?: 3 | 4;
 }) {
     const [hoveredId, setHoveredId] = useState<string | number | null>(null);
-    const columns = useMemo(() => distributeImages(images, 5), [images]);
+    const columnCount = useMasonryColumnCount(mobileColumns);
+    const columns = useMemo(
+        () => distributeImages(images, columnCount),
+        [columnCount, images],
+    );
+    const gridStyle = {
+        gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
+    };
 
     if (loadingSlots) {
         return (
-            <div className="grid grid-cols-2 gap-0.5 px-0.5 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-                {Array.from({ length: 10 }).map((_, index) => (
+            <div className="grid gap-0.5 px-0.5" style={gridStyle}>
+                {Array.from({ length: columnCount * 2 }).map((_, index) => (
                     <div
                         key={index}
                         className={cn(
@@ -311,7 +320,7 @@ export function MasonryGrid({
     }
 
     return (
-        <div className="grid grid-cols-2 gap-0.5 px-0.5 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        <div className="grid gap-0.5 px-0.5" style={gridStyle}>
             {columns.map((column, columnIndex) => (
                 <div key={columnIndex} className="flex flex-col gap-0.5">
                     {column.map((image) => {
@@ -1259,6 +1268,33 @@ function distributeImages(images: LegacyImage[], count: number) {
     });
 
     return columns;
+}
+
+function useMasonryColumnCount(mobileColumns: 3 | 4) {
+    const [columnCount, setColumnCount] = useState<number>(mobileColumns);
+
+    useEffect(() => {
+        const updateColumnCount = () => {
+            const width = window.innerWidth;
+
+            if (width >= 1536) {
+                setColumnCount(5);
+            } else if (width >= 1280) {
+                setColumnCount(4);
+            } else if (width >= 1024) {
+                setColumnCount(3);
+            } else {
+                setColumnCount(mobileColumns);
+            }
+        };
+
+        updateColumnCount();
+        window.addEventListener("resize", updateColumnCount);
+
+        return () => window.removeEventListener("resize", updateColumnCount);
+    }, [mobileColumns]);
+
+    return columnCount;
 }
 
 function imageHeightFactor(image: LegacyImage) {

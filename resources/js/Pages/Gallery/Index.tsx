@@ -111,6 +111,8 @@ type CropSource = "web" | "hd";
 
 const PAGE_SIZE = 60;
 const FILTER_DEBOUNCE_MS = 350;
+const GALLERY_SELECTION_EVENT = "stimergie:gallery-selection";
+const MOBILE_COLUMNS_STORAGE_KEY = "stimergie.gallery.mobileColumns";
 const DEFAULT_CROP_SETTING: CropSetting = {
     focusX: 0.5,
     focusY: 0.5,
@@ -195,6 +197,15 @@ export default function GalleryIndex({
     const [selectionDockVisible, setSelectionDockVisible] = useState(false);
     const [selectionDockClosing, setSelectionDockClosing] = useState(false);
     const [selectionDockCount, setSelectionDockCount] = useState(0);
+    const [mobileColumns, setMobileColumns] = useState<3 | 4>(() => {
+        if (typeof window === "undefined") {
+            return 3;
+        }
+
+        return window.localStorage.getItem(MOBILE_COLUMNS_STORAGE_KEY) === "4"
+            ? 4
+            : 3;
+    });
     const [detailImage, setDetailImage] = useState<LegacyImage | null>(null);
     const [editingImage, setEditingImage] = useState<LegacyImage | null>(null);
     const [imageModalOpen, setImageModalOpen] = useState(false);
@@ -354,6 +365,7 @@ export default function GalleryIndex({
 
         if (selectedImages.length === 0) {
             window.localStorage.removeItem(selectionStorageKey);
+            window.dispatchEvent(new Event(GALLERY_SELECTION_EVENT));
 
             return;
         }
@@ -366,6 +378,7 @@ export default function GalleryIndex({
                 snapshots: selectionSnapshots,
             }),
         );
+        window.dispatchEvent(new Event(GALLERY_SELECTION_EVENT));
     }, [
         selectedImages,
         selectionSnapshots,
@@ -549,6 +562,13 @@ export default function GalleryIndex({
     }, [selectedImages.length, selectionDockVisible]);
 
     useEffect(() => {
+        window.localStorage.setItem(
+            MOBILE_COLUMNS_STORAGE_KEY,
+            String(mobileColumns),
+        );
+    }, [mobileColumns]);
+
+    useEffect(() => {
         if (!didMount.current) {
             didMount.current = true;
 
@@ -650,6 +670,7 @@ export default function GalleryIndex({
         setSelectedImages([]);
         setSelectionSnapshots({});
         window.localStorage.removeItem(selectionStorageKey);
+        window.dispatchEvent(new Event(GALLERY_SELECTION_EVENT));
     };
 
     const openBulkProjectDialog = () => {
@@ -869,7 +890,7 @@ export default function GalleryIndex({
 
     return (
         <AuthenticatedLayout
-            navActions={
+            basketAction={
                 <Button
                     type="button"
                     variant="outline"
@@ -951,16 +972,12 @@ export default function GalleryIndex({
                                     size="sm"
                                     disabled={paginatedImages.length === 0}
                                     onClick={addCurrentPageToSelection}
-                                    className="h-9 flex-1 gap-2 sm:flex-none"
+                                    className="min-h-9 h-auto flex-[1_1_13rem] gap-2 whitespace-normal px-3 text-center leading-tight sm:h-9 sm:flex-none sm:whitespace-nowrap"
                                     title="Ajouter la page à la sélection"
                                 >
                                     <SquareCheck className="h-4 w-4" />
-                                    <span className="sm:hidden">
-                                        Sélection
-                                    </span>
-                                    <span className="hidden sm:inline">
-                                        Ajouter la page
-                                    </span>
+                                    Sélectionner les {paginatedImages.length}{" "}
+                                    image{paginatedImages.length > 1 ? "s" : ""}
                                 </Button>
                                 {canAddImages && (
                                     <Button
@@ -1055,7 +1072,7 @@ export default function GalleryIndex({
                                                         );
                                                         setCurrentPage(1);
                                                     }}
-                                                    className="h-10 w-full rounded-full border border-border/60 bg-background/80 px-4 pl-20 text-base outline-none transition focus:border-primary/40 focus:bg-background focus:ring-2 focus:ring-primary/20 sm:text-sm"
+                                                    className="h-10 w-full rounded-full border border-border/60 bg-background px-4 pl-20 text-base outline-none transition focus:border-primary/40 focus:bg-background focus:ring-2 focus:ring-primary/20 sm:text-sm"
                                                 />
                                             </div>
                                         </div>
@@ -1082,7 +1099,7 @@ export default function GalleryIndex({
                                                         );
                                                         setCurrentPage(1);
                                                     }}
-                                                    className="h-10 w-full rounded-full border border-border/60 bg-background/80 px-4 pl-24 text-base outline-none transition focus:border-primary/40 focus:bg-background focus:ring-2 focus:ring-primary/20 sm:text-sm"
+                                                    className="h-10 w-full rounded-full border border-border/60 bg-background px-4 pl-24 text-base outline-none transition focus:border-primary/40 focus:bg-background focus:ring-2 focus:ring-primary/20 sm:text-sm"
                                                 />
                                             </div>
                                         </div>
@@ -1093,7 +1110,7 @@ export default function GalleryIndex({
                                         type="button"
                                         variant="outline"
                                         size="sm"
-                                        className="h-10 rounded-full border-border/60 bg-background/80 px-4 justify-center gap-2"
+                                        className="h-10 rounded-full border-border/60 bg-background px-4 justify-center gap-2"
                                         onClick={resetFilters}
                                         title="Réinitialiser les filtres"
                                     >
@@ -1152,15 +1169,47 @@ export default function GalleryIndex({
                         selectionDockVisible ? "pb-28 md:pb-24" : ""
                     }`}
                 >
+                    <div className="flex justify-end px-2 py-2 md:hidden">
+                        <div className="inline-flex rounded-full border border-border bg-background p-1 shadow-sm">
+                            {([3, 4] as const).map((columnCount) => {
+                                const active = mobileColumns === columnCount;
+
+                                return (
+                                    <button
+                                        key={columnCount}
+                                        type="button"
+                                        onClick={() =>
+                                            setMobileColumns(columnCount)
+                                        }
+                                        className={`flex h-7 w-8 items-center justify-center rounded-full text-xs font-semibold transition ${
+                                            active
+                                                ? "bg-primary text-primary-foreground"
+                                                : "text-muted-foreground hover:bg-muted"
+                                        }`}
+                                        title={`${columnCount} colonnes`}
+                                        aria-label={`Afficher ${columnCount} colonnes`}
+                                        aria-pressed={active}
+                                    >
+                                        {columnCount}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
                     {paginatedImages.length > 0 ? (
                         <MasonryGrid
                             images={paginatedImages}
                             selectedIds={selectedImages}
                             onToggle={toggleSelection}
                             onImageClick={setDetailImage}
+                            mobileColumns={mobileColumns}
                         />
                     ) : (
-                        <MasonryGrid images={[]} loadingSlots />
+                        <MasonryGrid
+                            images={[]}
+                            loadingSlots
+                            mobileColumns={mobileColumns}
+                        />
                     )}
                 </div>
 
@@ -1175,19 +1224,6 @@ export default function GalleryIndex({
                     </div>
                 )}
             </main>
-            <button
-                type="button"
-                className={`fixed right-3 z-40 inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-lg transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30 md:hidden ${
-                    selectionDockVisible
-                        ? "bottom-28"
-                        : "bottom-4"
-                }`}
-                onClick={() => setSelectionReviewOpen(true)}
-                title="Ouvrir le panier"
-                aria-label={basketButtonLabel}
-            >
-                {basketButtonContent}
-            </button>
             {selectionDockVisible && (
                 <div
                     className={`fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/95 px-3 py-2 shadow-[0_-12px_30px_rgba(0,0,0,0.12)] backdrop-blur md:hidden ${selectionDockAnimationClass}`}
