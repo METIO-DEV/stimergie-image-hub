@@ -40,7 +40,6 @@ import {
     X,
 } from "lucide-react";
 import {
-    type TouchEvent as ReactTouchEvent,
     useEffect,
     useMemo,
     useRef,
@@ -127,7 +126,7 @@ const FILTER_DEBOUNCE_MS = 350;
 const GALLERY_SELECTION_EVENT = "stimergie:gallery-selection";
 const GALLERY_COLUMNS_STORAGE_KEY = "stimergie.gallery.mobileColumns";
 const GALLERY_COLUMN_OPTIONS = [2, 3, 4, 5] as const;
-const PINCH_COLUMN_THRESHOLD = 44;
+const PINCH_COLUMN_THRESHOLD = 30;
 const DEFAULT_CROP_SETTING: CropSetting = {
     focusX: 0.5,
     focusY: 0.5,
@@ -191,7 +190,7 @@ const defaultGalleryColumnCount = (): GalleryColumnCount => {
 const clampGalleryColumnCount = (value: number): GalleryColumnCount =>
     Math.min(5, Math.max(2, value)) as GalleryColumnCount;
 
-const touchDistance = (touches: ReactTouchEvent<HTMLDivElement>["touches"]) => {
+const touchDistance = (touches: TouchList) => {
     const first = touches[0];
     const second = touches[1];
 
@@ -273,6 +272,8 @@ export default function GalleryIndex({
     const submittedSearch = useRef(activeFilters.search);
     const pinchStartDistance = useRef<number | null>(null);
     const pinchStartColumns = useRef<GalleryColumnCount>(galleryColumns);
+    const pinchCurrentColumns = useRef<GalleryColumnCount>(galleryColumns);
+    const galleryTouchTarget = useRef<HTMLDivElement | null>(null);
     const selectionStorageKey = useMemo(
         () => `stimergie.gallery.selection.${user?.id ?? "guest"}`,
         [user?.id],
@@ -608,6 +609,7 @@ export default function GalleryIndex({
     }, [selectedImages.length, selectionDockVisible]);
 
     useEffect(() => {
+        pinchCurrentColumns.current = galleryColumns;
         window.localStorage.setItem(
             GALLERY_COLUMNS_STORAGE_KEY,
             String(galleryColumns),
@@ -719,8 +721,19 @@ export default function GalleryIndex({
         window.dispatchEvent(new Event(GALLERY_SELECTION_EVENT));
     };
 
-    const changeGalleryColumns = (nextColumns: GalleryColumnCount) => {
+    const changeGalleryColumns = (
+        nextColumns: GalleryColumnCount,
+        options: { animated?: boolean } = {},
+    ) => {
         if (nextColumns === galleryColumns) {
+            return;
+        }
+
+        pinchCurrentColumns.current = nextColumns;
+
+        if (options.animated === false) {
+            setGalleryColumns(nextColumns);
+
             return;
         }
 
@@ -737,42 +750,82 @@ export default function GalleryIndex({
         });
     };
 
-    const handleGridTouchStart = (event: ReactTouchEvent<HTMLDivElement>) => {
+    const handleGridTouchStart = (event: TouchEvent) => {
         if (event.touches.length !== 2) {
             return;
         }
 
         pinchStartDistance.current = touchDistance(event.touches);
         pinchStartColumns.current = galleryColumns;
+        pinchCurrentColumns.current = galleryColumns;
     };
 
-    const handleGridTouchMove = (event: ReactTouchEvent<HTMLDivElement>) => {
+    const handleGridTouchMove = (event: TouchEvent) => {
         if (event.touches.length !== 2 || pinchStartDistance.current === null) {
             return;
         }
 
-        event.preventDefault();
+        if (event.cancelable) {
+            event.preventDefault();
+        }
 
-        const delta = touchDistance(event.touches) - pinchStartDistance.current;
+        const currentDistance = touchDistance(event.touches);
+        const delta = currentDistance - pinchStartDistance.current;
         const steps = Math.trunc(delta / PINCH_COLUMN_THRESHOLD);
 
         if (steps === 0) {
             return;
         }
 
-        changeGalleryColumns(
-            clampGalleryColumnCount(pinchStartColumns.current - steps),
+        const nextColumns = clampGalleryColumnCount(
+            pinchStartColumns.current - steps,
         );
+
+        if (nextColumns === pinchCurrentColumns.current) {
+            return;
+        }
+
+        changeGalleryColumns(nextColumns, { animated: false });
+        pinchStartDistance.current = currentDistance;
+        pinchStartColumns.current = nextColumns;
     };
 
-    const handleGridTouchEnd = (event: ReactTouchEvent<HTMLDivElement>) => {
+    const handleGridTouchEnd = (event: TouchEvent) => {
         if (event.touches.length >= 2) {
             return;
         }
 
         pinchStartDistance.current = null;
-        pinchStartColumns.current = galleryColumns;
+        pinchStartColumns.current = pinchCurrentColumns.current;
     };
+
+    useEffect(() => {
+        const target = galleryTouchTarget.current;
+
+        if (!target) {
+            return;
+        }
+
+        target.addEventListener("touchstart", handleGridTouchStart, {
+            passive: true,
+        });
+        target.addEventListener("touchmove", handleGridTouchMove, {
+            passive: false,
+        });
+        target.addEventListener("touchend", handleGridTouchEnd, {
+            passive: true,
+        });
+        target.addEventListener("touchcancel", handleGridTouchEnd, {
+            passive: true,
+        });
+
+        return () => {
+            target.removeEventListener("touchstart", handleGridTouchStart);
+            target.removeEventListener("touchmove", handleGridTouchMove);
+            target.removeEventListener("touchend", handleGridTouchEnd);
+            target.removeEventListener("touchcancel", handleGridTouchEnd);
+        };
+    });
 
     const openBulkProjectDialog = () => {
         setSelectionReviewOpen(false);
@@ -1299,10 +1352,7 @@ export default function GalleryIndex({
                     }`}
                 >
                     <div
-                        onTouchStart={handleGridTouchStart}
-                        onTouchMove={handleGridTouchMove}
-                        onTouchEnd={handleGridTouchEnd}
-                        onTouchCancel={handleGridTouchEnd}
+                        ref={galleryTouchTarget}
                         style={{ touchAction: "pan-y" }}
                     >
                         {paginatedImages.length > 0 ? (
