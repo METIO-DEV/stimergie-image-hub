@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\DownloadJob;
 use App\Models\Image;
+use App\Support\ImageExportPresets;
 use App\Support\ImageUrlResolver;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -26,6 +27,8 @@ class PrepareDownloadArchive implements ShouldQueue
     {
         $job = DownloadJob::query()->findOrFail($this->downloadJobId);
         $variant = (string) data_get($job->payload, 'variant', 'web');
+        $cropPreset = (string) data_get($job->payload, 'crop_preset', 'square');
+        $cropSettings = $this->cropSettingsByImage(data_get($job->payload, 'crops', []));
         $imageIds = collect(data_get($job->payload, 'requested_image_ids', []))
             ->map(fn ($imageId) => (int) $imageId)
             ->filter()
@@ -40,7 +43,7 @@ class PrepareDownloadArchive implements ShouldQueue
                 ->whereIn('id', $imageIds)
                 ->get();
 
-            $result = $this->buildArchive($job, $images, $variant, $imageUrls);
+            $result = $this->buildArchive($job, $images, $variant, $imageUrls, $cropPreset, $cropSettings);
 
             $job->update([
                 'status' => 'ready',
@@ -67,6 +70,7 @@ class PrepareDownloadArchive implements ShouldQueue
 
     /**
      * @param  Collection<int, Image>  $images
+     * @param  array<int, array{focus_x: float, focus_y: float, zoom: float}>  $cropSettings
      * @return array{objectKey: string, downloadUrl: string, imageCount: int, skippedImages: array<int, array{id: int, title: string}>}
      */
     private function buildArchive(
@@ -74,6 +78,8 @@ class PrepareDownloadArchive implements ShouldQueue
         Collection $images,
         string $variant,
         ImageUrlResolver $imageUrls,
+        string $cropPreset,
+        array $cropSettings,
     ): array {
         $tempPath = tempnam(sys_get_temp_dir(), 'stimergie-download-');
         $zip = new ZipArchive;
@@ -91,7 +97,7 @@ class PrepareDownloadArchive implements ShouldQueue
             $skipped = [];
 
             foreach ($images as $image) {
-                $source = $imageUrls->downloadSource($image, $variant);
+                $source = $imageUrls->downloadSource($image, $variant === 'crop' ? 'hd' : $variant);
 
                 if (! $source['objectKey'] || ! Storage::disk($source['disk'])->exists($source['objectKey'])) {
                     $skipped[] = ['id' => $image->id, 'title' => $image->title];
@@ -105,9 +111,18 @@ class PrepareDownloadArchive implements ShouldQueue
                 );
                 $temporaryImagePaths[] = $temporaryImagePath;
 
+                if ($variant === 'crop') {
+                    $temporaryImagePath = $this->cropImage(
+                        $temporaryImagePath,
+                        ImageExportPresets::get($cropPreset),
+                        $cropSettings[$image->id] ?? ['focus_x' => 0.5, 'focus_y' => 0.5, 'zoom' => 1.0],
+                    );
+                    $temporaryImagePaths[] = $temporaryImagePath;
+                }
+
                 $addedToArchive = $zip->addFile(
                     $temporaryImagePath,
-                    $this->archiveFilename($image, $variant, $added + 1, $imageUrls),
+                    $this->archiveFilename($image, $variant, $added + 1, $imageUrls, $cropPreset),
                 );
 
                 if (! $addedToArchive) {
@@ -133,7 +148,7 @@ class PrepareDownloadArchive implements ShouldQueue
             $objectKey = sprintf(
                 'downloads/%d/%s-%s.zip',
                 $job->user_id,
-                $variant,
+                $variant === 'crop' ? ImageExportPresets::get($cropPreset)['slug'] : $variant,
                 Str::uuid(),
             );
 
@@ -223,15 +238,122 @@ class PrepareDownloadArchive implements ShouldQueue
         }
     }
 
-    private function archiveFilename(Image $image, string $variant, int $index, ImageUrlResolver $imageUrls): string
+    private function cropImage(string $sourcePath, array $preset, array $settings): string
     {
-        $extension = pathinfo(
-            $imageUrls->downloadSource($image, $variant)['objectKey'] ?? '',
-            PATHINFO_EXTENSION,
-        ) ?: 'jpg';
-        $name = Str::slug($image->title) ?: "image-{$image->id}";
+        $size = @getimagesize($sourcePath);
 
-        return sprintf('%03d-%s.%s', $index, $name, $extension);
+        if (! $size) {
+            throw new RuntimeException('Impossible de lire les dimensions de l image a recadrer.');
+        }
+
+        $mimeType = $size['mime'] ?? null;
+        $source = match ($mimeType) {
+            'image/png' => imagecreatefrompng($sourcePath),
+            'image/webp' => function_exists('imagecreatefromwebp') ? imagecreatefromwebp($sourcePath) : false,
+            default => imagecreatefromjpeg($sourcePath),
+        };
+
+        if (! $source) {
+            throw new RuntimeException('Impossible de preparer le recadrage image.');
+        }
+
+        $sourceWidth = imagesx($source);
+        $sourceHeight = imagesy($source);
+        $targetWidth = $preset['width'];
+        $targetHeight = $preset['height'];
+        $targetRatio = $targetWidth / $targetHeight;
+        $sourceRatio = $sourceWidth / $sourceHeight;
+
+        if ($sourceRatio > $targetRatio) {
+            $cropHeight = $sourceHeight;
+            $cropWidth = (int) round($cropHeight * $targetRatio);
+        } else {
+            $cropWidth = $sourceWidth;
+            $cropHeight = (int) round($cropWidth / $targetRatio);
+        }
+
+        $zoom = max(1.0, min(4.0, (float) $settings['zoom']));
+        $cropWidth = max(1, (int) round($cropWidth / $zoom));
+        $cropHeight = max(1, (int) round($cropHeight / $zoom));
+        $focusX = max(0.0, min(1.0, (float) $settings['focus_x']));
+        $focusY = max(0.0, min(1.0, (float) $settings['focus_y']));
+        $sourceX = (int) round(($sourceWidth * $focusX) - ($cropWidth / 2));
+        $sourceY = (int) round(($sourceHeight * $focusY) - ($cropHeight / 2));
+        $sourceX = max(0, min($sourceX, $sourceWidth - $cropWidth));
+        $sourceY = max(0, min($sourceY, $sourceHeight - $cropHeight));
+
+        $target = imagecreatetruecolor($targetWidth, $targetHeight);
+        imagecopyresampled(
+            $target,
+            $source,
+            0,
+            0,
+            $sourceX,
+            $sourceY,
+            $targetWidth,
+            $targetHeight,
+            $cropWidth,
+            $cropHeight,
+        );
+
+        $temporaryImagePath = tempnam(sys_get_temp_dir(), 'stimergie-crop-');
+
+        if ($temporaryImagePath === false) {
+            imagedestroy($source);
+            imagedestroy($target);
+            throw new RuntimeException('Impossible de creer le fichier recadre.');
+        }
+
+        imagejpeg($target, $temporaryImagePath, 88);
+        imagedestroy($source);
+        imagedestroy($target);
+
+        return $temporaryImagePath;
+    }
+
+    private function archiveFilename(
+        Image $image,
+        string $variant,
+        int $index,
+        ImageUrlResolver $imageUrls,
+        string $cropPreset,
+    ): string {
+        $extension = $variant === 'crop'
+            ? 'jpg'
+            : (pathinfo(
+                $imageUrls->downloadSource($image, $variant)['objectKey'] ?? '',
+                PATHINFO_EXTENSION,
+            ) ?: 'jpg');
+        $name = Str::slug($image->title) ?: "image-{$image->id}";
+        $suffix = $variant === 'crop' ? '-'.ImageExportPresets::get($cropPreset)['slug'] : '';
+
+        return sprintf('%03d-%s%s.%s', $index, $name, $suffix, $extension);
+    }
+
+    /**
+     * @return array<int, array{focus_x: float, focus_y: float, zoom: float}>
+     */
+    private function cropSettingsByImage(mixed $crops): array
+    {
+        if (! is_array($crops)) {
+            return [];
+        }
+
+        $settings = [];
+
+        foreach ($crops as $crop) {
+            if (! is_array($crop) || ! isset($crop['image_id'])) {
+                continue;
+            }
+
+            $settings[(int) $crop['image_id']] = [
+                'focus_x' => (float) ($crop['focus_x'] ?? 0.5),
+                'focus_y' => (float) ($crop['focus_y'] ?? 0.5),
+                'zoom' => (float) ($crop['zoom'] ?? 1.0),
+            ];
+        }
+
+        return $settings;
     }
 
     private function temporaryDownloadUrl(string $disk, string $objectKey, \DateTimeInterface $expiresAt): string

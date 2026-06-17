@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Image;
+use App\Support\ImageExportPresets;
 use App\Support\ProjectAccess;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -53,9 +54,15 @@ class StoreDownloadRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'variant' => ['required', 'string', Rule::in(['web', 'hd'])],
+            'variant' => ['required', 'string', Rule::in(['web', 'hd', 'crop'])],
             'image_ids' => ['required', 'array', 'min:1', 'max:'.self::MAX_IMAGE_COUNT],
             'image_ids.*' => ['integer', Rule::exists('images', 'id')],
+            'crop_preset' => ['nullable', 'required_if:variant,crop', 'string', Rule::in(array_keys(ImageExportPresets::all()))],
+            'crops' => ['nullable', 'required_if:variant,crop', 'array'],
+            'crops.*.image_id' => ['required_with:crops', 'integer', 'distinct', Rule::exists('images', 'id')],
+            'crops.*.focus_x' => ['required_with:crops', 'numeric', 'min:0', 'max:1'],
+            'crops.*.focus_y' => ['required_with:crops', 'numeric', 'min:0', 'max:1'],
+            'crops.*.zoom' => ['required_with:crops', 'numeric', 'min:1', 'max:4'],
         ];
     }
 
@@ -76,6 +83,29 @@ class StoreDownloadRequest extends FormRequest
                     );
 
                     return;
+                }
+
+                if ($this->input('variant') === 'crop') {
+                    $requestedIds = collect($imageIds)
+                        ->map(fn ($imageId) => (int) $imageId)
+                        ->sort()
+                        ->values()
+                        ->all();
+                    $cropIds = collect($this->input('crops', []))
+                        ->pluck('image_id')
+                        ->map(fn ($imageId) => (int) $imageId)
+                        ->sort()
+                        ->values()
+                        ->all();
+
+                    if ($requestedIds !== $cropIds) {
+                        $validator->errors()->add(
+                            'crops',
+                            'Chaque image exportée doit avoir un cadrage.',
+                        );
+
+                        return;
+                    }
                 }
 
                 $estimatedBytes = Image::query()

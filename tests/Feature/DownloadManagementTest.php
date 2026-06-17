@@ -10,6 +10,7 @@ use App\Models\Project;
 use App\Models\ProjectAccessPeriod;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 use ZipArchive;
@@ -88,6 +89,92 @@ class DownloadManagementTest extends TestCase
         @unlink($tempZip);
 
         $this->assertTrue($job->is_hd);
+    }
+
+    public function test_cropped_download_archive_applies_selected_preset(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        [$client, $project] = $this->clientAndProject();
+        $source = UploadedFile::fake()->image('source.jpg', 1200, 800);
+        $image = $this->image($client, $project, [
+            'object_key_original' => 'images/original/source.jpg',
+            'object_key_hd' => 'images/original/source.jpg',
+        ]);
+
+        Storage::disk('scaleway')->put(
+            'images/original/source.jpg',
+            file_get_contents($source->getRealPath()),
+        );
+
+        $this->actingAs($admin)->post(route('downloads.store'), [
+            'variant' => 'crop',
+            'crop_preset' => 'square',
+            'image_ids' => [$image->id],
+            'crops' => [[
+                'image_id' => $image->id,
+                'focus_x' => 0.5,
+                'focus_y' => 0.5,
+                'zoom' => 1.2,
+            ]],
+        ])->assertRedirect(route('downloads.index'));
+
+        $job = DownloadJob::query()->firstOrFail();
+        $tempZip = tempnam(sys_get_temp_dir(), 'download-crop-test-');
+        $tempImage = tempnam(sys_get_temp_dir(), 'download-crop-image-');
+
+        file_put_contents($tempZip, Storage::disk('scaleway')->get($job->object_key));
+
+        $zip = new ZipArchive;
+
+        try {
+            $this->assertTrue($zip->open($tempZip));
+            $this->assertStringContainsString('carre-1-1.jpg', $zip->getNameIndex(0));
+            file_put_contents($tempImage, $zip->getFromIndex(0));
+        } finally {
+            $zip->close();
+            @unlink($tempZip);
+        }
+
+        $size = getimagesize($tempImage);
+        @unlink($tempImage);
+
+        $this->assertSame('ready', $job->status);
+        $this->assertFalse($job->is_hd);
+        $this->assertSame('square', $job->payload['crop_preset']);
+        $this->assertSame(1600, $size[0]);
+        $this->assertSame(1600, $size[1]);
+    }
+
+    public function test_cropped_download_requires_crop_for_every_image(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        [$client, $project] = $this->clientAndProject();
+        $firstImage = $this->image($client, $project);
+        $secondImage = $this->image($client, $project);
+
+        $this->actingAs($admin)->post(route('downloads.store'), [
+            'variant' => 'crop',
+            'crop_preset' => 'story',
+            'image_ids' => [$firstImage->id, $secondImage->id],
+            'crops' => [[
+                'image_id' => $firstImage->id,
+                'focus_x' => 0.5,
+                'focus_y' => 0.5,
+                'zoom' => 1,
+            ]],
+        ])->assertInvalid('crops');
+
+        $this->assertDatabaseCount('download_jobs', 0);
     }
 
     public function test_download_archive_keeps_available_images_and_records_missing_sources(): void

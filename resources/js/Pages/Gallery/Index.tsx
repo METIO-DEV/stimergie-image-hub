@@ -25,6 +25,7 @@ import { ImageEditModal } from "@/Components/Legacy/LegacyModals";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, router, usePage } from "@inertiajs/react";
 import {
+    Crop,
     Download,
     FolderInput,
     Images,
@@ -90,8 +91,59 @@ type SelectionSnapshot = {
     canManage?: boolean;
 };
 
+type CropPresetKey = "square" | "story" | "magazine" | "web_banner";
+
+type CropPreset = {
+    key: CropPresetKey;
+    label: string;
+    ratioLabel: string;
+    width: number;
+    height: number;
+};
+
+type CropSetting = {
+    focusX: number;
+    focusY: number;
+    zoom: number;
+};
+
 const PAGE_SIZE = 60;
 const FILTER_DEBOUNCE_MS = 350;
+const DEFAULT_CROP_SETTING: CropSetting = {
+    focusX: 0.5,
+    focusY: 0.5,
+    zoom: 1,
+};
+const EXPORT_PRESETS: CropPreset[] = [
+    {
+        key: "square",
+        label: "Carré",
+        ratioLabel: "1:1",
+        width: 1,
+        height: 1,
+    },
+    {
+        key: "story",
+        label: "Story",
+        ratioLabel: "9:16",
+        width: 9,
+        height: 16,
+    },
+    {
+        key: "magazine",
+        label: "Magazine",
+        ratioLabel: "4:3",
+        width: 4,
+        height: 3,
+    },
+    {
+        key: "web_banner",
+        label: "Bandeau web",
+        ratioLabel: "3:1",
+        width: 3,
+        height: 1,
+    },
+];
 
 const normalizeImageId = (id: string | number) => String(id);
 
@@ -153,6 +205,12 @@ export default function GalleryIndex({
     const [shareMessage, setShareMessage] = useState("");
     const [shareStartsAt, setShareStartsAt] = useState("");
     const [shareExpiresAt, setShareExpiresAt] = useState("");
+    const [cropOpen, setCropOpen] = useState(false);
+    const [cropPreset, setCropPreset] = useState<CropPresetKey>("square");
+    const [cropImageId, setCropImageId] = useState<string | null>(null);
+    const [cropSettings, setCropSettings] = useState<
+        Record<string, CropSetting>
+    >({});
     const pendingFilterRequest = useRef<number | null>(null);
     const submittedSearch = useRef(activeFilters.search);
     const selectionStorageKey = useMemo(
@@ -203,6 +261,11 @@ export default function GalleryIndex({
     const selectedImageIdsForRequest = selectedImages
         .map((id) => Number(id))
         .filter(Number.isFinite);
+    const selectedCropItems = selectedImages
+        .map((id) => currentImagesById.get(id) || selectionSnapshots[id])
+        .filter((image): image is LegacyImage | SelectionSnapshot =>
+            Boolean(image),
+        );
     const paginatedImages = images;
     const hasActiveFilters =
         search.trim() !== "" ||
@@ -629,6 +692,75 @@ export default function GalleryIndex({
                 preserveScroll: true,
                 onSuccess: () => {
                     clearSelection();
+                },
+            },
+        );
+    };
+
+    const openCropDialog = () => {
+        if (selectionHasExpiredRights || selectedImages.length === 0) {
+            return;
+        }
+
+        setCropImageId((current) =>
+            current && selectedImages.includes(current)
+                ? current
+                : (selectedImages[0] ?? null),
+        );
+        setCropSettings((current) => {
+            const next = { ...current };
+
+            selectedImages.forEach((id) => {
+                next[id] = next[id] ?? DEFAULT_CROP_SETTING;
+            });
+
+            return next;
+        });
+        setSelectionReviewOpen(false);
+        setCropOpen(true);
+    };
+
+    const updateCurrentCrop = (updates: Partial<CropSetting>) => {
+        if (!cropImageId) {
+            return;
+        }
+
+        setCropSettings((current) => ({
+            ...current,
+            [cropImageId]: {
+                ...(current[cropImageId] ?? DEFAULT_CROP_SETTING),
+                ...updates,
+            },
+        }));
+    };
+
+    const requestCroppedDownload = () => {
+        if (selectionHasExpiredRights || selectedImageIdsForRequest.length === 0) {
+            return;
+        }
+
+        router.post(
+            route("downloads.store"),
+            {
+                variant: "crop",
+                crop_preset: cropPreset,
+                image_ids: selectedImageIdsForRequest,
+                crops: selectedImages.map((id) => {
+                    const setting = cropSettings[id] ?? DEFAULT_CROP_SETTING;
+
+                    return {
+                        image_id: Number(id),
+                        focus_x: setting.focusX,
+                        focus_y: setting.focusY,
+                        zoom: setting.zoom,
+                    };
+                }),
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    clearSelection();
+                    setCropOpen(false);
                 },
             },
         );
@@ -1064,7 +1196,7 @@ export default function GalleryIndex({
                                 img
                             </span>
                         </div>
-                        <div className="grid flex-1 grid-cols-4 gap-1">
+                        <div className="grid flex-1 grid-cols-5 gap-1">
                             <Button
                                 type="button"
                                 variant="ghost"
@@ -1088,6 +1220,18 @@ export default function GalleryIndex({
                             >
                                 <Download className="h-4 w-4" />
                                 HD
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-12 flex-col gap-1 px-1 text-[0.65rem]"
+                                onClick={openCropDialog}
+                                disabled={selectionHasExpiredRights}
+                                title="Exporter dans un format recadré"
+                            >
+                                <Crop className="h-4 w-4" />
+                                Formats
                             </Button>
                             {canCreateSharedAlbums ? (
                                 <Button
@@ -1190,6 +1334,22 @@ export default function GalleryIndex({
                             >
                                 <Download className="h-4 w-4" />
                                 HD impression
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="gap-2"
+                                onClick={openCropDialog}
+                                disabled={selectionHasExpiredRights}
+                                title={
+                                    selectionHasExpiredRights
+                                        ? "Une image sélectionnée a une cession expirée"
+                                        : "Exporter dans un format recadré"
+                                }
+                            >
+                                <Crop className="h-4 w-4" />
+                                Formats
                             </Button>
                             {selectionCanBeAssigned && (
                                 <Button
@@ -1375,7 +1535,7 @@ export default function GalleryIndex({
 
                     {selectedImages.length > 0 && (
                         <div className="space-y-3 border-t border-border bg-background p-4 pb-[calc(1rem+max(env(safe-area-inset-bottom),1.5rem))] sm:pb-4">
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-3 gap-2">
                                 <Button
                                     type="button"
                                     variant="outline"
@@ -1395,6 +1555,16 @@ export default function GalleryIndex({
                                 >
                                     <Download className="h-4 w-4" />
                                     HD
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="gap-2"
+                                    onClick={openCropDialog}
+                                    disabled={selectionHasExpiredRights}
+                                >
+                                    <Crop className="h-4 w-4" />
+                                    Formats
                                 </Button>
                             </div>
                             <div className="flex flex-wrap gap-2">
@@ -1454,6 +1624,18 @@ export default function GalleryIndex({
                         setEditingImage(null);
                     }
                 }}
+            />
+            <CropExportDialog
+                open={cropOpen}
+                onOpenChange={setCropOpen}
+                images={selectedCropItems}
+                selectedImageId={cropImageId}
+                onSelectedImageChange={setCropImageId}
+                preset={cropPreset}
+                onPresetChange={setCropPreset}
+                settings={cropSettings}
+                onSettingChange={updateCurrentCrop}
+                onSubmit={requestCroppedDownload}
             />
             <Dialog open={bulkProjectOpen} onOpenChange={setBulkProjectOpen}>
                 <DialogContent className="max-w-lg">
@@ -1605,5 +1787,229 @@ export default function GalleryIndex({
                 </DialogContent>
             </Dialog>
         </AuthenticatedLayout>
+    );
+}
+
+function CropExportDialog({
+    open,
+    onOpenChange,
+    images,
+    selectedImageId,
+    onSelectedImageChange,
+    preset,
+    onPresetChange,
+    settings,
+    onSettingChange,
+    onSubmit,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    images: Array<LegacyImage | SelectionSnapshot>;
+    selectedImageId: string | null;
+    onSelectedImageChange: (id: string) => void;
+    preset: CropPresetKey;
+    onPresetChange: (preset: CropPresetKey) => void;
+    settings: Record<string, CropSetting>;
+    onSettingChange: (updates: Partial<CropSetting>) => void;
+    onSubmit: () => void;
+}) {
+    const selectedImage =
+        images.find((image) => normalizeImageId(image.id) === selectedImageId) ??
+        images[0] ??
+        null;
+    const selectedId = selectedImage ? normalizeImageId(selectedImage.id) : null;
+    const selectedPreset =
+        EXPORT_PRESETS.find((candidate) => candidate.key === preset) ??
+        EXPORT_PRESETS[0];
+    const setting = selectedId
+        ? settings[selectedId] ?? DEFAULT_CROP_SETTING
+        : DEFAULT_CROP_SETTING;
+    const previewSrc = selectedImage?.imageUrl || selectedImage?.thumbUrl || null;
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-h-[92dvh] max-w-5xl overflow-hidden p-0">
+                <DialogHeader className="border-b border-border px-5 py-4">
+                    <DialogTitle>Formats d'export</DialogTitle>
+                </DialogHeader>
+                <div className="grid min-h-0 gap-0 md:grid-cols-[16rem_minmax(0,1fr)]">
+                    <div className="max-h-[70dvh] overflow-y-auto border-b border-border p-3 md:border-b-0 md:border-r">
+                        <div className="grid grid-cols-2 gap-2 md:grid-cols-1">
+                            {images.map((image) => {
+                                const id = normalizeImageId(image.id);
+                                const src = image.thumbUrl || image.imageUrl;
+                                const active = id === selectedId;
+
+                                return (
+                                    <button
+                                        key={id}
+                                        type="button"
+                                        className={`grid grid-cols-[3rem_minmax(0,1fr)] gap-2 rounded-md border p-2 text-left transition ${
+                                            active
+                                                ? "border-primary bg-primary/5"
+                                                : "border-border hover:bg-muted"
+                                        }`}
+                                        onClick={() => onSelectedImageChange(id)}
+                                    >
+                                        <span className="h-12 overflow-hidden rounded bg-muted">
+                                            {src ? (
+                                                <img
+                                                    src={src}
+                                                    alt={image.title}
+                                                    className="h-full w-full object-cover"
+                                                />
+                                            ) : (
+                                                <Images className="mx-auto h-full w-5 text-muted-foreground" />
+                                            )}
+                                        </span>
+                                        <span className="min-w-0 self-center truncate text-sm font-medium">
+                                            {image.title}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    <div className="max-h-[70dvh] overflow-y-auto p-5">
+                        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
+                            <div className="space-y-4">
+                                <div
+                                    className="relative mx-auto w-full max-w-2xl overflow-hidden rounded-md bg-muted"
+                                    style={{
+                                        aspectRatio: `${selectedPreset.width} / ${selectedPreset.height}`,
+                                    }}
+                                >
+                                    {previewSrc ? (
+                                        <img
+                                            src={previewSrc}
+                                            alt={selectedImage?.title ?? "Aperçu"}
+                                            className="h-full w-full object-cover"
+                                            style={{
+                                                objectPosition: `${setting.focusX * 100}% ${setting.focusY * 100}%`,
+                                                transform: `scale(${setting.zoom})`,
+                                                transformOrigin: `${setting.focusX * 100}% ${setting.focusY * 100}%`,
+                                            }}
+                                        />
+                                    ) : (
+                                        <div className="flex h-full items-center justify-center text-muted-foreground">
+                                            <Images className="h-10 w-10" />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="space-y-5">
+                                <div className="grid grid-cols-2 gap-2">
+                                    {EXPORT_PRESETS.map((candidate) => (
+                                        <button
+                                            key={candidate.key}
+                                            type="button"
+                                            className={`rounded-md border px-3 py-2 text-left text-sm transition ${
+                                                candidate.key === preset
+                                                    ? "border-primary bg-primary text-primary-foreground"
+                                                    : "border-border hover:bg-muted"
+                                            }`}
+                                            onClick={() =>
+                                                onPresetChange(candidate.key)
+                                            }
+                                        >
+                                            <span className="block font-semibold">
+                                                {candidate.label}
+                                            </span>
+                                            <span className="text-xs opacity-80">
+                                                {candidate.ratioLabel}
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <div className="space-y-4">
+                                    <CropRange
+                                        label="Horizontal"
+                                        min={0}
+                                        max={100}
+                                        step={1}
+                                        value={Math.round(setting.focusX * 100)}
+                                        onChange={(value) =>
+                                            onSettingChange({
+                                                focusX: value / 100,
+                                            })
+                                        }
+                                    />
+                                    <CropRange
+                                        label="Vertical"
+                                        min={0}
+                                        max={100}
+                                        step={1}
+                                        value={Math.round(setting.focusY * 100)}
+                                        onChange={(value) =>
+                                            onSettingChange({
+                                                focusY: value / 100,
+                                            })
+                                        }
+                                    />
+                                    <CropRange
+                                        label="Zoom"
+                                        min={1}
+                                        max={4}
+                                        step={0.05}
+                                        value={setting.zoom}
+                                        onChange={(value) =>
+                                            onSettingChange({ zoom: value })
+                                        }
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <DialogFooter className="border-t border-border px-5 py-4">
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>
+                        Annuler
+                    </Button>
+                    <Button disabled={images.length === 0} onClick={onSubmit}>
+                        <Download className="mr-2 h-4 w-4" />
+                        Exporter
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function CropRange({
+    label,
+    min,
+    max,
+    step,
+    value,
+    onChange,
+}: {
+    label: string;
+    min: number;
+    max: number;
+    step: number;
+    value: number;
+    onChange: (value: number) => void;
+}) {
+    return (
+        <label className="block space-y-2 text-sm">
+            <span className="flex items-center justify-between gap-3 font-medium">
+                <span>{label}</span>
+                <span className="text-xs text-muted-foreground">
+                    {label === "Zoom" ? `${value.toFixed(2)}x` : `${value}%`}
+                </span>
+            </span>
+            <input
+                type="range"
+                min={min}
+                max={max}
+                step={step}
+                value={value}
+                onChange={(event) => onChange(Number(event.target.value))}
+                className="w-full accent-primary"
+            />
+        </label>
     );
 }

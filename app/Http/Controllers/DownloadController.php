@@ -6,6 +6,7 @@ use App\Http\Requests\StoreDownloadRequest;
 use App\Jobs\PrepareDownloadArchive;
 use App\Models\DownloadJob;
 use App\Models\Image;
+use App\Support\ImageExportPresets;
 use App\Support\ImageUrlResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -29,7 +30,7 @@ class DownloadController extends Controller
         $job = DownloadJob::create([
             'user_id' => $request->user()->id,
             'client_id' => $this->singleClientId($images),
-            'title' => $this->title($images->count(), $variant),
+            'title' => $this->title($images->count(), $variant, $data['crop_preset'] ?? null),
             'status' => 'pending',
             'is_hd' => $variant === 'hd',
             'image_count' => $images->count(),
@@ -37,6 +38,10 @@ class DownloadController extends Controller
             'payload' => [
                 'variant' => $variant,
                 'requested_image_ids' => $images->pluck('id')->values(),
+                ...($variant === 'crop' ? [
+                    'crop_preset' => $data['crop_preset'],
+                    'crops' => $data['crops'],
+                ] : []),
             ],
         ]);
 
@@ -93,9 +98,13 @@ class DownloadController extends Controller
         return $clientIds->count() === 1 ? $clientIds->first() : null;
     }
 
-    private function title(int $count, string $variant): string
+    private function title(int $count, string $variant, ?string $cropPreset = null): string
     {
-        $label = $variant === 'hd' ? 'HD impression' : 'Web reseaux sociaux';
+        $label = match ($variant) {
+            'hd' => 'HD impression',
+            'crop' => 'Export '.ImageExportPresets::get((string) $cropPreset)['label'],
+            default => 'Web reseaux sociaux',
+        };
 
         return "{$count} image".($count > 1 ? 's' : '')." ({$label})";
     }
