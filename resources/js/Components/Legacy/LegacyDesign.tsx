@@ -278,17 +278,16 @@ export function MasonryGrid({
     onToggle,
     onImageClick,
     loadingSlots = false,
-    mobileColumns = 3,
+    columnCount = 3,
 }: {
     images: LegacyImage[];
     selectedIds?: Array<string | number>;
     onToggle?: (id: string | number) => void;
     onImageClick?: (image: LegacyImage) => void;
     loadingSlots?: boolean;
-    mobileColumns?: 3 | 4;
+    columnCount?: 2 | 3 | 4 | 5;
 }) {
     const [hoveredId, setHoveredId] = useState<string | number | null>(null);
-    const columnCount = useMasonryColumnCount(mobileColumns);
     const columns = useMemo(
         () => distributeImages(images, columnCount),
         [columnCount, images],
@@ -1268,33 +1267,6 @@ function distributeImages(images: LegacyImage[], count: number) {
     });
 
     return columns;
-}
-
-function useMasonryColumnCount(mobileColumns: 3 | 4) {
-    const [columnCount, setColumnCount] = useState<number>(mobileColumns);
-
-    useEffect(() => {
-        const updateColumnCount = () => {
-            const width = window.innerWidth;
-
-            if (width >= 1536) {
-                setColumnCount(5);
-            } else if (width >= 1280) {
-                setColumnCount(4);
-            } else if (width >= 1024) {
-                setColumnCount(3);
-            } else {
-                setColumnCount(mobileColumns);
-            }
-        };
-
-        updateColumnCount();
-        window.addEventListener("resize", updateColumnCount);
-
-        return () => window.removeEventListener("resize", updateColumnCount);
-    }, [mobileColumns]);
-
-    return columnCount;
 }
 
 function imageHeightFactor(image: LegacyImage) {

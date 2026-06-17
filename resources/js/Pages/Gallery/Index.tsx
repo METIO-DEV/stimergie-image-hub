@@ -38,7 +38,13 @@ import {
     Trash2,
     X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+    type TouchEvent as ReactTouchEvent,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
 
 type FilterOption = {
     id: number;
@@ -108,11 +114,14 @@ type CropSetting = {
 };
 
 type CropSource = "web" | "hd";
+type GalleryColumnCount = 2 | 3 | 4 | 5;
 
 const PAGE_SIZE = 60;
 const FILTER_DEBOUNCE_MS = 350;
 const GALLERY_SELECTION_EVENT = "stimergie:gallery-selection";
-const MOBILE_COLUMNS_STORAGE_KEY = "stimergie.gallery.mobileColumns";
+const GALLERY_COLUMNS_STORAGE_KEY = "stimergie.gallery.mobileColumns";
+const GALLERY_COLUMN_OPTIONS = [2, 3, 4, 5] as const;
+const PINCH_COLUMN_THRESHOLD = 44;
 const DEFAULT_CROP_SETTING: CropSetting = {
     focusX: 0.5,
     focusY: 0.5,
@@ -150,6 +159,41 @@ const EXPORT_PRESETS: CropPreset[] = [
 ];
 
 const normalizeImageId = (id: string | number) => String(id);
+
+const defaultGalleryColumnCount = (): GalleryColumnCount => {
+    if (typeof window === "undefined") {
+        return 3;
+    }
+
+    const stored = Number(window.localStorage.getItem(GALLERY_COLUMNS_STORAGE_KEY));
+
+    if (GALLERY_COLUMN_OPTIONS.includes(stored as GalleryColumnCount)) {
+        return stored as GalleryColumnCount;
+    }
+
+    if (window.innerWidth >= 1536) {
+        return 5;
+    }
+
+    if (window.innerWidth >= 1280) {
+        return 4;
+    }
+
+    return 3;
+};
+
+const clampGalleryColumnCount = (value: number): GalleryColumnCount =>
+    Math.min(5, Math.max(2, value)) as GalleryColumnCount;
+
+const touchDistance = (touches: ReactTouchEvent<HTMLDivElement>["touches"]) => {
+    const first = touches[0];
+    const second = touches[1];
+
+    return Math.hypot(
+        first.clientX - second.clientX,
+        first.clientY - second.clientY,
+    );
+};
 
 const imageToSelectionSnapshot = (image: LegacyImage): SelectionSnapshot => ({
     id: normalizeImageId(image.id),
@@ -197,15 +241,9 @@ export default function GalleryIndex({
     const [selectionDockVisible, setSelectionDockVisible] = useState(false);
     const [selectionDockClosing, setSelectionDockClosing] = useState(false);
     const [selectionDockCount, setSelectionDockCount] = useState(0);
-    const [mobileColumns, setMobileColumns] = useState<3 | 4>(() => {
-        if (typeof window === "undefined") {
-            return 3;
-        }
-
-        return window.localStorage.getItem(MOBILE_COLUMNS_STORAGE_KEY) === "4"
-            ? 4
-            : 3;
-    });
+    const [galleryColumns, setGalleryColumns] = useState<GalleryColumnCount>(
+        defaultGalleryColumnCount,
+    );
     const [detailImage, setDetailImage] = useState<LegacyImage | null>(null);
     const [editingImage, setEditingImage] = useState<LegacyImage | null>(null);
     const [imageModalOpen, setImageModalOpen] = useState(false);
@@ -227,6 +265,8 @@ export default function GalleryIndex({
     >({});
     const pendingFilterRequest = useRef<number | null>(null);
     const submittedSearch = useRef(activeFilters.search);
+    const pinchStartDistance = useRef<number | null>(null);
+    const pinchStartColumns = useRef<GalleryColumnCount>(galleryColumns);
     const selectionStorageKey = useMemo(
         () => `stimergie.gallery.selection.${user?.id ?? "guest"}`,
         [user?.id],
@@ -563,10 +603,10 @@ export default function GalleryIndex({
 
     useEffect(() => {
         window.localStorage.setItem(
-            MOBILE_COLUMNS_STORAGE_KEY,
-            String(mobileColumns),
+            GALLERY_COLUMNS_STORAGE_KEY,
+            String(galleryColumns),
         );
-    }, [mobileColumns]);
+    }, [galleryColumns]);
 
     useEffect(() => {
         if (!didMount.current) {
@@ -671,6 +711,43 @@ export default function GalleryIndex({
         setSelectionSnapshots({});
         window.localStorage.removeItem(selectionStorageKey);
         window.dispatchEvent(new Event(GALLERY_SELECTION_EVENT));
+    };
+
+    const handleGridTouchStart = (event: ReactTouchEvent<HTMLDivElement>) => {
+        if (event.touches.length !== 2) {
+            return;
+        }
+
+        pinchStartDistance.current = touchDistance(event.touches);
+        pinchStartColumns.current = galleryColumns;
+    };
+
+    const handleGridTouchMove = (event: ReactTouchEvent<HTMLDivElement>) => {
+        if (event.touches.length !== 2 || pinchStartDistance.current === null) {
+            return;
+        }
+
+        event.preventDefault();
+
+        const delta = touchDistance(event.touches) - pinchStartDistance.current;
+        const steps = Math.trunc(delta / PINCH_COLUMN_THRESHOLD);
+
+        if (steps === 0) {
+            return;
+        }
+
+        setGalleryColumns(
+            clampGalleryColumnCount(pinchStartColumns.current - steps),
+        );
+    };
+
+    const handleGridTouchEnd = (event: ReactTouchEvent<HTMLDivElement>) => {
+        if (event.touches.length >= 2) {
+            return;
+        }
+
+        pinchStartDistance.current = null;
+        pinchStartColumns.current = galleryColumns;
     };
 
     const openBulkProjectDialog = () => {
@@ -1169,19 +1246,19 @@ export default function GalleryIndex({
                         selectionDockVisible ? "pb-28 md:pb-24" : ""
                     }`}
                 >
-                    <div className="flex justify-end px-2 py-2 md:hidden">
+                    <div className="flex justify-end px-2 py-2">
                         <div className="inline-flex rounded-full border border-border bg-background p-1 shadow-sm">
-                            {([3, 4] as const).map((columnCount) => {
-                                const active = mobileColumns === columnCount;
+                            {GALLERY_COLUMN_OPTIONS.map((columnCount) => {
+                                const active = galleryColumns === columnCount;
 
                                 return (
                                     <button
                                         key={columnCount}
                                         type="button"
                                         onClick={() =>
-                                            setMobileColumns(columnCount)
+                                            setGalleryColumns(columnCount)
                                         }
-                                        className={`flex h-7 w-8 items-center justify-center rounded-full text-xs font-semibold transition ${
+                                        className={`flex h-8 w-9 items-center justify-center rounded-full transition ${
                                             active
                                                 ? "bg-primary text-primary-foreground"
                                                 : "text-muted-foreground hover:bg-muted"
@@ -1190,27 +1267,37 @@ export default function GalleryIndex({
                                         aria-label={`Afficher ${columnCount} colonnes`}
                                         aria-pressed={active}
                                     >
-                                        {columnCount}
+                                        <ColumnDensityIcon
+                                            columns={columnCount}
+                                        />
                                     </button>
                                 );
                             })}
                         </div>
                     </div>
-                    {paginatedImages.length > 0 ? (
-                        <MasonryGrid
-                            images={paginatedImages}
-                            selectedIds={selectedImages}
-                            onToggle={toggleSelection}
-                            onImageClick={setDetailImage}
-                            mobileColumns={mobileColumns}
-                        />
-                    ) : (
-                        <MasonryGrid
-                            images={[]}
-                            loadingSlots
-                            mobileColumns={mobileColumns}
-                        />
-                    )}
+                    <div
+                        onTouchStart={handleGridTouchStart}
+                        onTouchMove={handleGridTouchMove}
+                        onTouchEnd={handleGridTouchEnd}
+                        onTouchCancel={handleGridTouchEnd}
+                        style={{ touchAction: "pan-y" }}
+                    >
+                        {paginatedImages.length > 0 ? (
+                            <MasonryGrid
+                                images={paginatedImages}
+                                selectedIds={selectedImages}
+                                onToggle={toggleSelection}
+                                onImageClick={setDetailImage}
+                                columnCount={galleryColumns}
+                            />
+                        ) : (
+                            <MasonryGrid
+                                images={[]}
+                                loadingSlots
+                                columnCount={galleryColumns}
+                            />
+                        )}
+                    </div>
                 </div>
 
                 {!infiniteScroll && (
@@ -2086,5 +2173,21 @@ function CropRange({
                 className="w-full accent-primary"
             />
         </label>
+    );
+}
+
+function ColumnDensityIcon({ columns }: { columns: GalleryColumnCount }) {
+    return (
+        <span
+            aria-hidden="true"
+            className="flex h-4 w-5 items-stretch justify-center gap-0.5"
+        >
+            {Array.from({ length: columns }).map((_, index) => (
+                <span
+                    key={index}
+                    className="h-full flex-1 rounded-[2px] bg-current"
+                />
+            ))}
+        </span>
     );
 }
