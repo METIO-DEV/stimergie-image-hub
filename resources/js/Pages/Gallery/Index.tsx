@@ -1232,7 +1232,7 @@ export default function GalleryIndex({
                     </div>
                 </section>
 
-                <div className="flex flex-col items-center gap-4 px-4 py-6">
+                <div className="flex flex-col items-center gap-2 px-3 py-4">
                     {!infiniteScroll && (
                         <LegacyPagination
                             totalCount={pagination.total}
@@ -1242,7 +1242,7 @@ export default function GalleryIndex({
                             className="py-0"
                         />
                     )}
-                    <div className="inline-flex rounded-full border border-border bg-background p-1 shadow-sm">
+                    <div className="inline-flex rounded-full border border-border bg-background p-0.5 shadow-sm">
                         {GALLERY_COLUMN_OPTIONS.map((columnCount) => {
                             const active = galleryColumns === columnCount;
 
@@ -1253,7 +1253,7 @@ export default function GalleryIndex({
                                     onClick={() =>
                                         setGalleryColumns(columnCount)
                                     }
-                                    className={`flex h-9 w-10 items-center justify-center rounded-full transition ${
+                                    className={`flex h-7 w-8 items-center justify-center rounded-full transition ${
                                         active
                                             ? "bg-primary text-primary-foreground"
                                             : "text-muted-foreground hover:bg-muted"
@@ -2179,7 +2179,7 @@ function ColumnDensityIcon({ columns }: { columns: GalleryColumnCount }) {
     return (
         <span
             aria-hidden="true"
-            className="grid h-5 w-6 gap-[2px]"
+            className="grid h-4 w-5 gap-[2px]"
             style={{
                 gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
             }}
@@ -2191,12 +2191,12 @@ function ColumnDensityIcon({ columns }: { columns: GalleryColumnCount }) {
                 >
                     <span
                         className={`block rounded-[2px] bg-current ${
-                            index % 2 === 0 ? "h-3" : "h-2"
+                            index % 2 === 0 ? "h-2.5" : "h-1.5"
                         }`}
                     />
                     <span
                         className={`block flex-1 rounded-[2px] bg-current opacity-70 ${
-                            index % 2 === 0 ? "min-h-1.5" : "min-h-2.5"
+                            index % 2 === 0 ? "min-h-1" : "min-h-2"
                         }`}
                     />
                 </span>

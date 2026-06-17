@@ -296,6 +296,28 @@ export function MasonryGrid({
     const gridStyle = {
         gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
     };
+    const overlaySizeClass =
+        columnCount >= 5
+            ? "h-5 w-5 left-1.5 top-1.5 border"
+            : columnCount >= 4
+              ? "h-6 w-6 left-2 top-2 border"
+              : columnCount >= 3
+                ? "h-7 w-7 left-2.5 top-2.5 border-2"
+                : "h-8 w-8 left-3 top-3 border-2";
+    const overlayIconClass =
+        columnCount >= 5
+            ? "h-2.5 w-2.5"
+            : columnCount >= 4
+              ? "h-3 w-3"
+              : "h-3.5 w-3.5";
+    const downloadSizeClass =
+        columnCount >= 5
+            ? "h-6 w-6 right-1.5 top-1.5"
+            : columnCount >= 4
+              ? "h-7 w-7 right-2 top-2"
+              : columnCount >= 3
+                ? "h-8 w-8 right-2.5 top-2.5"
+                : "h-9 w-9 right-3 top-3";
 
     useEffect(() => {
         setTransitioning(true);
@@ -371,7 +393,8 @@ export function MasonryGrid({
                                 <button
                                     type="button"
                                     className={cn(
-                                        "absolute left-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white/80 transition",
+                                        "absolute z-10 flex items-center justify-center rounded-full border-white/80 transition",
+                                        overlaySizeClass,
                                         isSelected
                                             ? "scale-110 bg-primary text-white"
                                             : "bg-white/60 group-hover:bg-white/90",
@@ -383,7 +406,7 @@ export function MasonryGrid({
                                     aria-label="Sélectionner l'image"
                                 >
                                     {isSelected && (
-                                        <Check className="h-4 w-4" />
+                                        <Check className={overlayIconClass} />
                                     )}
                                 </button>
 
@@ -448,7 +471,8 @@ export function MasonryGrid({
                                     <a
                                         href={image.downloadUrl}
                                         className={cn(
-                                            "absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-foreground shadow-md transition",
+                                            "absolute z-10 flex items-center justify-center rounded-full bg-white/90 text-foreground shadow-md transition",
+                                            downloadSizeClass,
                                             hoveredId === imageId
                                                 ? "translate-y-0 opacity-100"
                                                 : "-translate-y-2 opacity-0",
@@ -458,7 +482,7 @@ export function MasonryGrid({
                                         }
                                         title="Télécharger"
                                     >
-                                        <Download className="h-4 w-4" />
+                                        <Download className={overlayIconClass} />
                                     </a>
                                 )}
                             </div>
@@ -1047,11 +1071,11 @@ export function LegacyPagination({
     return (
         <div
             className={cn(
-                "flex flex-col items-center gap-6 px-4 py-8",
+                "flex flex-col items-center gap-3 px-3 py-5",
                 className,
             )}
         >
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <span className="font-medium text-foreground">
                     {start} - {end}
                 </span>
@@ -1060,7 +1084,7 @@ export function LegacyPagination({
                     {totalCount}
                 </span>
                 <span>images</span>
-                <span className="ml-2 text-xs">
+                <span className="ml-1 text-[0.68rem]">
                     (Page {currentPage}/{totalPages})
                 </span>
             </div>
@@ -1086,7 +1110,7 @@ export function LegacyPagination({
                         <Button
                             key={page}
                             variant={page === currentPage ? "default" : "ghost"}
-                            className="h-10 w-10"
+                            className="h-8 w-8 text-xs"
                             onClick={() => onPageChange(page)}
                         >
                             {page}
@@ -1275,7 +1299,7 @@ function PageButton({
             variant="outline"
             size="icon"
             disabled={disabled}
-            className="h-10 w-10"
+            className="h-8 w-8"
             onClick={onClick}
         >
             {children}
