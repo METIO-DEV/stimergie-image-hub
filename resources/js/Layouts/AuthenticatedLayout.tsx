@@ -386,7 +386,9 @@ export default function Authenticated({
                             <div className="flex items-center">
                                 {basketAction ?? (
                                     <Link
-                                        href={route("gallery.index")}
+                                        href={route("gallery.index", {
+                                            basket: "1",
+                                        })}
                                         className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-background/80 px-3 text-sm font-medium shadow-sm transition hover:bg-white"
                                         title="Ouvrir le panier"
                                         aria-label={`Ouvrir le panier, ${basketCount} image${basketCount > 1 ? "s" : ""} sélectionnée${basketCount > 1 ? "s" : ""}`}

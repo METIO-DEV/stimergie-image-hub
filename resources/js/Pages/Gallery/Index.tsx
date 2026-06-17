@@ -226,7 +226,8 @@ export default function GalleryIndex({
     canCreateSharedAlbums,
     pagination,
 }: Props) {
-    const user = usePage().props.auth.user;
+    const page = usePage();
+    const user = page.props.auth.user;
     const [search, setSearch] = useState(activeFilters.search);
     const [orientation, setOrientation] = useState(activeFilters.orientation);
     const [clientId, setClientId] = useState(activeFilters.clientId);
@@ -445,7 +446,6 @@ export default function GalleryIndex({
 
     useEffect(() => {
         if (selectedImages.length === 0) {
-            setSelectionReviewOpen(false);
             setSelectionSnapshots({});
 
             return;
@@ -617,6 +617,16 @@ export default function GalleryIndex({
 
         return () => window.clearTimeout(timeout);
     }, [selectedImages.length, selectionDockVisible]);
+
+    useEffect(() => {
+        const searchParams = new URLSearchParams(
+            window.location.search || page.url.split("?")[1] || "",
+        );
+
+        if (searchParams.get("basket") === "1") {
+            setSelectionReviewOpen(true);
+        }
+    }, [page.url]);
 
     useEffect(() => {
         pinchCurrentColumns.current = galleryColumns;
