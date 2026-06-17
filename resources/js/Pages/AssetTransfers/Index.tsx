@@ -127,6 +127,9 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
     const [limit, setLimit] = useState("5");
     const [loadingSources, setLoadingSources] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [mappingSubmittingFolders, setMappingSubmittingFolders] = useState<
+        Record<string, boolean>
+    >({});
     const [error, setError] = useState<string | null>(null);
     const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
     const mounted = useRef(false);
@@ -419,13 +422,96 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
         }
     };
 
+    const projectOptionById = useMemo(
+        () =>
+            new Map(
+                projectOptions.map((project) => [project.id, project] as const),
+            ),
+        [projectOptions],
+    );
+
+    const markFolderAsMapped = useCallback(
+        (folder: string, projectId: number) => {
+            const project = projectOptionById.get(projectId);
+
+            if (!project) {
+                return;
+            }
+
+            setFolderMatches((currentMatches) =>
+                currentMatches.map((match) =>
+                    match.folder === folder
+                        ? {
+                              ...match,
+                              status: "mapped",
+                              mappedProject: project,
+                              exactProject: null,
+                              suggestion: null,
+                          }
+                        : match,
+                ),
+            );
+            setFolders((currentFolders) =>
+                currentFolders.map((currentFolder) =>
+                    currentFolder.name === folder
+                        ? {
+                              ...currentFolder,
+                              projectId: project.id,
+                              projectName: project.name,
+                              databaseImageCount:
+                                  project.imagesCount ??
+                                  currentFolder.databaseImageCount,
+                          }
+                        : currentFolder,
+                ),
+            );
+            setMappingSelections((currentSelections) => ({
+                ...currentSelections,
+                [folder]: String(project.id),
+            }));
+        },
+        [projectOptionById],
+    );
+
+    const markFolderAsIgnored = useCallback((folder: string) => {
+        setFolderMatches((currentMatches) =>
+            currentMatches.map((match) =>
+                match.folder === folder
+                    ? {
+                          ...match,
+                          status: "ignored",
+                          mappedProject: null,
+                          exactProject: null,
+                          suggestion: null,
+                      }
+                    : match,
+            ),
+        );
+    }, []);
+
+    const setMappingSubmitting = (folder: string, value: boolean) => {
+        setMappingSubmittingFolders((current) => {
+            const next = { ...current };
+
+            if (value) {
+                next[folder] = true;
+            } else {
+                delete next[folder];
+            }
+
+            return next;
+        });
+    };
+
     const mapFolder = async (folder: string, projectId?: string) => {
         if (!projectId) {
             setError("Sélectionnez un projet avant d'associer le dossier.");
             return;
         }
 
-        setSubmitting(true);
+        const numericProjectId = Number(projectId);
+
+        setMappingSubmitting(folder, true);
         setError(null);
 
         try {
@@ -440,7 +526,7 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                     },
                     body: JSON.stringify({
                         folder,
-                        project_id: Number(projectId),
+                        project_id: numericProjectId,
                     }),
                 },
             );
@@ -450,7 +536,7 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                 throw new Error(payload.message || "Association impossible.");
             }
 
-            await loadSources();
+            markFolderAsMapped(folder, numericProjectId);
         } catch (exception) {
             setError(
                 exception instanceof Error
@@ -458,12 +544,12 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                     : "Association impossible.",
             );
         } finally {
-            setSubmitting(false);
+            setMappingSubmitting(folder, false);
         }
     };
 
     const ignoreFolder = async (folder: string) => {
-        setSubmitting(true);
+        setMappingSubmitting(folder, true);
         setError(null);
 
         try {
@@ -485,7 +571,7 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                 throw new Error(payload.message || "Action impossible.");
             }
 
-            await loadSources();
+            markFolderAsIgnored(folder);
         } catch (exception) {
             setError(
                 exception instanceof Error
@@ -493,7 +579,7 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                     : "Action impossible.",
             );
         } finally {
-            setSubmitting(false);
+            setMappingSubmitting(folder, false);
         }
     };
 
@@ -862,6 +948,9 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                                     folderMatches.map((match) => {
                                         const selectedProjectId =
                                             mappingSelections[match.folder] || "";
+                                        const isMappingSubmitting = Boolean(
+                                            mappingSubmittingFolders[match.folder],
+                                        );
 
                                         return (
                                             <TableRow key={match.folder}>
@@ -924,7 +1013,7 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                                                                 }),
                                                             )
                                                         }
-                                                        disabled={submitting}
+                                                        disabled={isMappingSubmitting}
                                                     >
                                                         <option value="">
                                                             Sélectionner un projet
@@ -954,12 +1043,14 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                                                                 )
                                                             }
                                                             disabled={
-                                                                submitting ||
+                                                                isMappingSubmitting ||
                                                                 !selectedProjectId
                                                             }
                                                         >
                                                             <Link2 className="mr-2 h-4 w-4" />
-                                                            Associer
+                                                            {isMappingSubmitting
+                                                                ? "Association..."
+                                                                : "Associer"}
                                                         </Button>
                                                         <Button
                                                             type="button"
@@ -968,9 +1059,11 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                                                             onClick={() =>
                                                                 void ignoreFolder(match.folder)
                                                             }
-                                                            disabled={submitting}
+                                                            disabled={isMappingSubmitting}
                                                         >
-                                                            Ignorer
+                                                            {isMappingSubmitting
+                                                                ? "..."
+                                                                : "Ignorer"}
                                                         </Button>
                                                     </div>
                                                 </TableCell>
