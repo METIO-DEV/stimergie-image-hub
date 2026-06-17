@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AppPageController;
+use App\Http\Controllers\AssetTransferController;
 use App\Http\Controllers\BlogPostController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ClientMemberController;
@@ -86,6 +87,15 @@ Route::middleware('auth')->group(function () {
     Route::get('/downloads/{downloadJob}', [DownloadController::class, 'show'])->name('downloads.show');
     Route::get('/images', [AppPageController::class, 'images'])->name('images.index');
     Route::get('/imports', [AppPageController::class, 'imports'])->name('imports.index');
+    Route::get('/asset-transfers', [AssetTransferController::class, 'index'])->name('asset-transfers.index');
+    Route::get('/asset-transfers/sources', [AssetTransferController::class, 'sources'])->name('asset-transfers.sources');
+    Route::post('/asset-transfers', [AssetTransferController::class, 'store'])->name('asset-transfers.store');
+    Route::post('/asset-transfers/resync-bucket', [AssetTransferController::class, 'resyncBucket'])->name('asset-transfers.resync-bucket');
+    Route::post('/asset-transfers/folder-mappings', [AssetTransferController::class, 'mapFolder'])->name('asset-transfers.folder-mappings.store');
+    Route::post('/asset-transfers/folder-mappings/ignore', [AssetTransferController::class, 'ignoreFolder'])->name('asset-transfers.folder-mappings.ignore');
+    Route::post('/asset-transfers/folder-mappings/auto', [AssetTransferController::class, 'autoMapFolders'])->name('asset-transfers.folder-mappings.auto');
+    Route::get('/asset-transfers/{assetTransferJob}', [AssetTransferController::class, 'show'])->name('asset-transfers.show');
+    Route::post('/asset-transfers/{assetTransferJob}/stop', [AssetTransferController::class, 'stop'])->name('asset-transfers.stop');
     Route::get('/images/{image}/download', [ImageController::class, 'download'])->name('images.download');
     Route::post('/images/{image}/rights-extension', [ImageController::class, 'requestRightsExtension'])->name('images.rights-extension');
     Route::post('/images/analyze-tags', [ImageAnalysisController::class, 'upload'])->name('images.analyze-tags');

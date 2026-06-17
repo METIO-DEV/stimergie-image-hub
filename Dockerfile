@@ -24,6 +24,7 @@ RUN apt-get update \
         libpng-dev \
         libpq-dev \
         libzip-dev \
+        rclone \
         unzip \
         zip \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \

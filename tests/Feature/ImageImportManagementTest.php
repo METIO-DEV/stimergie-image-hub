@@ -321,6 +321,57 @@ class ImageImportManagementTest extends TestCase
         ]);
     }
 
+    public function test_command_can_sync_project_bucket_images_into_database(): void
+    {
+        Storage::fake('scaleway');
+
+        [, $project] = $this->clientAndProject();
+        $original = UploadedFile::fake()->image('command-source.jpg', 1200, 900);
+        $web = UploadedFile::fake()->image('command-source.jpg', 600, 450);
+
+        Storage::disk('scaleway')->put(
+            'photos/projet-import/command-source.jpg',
+            file_get_contents($original->getRealPath()),
+        );
+        Storage::disk('scaleway')->put(
+            'photos/projet-import/JPG/command-source.jpg',
+            file_get_contents($web->getRealPath()),
+        );
+
+        $this->artisan('images:sync-project-bucket-assets', ['--project' => $project->id])
+            ->assertExitCode(0);
+
+        $this->assertDatabaseHas('images', [
+            'project_id' => $project->id,
+            'object_key_original' => 'photos/projet-import/command-source.jpg',
+            'object_key_web' => 'photos/projet-import/JPG/command-source.jpg',
+            'status' => 'ready',
+        ]);
+    }
+
+    public function test_command_resolves_legacy_project_folder_variants_when_syncing_bucket_images(): void
+    {
+        Storage::fake('scaleway');
+
+        [, $project] = $this->clientAndProject();
+        $project->update(['source_folder' => 'ADAMANCE_Gamme Fraiche_14112024']);
+        $original = UploadedFile::fake()->image('fruit-source.jpg', 1200, 900);
+
+        Storage::disk('scaleway')->put(
+            'photos/ADAMANCE_GAMME FRAICHE 141124/fruit-source.jpg',
+            file_get_contents($original->getRealPath()),
+        );
+
+        $this->artisan('images:sync-project-bucket-assets', ['--project' => $project->id])
+            ->assertExitCode(0);
+
+        $this->assertDatabaseHas('images', [
+            'project_id' => $project->id,
+            'object_key_original' => 'photos/ADAMANCE_GAMME FRAICHE 141124/fruit-source.jpg',
+            'status' => 'ready',
+        ]);
+    }
+
     public function test_client_manager_can_sync_project_bucket_images_into_database(): void
     {
         Storage::fake('scaleway');

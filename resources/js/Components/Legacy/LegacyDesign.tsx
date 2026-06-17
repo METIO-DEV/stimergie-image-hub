@@ -316,7 +316,10 @@ export function MasonryGrid({
                 <div key={columnIndex} className="flex flex-col gap-0.5">
                     {column.map((image) => {
                         const imageId = image.id;
-                        const isSelected = selectedIds?.includes(imageId);
+                        const isSelected = selectedIds?.some(
+                            (selectedId) =>
+                                String(selectedId) === String(imageId),
+                        );
                         const src = image.thumbUrl || image.imageUrl;
                         const rightsExpired =
                             image.rightsStatus === "expired";

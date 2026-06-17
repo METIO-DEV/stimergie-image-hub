@@ -10,6 +10,7 @@ import {
     FolderUp,
     Image,
     Users,
+    ServerCog,
 } from "lucide-react";
 
 type DashboardStats = {
@@ -154,6 +155,13 @@ export default function Dashboard({
                         description="Interface de visualisation des images"
                         href={route("gallery.index")}
                         icon={Image}
+                    />
+                    <FeatureCard
+                        title="Transferts FTP"
+                        subtitle="Piloter les dossiers o2switch vers Scaleway"
+                        description="Suivi rclone et synchronisation de la base"
+                        href={route("asset-transfers.index")}
+                        icon={ServerCog}
                     />
                     <FeatureCard
                         title="Blog et ressources"

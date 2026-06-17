@@ -1,0 +1,228 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Jobs\RunAssetTransferJob;
+use App\Jobs\RunBucketDatabaseSyncJob;
+use App\Models\AssetTransferJob;
+use App\Models\Client;
+use App\Models\Project;
+use App\Models\User;
+use App\Support\O2SwitchAssetBrowser;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
+use Tests\TestCase;
+
+class AssetTransferManagementTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_super_admin_can_open_asset_transfer_interface(): void
+    {
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('asset-transfers.index'))
+            ->assertOk();
+    }
+
+    public function test_standard_user_cannot_open_asset_transfer_interface(): void
+    {
+        $user = User::factory()->create([
+            'platform_role' => 'user',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('asset-transfers.index'))
+            ->assertForbidden();
+    }
+
+    public function test_super_admin_can_start_transfer_from_selected_folders(): void
+    {
+        Queue::fake();
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson(route('asset-transfers.store'), [
+                'folders' => ['ADAMANCE_ESSENTIELS', 'IMPRONONCABLE'],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('job.status', 'pending')
+            ->assertJsonPath('job.totalFolders', 2);
+
+        $this->assertDatabaseHas('asset_transfer_jobs', [
+            'started_by' => $admin->id,
+            'status' => 'pending',
+            'total_folders' => 2,
+        ]);
+        Queue::assertPushed(RunAssetTransferJob::class);
+    }
+
+    public function test_super_admin_can_start_transfer_from_first_missing_folders(): void
+    {
+        Queue::fake();
+
+        $this->instance(O2SwitchAssetBrowser::class, new class extends O2SwitchAssetBrowser
+        {
+            public function ftpFolders(int $limit = 1000): array
+            {
+                return ['ALREADY_BUCKET', 'MISSING_ONE', 'MISSING_TWO'];
+            }
+
+            public function bucketFolders(string $prefix = 'photos'): array
+            {
+                return ['ALREADY_BUCKET' => 12];
+            }
+        });
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson(route('asset-transfers.store'), [
+                'limit' => 1,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('job.totalFolders', 1)
+            ->assertJsonPath('job.folders.0', 'MISSING_ONE');
+
+        $job = AssetTransferJob::query()->firstOrFail();
+
+        $this->assertSame(['MISSING_ONE'], $job->folders);
+        Queue::assertPushed(RunAssetTransferJob::class);
+    }
+
+    public function test_super_admin_can_start_bucket_database_sync_while_transfer_is_running(): void
+    {
+        Queue::fake();
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+
+        AssetTransferJob::create([
+            'started_by' => $admin->id,
+            'status' => 'running',
+            'mode' => 'batch-copy',
+            'total_folders' => 20,
+            'processed_folders' => 3,
+            'folders' => ['COMPAS_SHOOT EXALT 071025'],
+            'completed_folders' => [],
+            'failed_folder_details' => [],
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson(route('asset-transfers.resync-bucket'))
+            ->assertCreated()
+            ->assertJsonPath('job.status', 'pending')
+            ->assertJsonPath('job.mode', 'bucket-db-sync');
+
+        Queue::assertPushedOn('sync', RunBucketDatabaseSyncJob::class);
+
+        $this->assertDatabaseHas('asset_transfer_jobs', [
+            'started_by' => $admin->id,
+            'status' => 'pending',
+            'mode' => 'bucket-db-sync',
+        ]);
+    }
+
+    public function test_super_admin_can_map_and_ignore_asset_folders(): void
+    {
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $client = Client::create([
+            'name' => 'Client',
+            'slug' => 'client',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet associé',
+            'slug' => 'projet-associe',
+            'source_folder' => 'PROJET_ASSOCIE',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson(route('asset-transfers.folder-mappings.store'), [
+                'folder' => 'DOSSIER_BUCKET_SANS_PROJET',
+                'project_id' => $project->id,
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('asset_folder_mappings', [
+            'folder' => 'DOSSIER_BUCKET_SANS_PROJET',
+            'project_id' => $project->id,
+            'status' => 'mapped',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson(route('asset-transfers.folder-mappings.ignore'), [
+                'folder' => 'DOSSIER_A_IGNORER',
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('asset_folder_mappings', [
+            'folder' => 'DOSSIER_A_IGNORER',
+            'project_id' => null,
+            'status' => 'ignored',
+        ]);
+    }
+
+    public function test_super_admin_can_auto_map_high_confidence_asset_folders(): void
+    {
+        $this->instance(O2SwitchAssetBrowser::class, new class extends O2SwitchAssetBrowser
+        {
+            public function ftpFolders(int $limit = 1000): array
+            {
+                return ['COMPAS_SHOOT EXALT 071025 HD'];
+            }
+
+            public function bucketFolders(string $prefix = 'photos'): array
+            {
+                return ['COMPAS_SHOOT EXALT 071025 HD' => 12];
+            }
+        });
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $client = Client::create([
+            'name' => 'Compas',
+            'slug' => 'compas',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'COMPAS SHOOT EXALT 071025',
+            'slug' => 'compas-shoot-exalt-071025',
+            'source_folder' => 'COMPAS_SHOOT EXALT_071025',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson(route('asset-transfers.folder-mappings.auto'))
+            ->assertOk()
+            ->assertJsonPath('mapped', 1);
+
+        $this->assertDatabaseHas('asset_folder_mappings', [
+            'folder' => 'COMPAS_SHOOT EXALT 071025 HD',
+            'project_id' => $project->id,
+            'status' => 'mapped',
+        ]);
+    }
+}

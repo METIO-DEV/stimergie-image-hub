@@ -63,7 +63,38 @@ services:
         condition: service_started
     volumes:
       - .:/var/www/html
-    command: php artisan queue:work --sleep=1 --tries=3 --timeout=120
+    command: php artisan queue:work --sleep=1 --tries=3 --timeout=0
+
+  queue-sync:
+    build:
+      context: .
+    env_file:
+      - ./.env
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: pgsql
+      DB_PORT: 5432
+      DB_DATABASE: stimergie_image_hub
+      DB_USERNAME: stimergie
+      DB_PASSWORD: stimergie
+      CACHE_STORE: database
+      QUEUE_CONNECTION: database
+      SESSION_DRIVER: database
+      MAIL_MAILER: smtp
+      MAIL_SCHEME: null
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      MAIL_USERNAME: null
+      MAIL_PASSWORD: null
+      BREVO_TEMPLATE_MAILER: laravel
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
+    volumes:
+      - .:/var/www/html
+    command: php artisan queue:work --queue=sync --sleep=1 --tries=1 --timeout=0
 
   migrate:
     build:

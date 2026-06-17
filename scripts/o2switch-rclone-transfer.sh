@@ -13,6 +13,7 @@ OVERRIDE_DEST_PREFIX="${DEST_PREFIX:-}"
 OVERRIDE_VERIFY_AFTER_COPY="${VERIFY_AFTER_COPY:-}"
 OVERRIDE_ALLOW_SYNC_DELETE="${ALLOW_SYNC_DELETE:-}"
 OVERRIDE_LOG_FILE="${LOG_FILE:-}"
+OVERRIDE_RCLONE_BIN="${RCLONE_BIN:-}"
 
 if [[ -f "${ENV_FILE}" ]]; then
   # shellcheck disable=SC1090
@@ -38,6 +39,7 @@ apply_override DEST_PREFIX "${OVERRIDE_DEST_PREFIX}"
 apply_override VERIFY_AFTER_COPY "${OVERRIDE_VERIFY_AFTER_COPY}"
 apply_override ALLOW_SYNC_DELETE "${OVERRIDE_ALLOW_SYNC_DELETE}"
 apply_override LOG_FILE "${OVERRIDE_LOG_FILE}"
+apply_override RCLONE_BIN "${OVERRIDE_RCLONE_BIN}"
 
 RCLONE_BIN="${RCLONE_BIN:-rclone}"
 RCLONE_REMOTE="${RCLONE_REMOTE:-scaleway}"
@@ -85,8 +87,13 @@ for var_name in "${required_vars[@]}"; do
   fi
 done
 
-if [[ ! -x "${RCLONE_BIN}" ]]; then
-  echo "rclone not found or not executable: ${RCLONE_BIN}" >&2
+if [[ "${RCLONE_BIN}" == */* ]]; then
+  if [[ ! -x "${RCLONE_BIN}" ]]; then
+    echo "rclone not found or not executable: ${RCLONE_BIN}" >&2
+    exit 1
+  fi
+elif ! command -v "${RCLONE_BIN}" >/dev/null 2>&1; then
+  echo "rclone not found in PATH: ${RCLONE_BIN}" >&2
   exit 1
 fi
 
@@ -149,10 +156,10 @@ if [[ -n "${INCLUDE_FROM:-}" ]]; then
   common_args+=("--include-from" "${INCLUDE_FROM}")
 fi
 
-echo "Mode: ${MODE}"
-echo "Source: ${source_path}"
-echo "Destination: ${dest_path}"
-echo "Log: ${LOG_FILE}"
+echo "Mode: ${MODE}" >&2
+echo "Source: ${source_path}" >&2
+echo "Destination: ${dest_path}" >&2
+echo "Log: ${LOG_FILE}" >&2
 
 list_source_dirs() {
   if [[ -n "${BATCH_FILE}" ]]; then

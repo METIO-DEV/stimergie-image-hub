@@ -24,6 +24,7 @@ import {
     LogOut,
     Mail,
     Menu,
+    ServerCog,
     Shield,
     User,
     Users,
@@ -45,8 +46,9 @@ type BreadcrumbItem = {
 
 export default function Authenticated({
     header,
+    navActions,
     children,
-}: PropsWithChildren<{ header?: ReactNode }>) {
+}: PropsWithChildren<{ header?: ReactNode; navActions?: ReactNode }>) {
     const { abilities, user } = usePage().props.auth;
     const { flash } = usePage().props;
     const [mobileOpen, setMobileOpen] = useState(false);
@@ -129,6 +131,12 @@ export default function Authenticated({
             label: "Gestion des images",
             icon: Image,
             active: route().current("images.index"),
+        },
+        {
+            href: route("asset-transfers.index"),
+            label: "Transferts FTP",
+            icon: ServerCog,
+            active: route().current("asset-transfers.*"),
         },
         {
             href: route("blog.admin.index"),
@@ -313,7 +321,7 @@ export default function Authenticated({
                         </SheetContent>
                     </Sheet>
 
-                    <div className="flex flex-1 items-center justify-between md:justify-end">
+                    <div className="flex flex-1 items-center justify-between gap-2 md:justify-end">
                         <Link
                             href={route("gallery.index")}
                             className="flex items-center md:hidden"
@@ -324,6 +332,12 @@ export default function Authenticated({
                                 className="h-7 w-auto"
                             />
                         </Link>
+
+                        {navActions && (
+                            <div className="hidden items-center md:flex">
+                                {navActions}
+                            </div>
+                        )}
 
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -503,6 +517,10 @@ function breadcrumbItems(): BreadcrumbItem[] {
 
     if (route().current("imports.index")) {
         return [home, { label: "Imports" }];
+    }
+
+    if (route().current("asset-transfers.*")) {
+        return [home, { label: "Transferts FTP" }];
     }
 
     if (route().current("clients.create")) {

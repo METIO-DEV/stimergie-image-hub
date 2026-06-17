@@ -7,6 +7,13 @@ import {
     DialogTitle,
 } from "@/Components/ui/dialog";
 import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+} from "@/Components/ui/sheet";
+import {
     LegacyImage,
     ImageInfoSheet,
     LegacyPagination,
@@ -20,11 +27,14 @@ import { Head, router, usePage } from "@inertiajs/react";
 import {
     Download,
     FolderInput,
+    Images,
     Infinity,
     Info,
     Plus,
     Share2,
+    ShoppingBasket,
     SquareCheck,
+    Trash2,
     X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -68,8 +78,37 @@ type Props = {
     };
 };
 
+type SelectionSnapshot = {
+    id: string;
+    title: string;
+    thumbUrl?: string | null;
+    imageUrl?: string | null;
+    clientName?: string | null;
+    projectName?: string | null;
+    rightsStatus?: LegacyImage["rightsStatus"];
+    rightsStatusLabel?: string;
+    canManage?: boolean;
+};
+
 const PAGE_SIZE = 100;
 const FILTER_DEBOUNCE_MS = 350;
+
+const normalizeImageId = (id: string | number) => String(id);
+
+const imageToSelectionSnapshot = (image: LegacyImage): SelectionSnapshot => ({
+    id: normalizeImageId(image.id),
+    title: image.title,
+    thumbUrl: image.thumbUrl,
+    imageUrl: image.imageUrl,
+    clientName: image.clientName || image.client?.name || null,
+    projectName: image.projectName || null,
+    rightsStatus: image.rightsStatus,
+    rightsStatusLabel: image.rightsStatusLabel,
+    canManage: image.canManage,
+});
+
+const uniqueImageIds = (ids: Array<string | number>) =>
+    Array.from(new Set(ids.map(normalizeImageId)));
 
 export default function GalleryIndex({
     images,
@@ -93,9 +132,12 @@ export default function GalleryIndex({
     const [searchFocused, setSearchFocused] = useState(false);
     const [infiniteScroll, setInfiniteScroll] = useState(false);
     const didMount = useRef(false);
-    const [selectedImages, setSelectedImages] = useState<
-        Array<string | number>
-    >([]);
+    const [selectedImages, setSelectedImages] = useState<string[]>([]);
+    const [selectionSnapshots, setSelectionSnapshots] = useState<
+        Record<string, SelectionSnapshot>
+    >({});
+    const [selectionStorageLoaded, setSelectionStorageLoaded] = useState(false);
+    const [selectionReviewOpen, setSelectionReviewOpen] = useState(false);
     const [selectionDockVisible, setSelectionDockVisible] = useState(false);
     const [selectionDockClosing, setSelectionDockClosing] = useState(false);
     const [selectionDockCount, setSelectionDockCount] = useState(0);
@@ -113,6 +155,10 @@ export default function GalleryIndex({
     const [shareExpiresAt, setShareExpiresAt] = useState("");
     const pendingFilterRequest = useRef<number | null>(null);
     const submittedSearch = useRef(activeFilters.search);
+    const selectionStorageKey = useMemo(
+        () => `stimergie.gallery.selection.${user?.id ?? "guest"}`,
+        [user?.id],
+    );
 
     const projects = useMemo(
         () =>
@@ -124,17 +170,39 @@ export default function GalleryIndex({
         [clientId, filters.projects],
     );
 
-    const selectedImageItems = images.filter((image) =>
-        selectedImages.includes(image.id),
+    const currentImagesById = useMemo(
+        () =>
+            new Map(
+                images.map((image) => [
+                    normalizeImageId(image.id),
+                    image,
+                ]),
+            ),
+        [images],
     );
-    const selectionHasExpiredRights = selectedImageItems.some(
+    const selectedVisibleImageItems = images.filter((image) =>
+        selectedImages.includes(normalizeImageId(image.id)),
+    );
+    const selectedSelectionItems = selectedImages
+        .map((id) => currentImagesById.get(id) || selectionSnapshots[id])
+        .filter((image): image is LegacyImage | SelectionSnapshot =>
+            Boolean(image),
+        );
+    const selectionOutsideCurrentPageCount = Math.max(
+        0,
+        selectedImages.length - selectedVisibleImageItems.length,
+    );
+    const selectionHasExpiredRights = selectedSelectionItems.some(
         (image) => image.rightsStatus === "expired",
     );
     const selectionCanBeAssigned =
         selectedImages.length > 0 &&
         canBulkAssignImages &&
-        selectedImageItems.length === selectedImages.length &&
-        selectedImageItems.every((image) => image.canManage);
+        selectedSelectionItems.length === selectedImages.length &&
+        selectedSelectionItems.every((image) => image.canManage === true);
+    const selectedImageIdsForRequest = selectedImages
+        .map((id) => Number(id))
+        .filter(Number.isFinite);
     const paginatedImages = images;
     const hasActiveFilters =
         search.trim() !== "" ||
@@ -162,6 +230,131 @@ export default function GalleryIndex({
                 .slice(0, 120),
         [filters.clients, filters.projects, filters.tags],
     );
+
+    useEffect(() => {
+        setSelectionStorageLoaded(false);
+
+        try {
+            const storedSelection = window.localStorage.getItem(
+                selectionStorageKey,
+            );
+
+            if (!storedSelection) {
+                setSelectedImages([]);
+                setSelectionSnapshots({});
+                setSelectionStorageLoaded(true);
+
+                return;
+            }
+
+            const parsed = JSON.parse(storedSelection);
+
+            if (Array.isArray(parsed)) {
+                setSelectedImages(uniqueImageIds(parsed));
+                setSelectionSnapshots({});
+                setSelectionStorageLoaded(true);
+
+                return;
+            }
+
+            const ids = uniqueImageIds(
+                Array.isArray(parsed?.ids) ? parsed.ids : [],
+            );
+            const snapshots =
+                parsed?.snapshots && typeof parsed.snapshots === "object"
+                    ? parsed.snapshots
+                    : {};
+
+            setSelectedImages(ids);
+            setSelectionSnapshots(
+                Object.fromEntries(
+                    ids
+                        .map((id) => [id, snapshots[id]])
+                        .filter(([, snapshot]) => Boolean(snapshot)),
+                ),
+            );
+        } catch {
+            setSelectedImages([]);
+            setSelectionSnapshots({});
+        } finally {
+            setSelectionStorageLoaded(true);
+        }
+    }, [selectionStorageKey]);
+
+    useEffect(() => {
+        if (!selectionStorageLoaded) {
+            return;
+        }
+
+        if (selectedImages.length === 0) {
+            window.localStorage.removeItem(selectionStorageKey);
+
+            return;
+        }
+
+        window.localStorage.setItem(
+            selectionStorageKey,
+            JSON.stringify({
+                version: 1,
+                ids: selectedImages,
+                snapshots: selectionSnapshots,
+            }),
+        );
+    }, [
+        selectedImages,
+        selectionSnapshots,
+        selectionStorageKey,
+        selectionStorageLoaded,
+    ]);
+
+    useEffect(() => {
+        if (selectedImages.length === 0) {
+            setSelectionReviewOpen(false);
+            setSelectionSnapshots({});
+
+            return;
+        }
+
+        const selectedIdSet = new Set(selectedImages);
+
+        setSelectionSnapshots((current) => {
+            let changed = false;
+            const next: Record<string, SelectionSnapshot> = {};
+
+            selectedImages.forEach((id) => {
+                const currentImage = currentImagesById.get(id);
+                const snapshot = currentImage
+                    ? imageToSelectionSnapshot(currentImage)
+                    : current[id];
+
+                if (snapshot) {
+                    next[id] = snapshot;
+                }
+            });
+
+            images.forEach((image) => {
+                const id = normalizeImageId(image.id);
+
+                if (selectedIdSet.has(id)) {
+                    next[id] = imageToSelectionSnapshot(image);
+                }
+            });
+
+            const currentKeys = Object.keys(current);
+            const nextKeys = Object.keys(next);
+
+            changed =
+                currentKeys.length !== nextKeys.length ||
+                nextKeys.some(
+                    (id) =>
+                        JSON.stringify(current[id]) !==
+                        JSON.stringify(next[id]),
+                );
+
+            return changed ? next : current;
+        });
+    }, [currentImagesById, images, selectedImages]);
+
     const resetFilters = () => {
         clearPendingFilterRequest();
         submittedSearch.current = "";
@@ -321,17 +514,80 @@ export default function GalleryIndex({
         setCurrentPage(page);
         router.get(route("gallery.index"), filterParams(page), {
             preserveScroll: true,
-            preserveState: false,
+            preserveState: true,
             only: ["images", "activeFilters", "pagination"],
         });
     };
 
     const toggleSelection = (id: string | number) => {
+        const normalizedId = normalizeImageId(id);
+        const image = currentImagesById.get(normalizedId);
+
         setSelectedImages((current) =>
-            current.includes(id)
-                ? current.filter((selectedId) => selectedId !== id)
-                : [...current, id],
+            current.includes(normalizedId)
+                ? current.filter((selectedId) => selectedId !== normalizedId)
+                : [...current, normalizedId],
         );
+
+        setSelectionSnapshots((current) => {
+            if (!image) {
+                const { [normalizedId]: _removed, ...next } = current;
+
+                return next;
+            }
+
+            if (current[normalizedId]) {
+                const { [normalizedId]: _removed, ...next } = current;
+
+                return next;
+            }
+
+            return {
+                ...current,
+                [normalizedId]: imageToSelectionSnapshot(image),
+            };
+        });
+    };
+
+    const addCurrentPageToSelection = () => {
+        setSelectedImages((current) =>
+            uniqueImageIds([
+                ...current,
+                ...paginatedImages.map((image) => image.id),
+            ]),
+        );
+        setSelectionSnapshots((current) => ({
+            ...current,
+            ...Object.fromEntries(
+                paginatedImages.map((image) => [
+                    normalizeImageId(image.id),
+                    imageToSelectionSnapshot(image),
+                ]),
+            ),
+        }));
+    };
+
+    const removeFromSelection = (id: string | number) => {
+        const normalizedId = normalizeImageId(id);
+
+        setSelectedImages((current) =>
+            current.filter((selectedId) => selectedId !== normalizedId),
+        );
+        setSelectionSnapshots((current) => {
+            const { [normalizedId]: _removed, ...next } = current;
+
+            return next;
+        });
+    };
+
+    const clearSelection = () => {
+        setSelectedImages([]);
+        setSelectionSnapshots({});
+    };
+
+    const openBulkProjectDialog = () => {
+        setSelectionReviewOpen(false);
+        setBulkProjectOpen(true);
     };
 
     const filterByTag = (nextTag: string) => {
@@ -345,12 +601,12 @@ export default function GalleryIndex({
             route("images.bulk-project"),
             {
                 project_id: bulkProjectId,
-                image_ids: selectedImages.map((id) => Number(id)),
+                image_ids: selectedImageIdsForRequest,
             },
             {
                 preserveScroll: true,
                 onSuccess: () => {
-                    setSelectedImages([]);
+                    clearSelection();
                     setBulkProjectId("");
                     setBulkProjectOpen(false);
                 },
@@ -367,12 +623,12 @@ export default function GalleryIndex({
             route("downloads.store"),
             {
                 variant,
-                image_ids: selectedImages.map((id) => Number(id)),
+                image_ids: selectedImageIdsForRequest,
             },
             {
                 preserveScroll: true,
                 onSuccess: () => {
-                    setSelectedImages([]);
+                    clearSelection();
                 },
             },
         );
@@ -418,10 +674,11 @@ export default function GalleryIndex({
 
     const openShareDialog = () => {
         setShareName(
-            selectedImageItems.length === 1
-                ? selectedImageItems[0].title
+            selectedSelectionItems.length === 1
+                ? selectedSelectionItems[0].title
                 : `Sélection de ${selectedImages.length} images`,
         );
+        setSelectionReviewOpen(false);
         setShareOpen(true);
     };
 
@@ -435,12 +692,12 @@ export default function GalleryIndex({
                 message: shareMessage,
                 starts_at: shareStartsAt || null,
                 expires_at: shareExpiresAt || null,
-                image_ids: selectedImages.map((id) => Number(id)),
+                image_ids: selectedImageIdsForRequest,
             },
             {
                 preserveScroll: true,
                 onSuccess: () => {
-                    setSelectedImages([]);
+                    clearSelection();
                     setShareOpen(false);
                     setShareName("");
                     setShareDescription("");
@@ -458,9 +715,37 @@ export default function GalleryIndex({
         : "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-4 motion-safe:duration-300";
     const selectionDisplayCount =
         selectedImages.length > 0 ? selectedImages.length : selectionDockCount;
+    const basketButtonLabel = `Ouvrir le panier, ${selectedImages.length} image${
+        selectedImages.length > 1 ? "s" : ""
+    } sélectionnée${selectedImages.length > 1 ? "s" : ""}`;
+    const basketButtonContent = (
+        <>
+            <span className="relative inline-flex">
+                <ShoppingBasket className="h-5 w-5" />
+                <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[0.65rem] font-bold leading-none text-primary-foreground">
+                    {selectedImages.length}
+                </span>
+            </span>
+            <span>Panier</span>
+        </>
+    );
 
     return (
-        <AuthenticatedLayout>
+        <AuthenticatedLayout
+            navActions={
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 rounded-full bg-background/80 px-4"
+                    onClick={() => setSelectionReviewOpen(true)}
+                    title="Ouvrir le panier"
+                    aria-label={basketButtonLabel}
+                >
+                    {basketButtonContent}
+                </Button>
+            }
+        >
             <Head title="Banque d'images" />
 
             <main className="min-w-0 flex-grow overflow-x-hidden px-0">
@@ -491,8 +776,7 @@ export default function GalleryIndex({
                                 <p className="mt-1 text-sm text-[#150B0D]/75">
                                     {pagination.total} image
                                     {pagination.total > 1 ? "s" : ""} visible
-                                    {pagination.total > 1 ? "s" : ""} pour vos
-                                    projets
+                                    {pagination.total > 1 ? "s" : ""}
                                 </p>
                             </div>
                             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
@@ -529,22 +813,16 @@ export default function GalleryIndex({
                                     variant="outline"
                                     size="sm"
                                     disabled={paginatedImages.length === 0}
-                                    onClick={() =>
-                                        setSelectedImages(
-                                            paginatedImages.map(
-                                                (image) => image.id,
-                                            ),
-                                        )
-                                    }
+                                    onClick={addCurrentPageToSelection}
                                     className="h-9 flex-1 gap-2 sm:flex-none"
-                                    title="Tout sélectionner"
+                                    title="Ajouter la page à la sélection"
                                 >
                                     <SquareCheck className="h-4 w-4" />
                                     <span className="sm:hidden">
                                         Sélection
                                     </span>
                                     <span className="hidden sm:inline">
-                                        Tout sélectionner
+                                        Ajouter la page
                                     </span>
                                 </Button>
                                 {canAddImages && (
@@ -712,6 +990,9 @@ export default function GalleryIndex({
                                             {selectedImages.length > 1
                                                 ? "s"
                                                 : ""}
+                                            {selectionOutsideCurrentPageCount >
+                                                0 &&
+                                                `, dont ${selectionOutsideCurrentPageCount} hors page`}
                                         </span>
                                     )}
                                 </div>
@@ -757,6 +1038,19 @@ export default function GalleryIndex({
                     </div>
                 )}
             </main>
+            <button
+                type="button"
+                className={`fixed right-3 z-40 inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-lg transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30 md:hidden ${
+                    selectionDockVisible
+                        ? "bottom-28"
+                        : "bottom-4"
+                }`}
+                onClick={() => setSelectionReviewOpen(true)}
+                title="Ouvrir le panier"
+                aria-label={basketButtonLabel}
+            >
+                {basketButtonContent}
+            </button>
             {selectionDockVisible && (
                 <div
                     className={`fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/95 px-3 py-2 shadow-[0_-12px_30px_rgba(0,0,0,0.12)] backdrop-blur md:hidden ${selectionDockAnimationClass}`}
@@ -816,7 +1110,7 @@ export default function GalleryIndex({
                                 variant="ghost"
                                 size="sm"
                                 className="h-12 flex-col gap-1 px-1 text-[0.65rem]"
-                                onClick={() => setSelectedImages([])}
+                                onClick={clearSelection}
                                 title="Effacer la sélection"
                             >
                                 <X className="h-4 w-4" />
@@ -830,7 +1124,7 @@ export default function GalleryIndex({
                             variant="outline"
                             size="sm"
                             className="mx-auto mt-2 flex h-9 w-full max-w-md gap-2"
-                            onClick={() => setBulkProjectOpen(true)}
+                            onClick={openBulkProjectDialog}
                         >
                             <FolderInput className="h-4 w-4" />
                             Lier la sélection à un projet
@@ -850,6 +1144,19 @@ export default function GalleryIndex({
                                 sélectionnée
                                 {selectionDisplayCount > 1 ? "s" : ""}
                             </div>
+                            {selectionOutsideCurrentPageCount > 0 && (
+                                <div className="text-xs text-muted-foreground">
+                                    {selectionOutsideCurrentPageCount} image
+                                    {selectionOutsideCurrentPageCount > 1
+                                        ? "s"
+                                        : ""}{" "}
+                                    conservée
+                                    {selectionOutsideCurrentPageCount > 1
+                                        ? "s"
+                                        : ""}{" "}
+                                    hors de la page visible
+                                </div>
+                            )}
                         </div>
                         <div className="flex flex-wrap items-center justify-end gap-2">
                             <Button
@@ -890,7 +1197,7 @@ export default function GalleryIndex({
                                     variant="outline"
                                     size="sm"
                                     className="gap-2"
-                                    onClick={() => setBulkProjectOpen(true)}
+                                    onClick={openBulkProjectDialog}
                                 >
                                     <FolderInput className="h-4 w-4" />
                                     Lier à un projet
@@ -918,7 +1225,7 @@ export default function GalleryIndex({
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => setSelectedImages([])}
+                                onClick={clearSelection}
                             >
                                 Effacer la sélection
                             </Button>
@@ -926,6 +1233,208 @@ export default function GalleryIndex({
                     </div>
                 </div>
             )}
+
+            <Sheet
+                open={selectionReviewOpen}
+                onOpenChange={setSelectionReviewOpen}
+            >
+                <SheetContent
+                    side="right"
+                    className="flex h-[100dvh] max-h-[100dvh] w-full max-w-none flex-col overflow-hidden p-0 sm:w-[28rem]"
+                >
+                    <div className="border-b border-border p-6">
+                        <SheetHeader className="pr-10 text-left">
+                            <SheetTitle>Panier / lightbox</SheetTitle>
+                            <SheetDescription>
+                                {selectedImages.length} image
+                                {selectedImages.length > 1 ? "s" : ""}{" "}
+                                accumulée
+                                {selectedImages.length > 1 ? "s" : ""} entre
+                                les pages, filtres, recherches et tags.
+                            </SheetDescription>
+                        </SheetHeader>
+                    </div>
+
+                    <div className="relative min-h-0 flex-1 bg-muted/25">
+                        <div className="h-full overflow-y-auto px-4 py-4 pb-12">
+                        {selectionHasExpiredRights && (
+                            <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                                Une image sélectionnée a une cession expirée.
+                                Les téléchargements et partages sont bloqués
+                                jusqu'à correction de la sélection.
+                            </div>
+                        )}
+
+                        {selectedImages.length === 0 ? (
+                            <div className="flex min-h-80 flex-col items-center justify-center rounded-md border border-dashed p-6 text-center">
+                                <Images className="h-10 w-10 text-muted-foreground" />
+                                <p className="mt-3 text-sm font-medium">
+                                    Aucune image sélectionnée
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {selectedImages.map((id) => {
+                                    const image =
+                                        currentImagesById.get(id) ||
+                                        selectionSnapshots[id];
+                                    const imageSrc =
+                                        image?.thumbUrl || image?.imageUrl;
+                                    const currentImage =
+                                        currentImagesById.get(id);
+                                    const rightsExpired =
+                                        image?.rightsStatus === "expired";
+
+                                    return (
+                                        <div
+                                            key={id}
+                                            className="grid grid-cols-[4.5rem_minmax(0,1fr)_2.25rem] gap-3 rounded-md border border-border bg-background p-2"
+                                        >
+                                            <button
+                                                type="button"
+                                                className="h-16 overflow-hidden rounded-md bg-muted text-muted-foreground"
+                                                onClick={() => {
+                                                    if (currentImage) {
+                                                        setDetailImage(
+                                                            currentImage,
+                                                        );
+                                                        setSelectionReviewOpen(
+                                                            false,
+                                                        );
+                                                    }
+                                                }}
+                                                disabled={!currentImage}
+                                                title={
+                                                    currentImage
+                                                        ? "Ouvrir le détail"
+                                                        : "Image conservée hors page visible"
+                                                }
+                                            >
+                                                {imageSrc ? (
+                                                    <img
+                                                        src={imageSrc}
+                                                        alt={
+                                                            image?.title ||
+                                                            "Image sélectionnée"
+                                                        }
+                                                        className="h-full w-full object-cover"
+                                                    />
+                                                ) : (
+                                                    <Images className="mx-auto h-full w-6" />
+                                                )}
+                                            </button>
+                                            <div className="min-w-0 py-0.5">
+                                                <div className="truncate text-sm font-semibold">
+                                                    {image?.title ||
+                                                        `Image #${id}`}
+                                                </div>
+                                                <div className="mt-1 truncate text-xs text-muted-foreground">
+                                                    {[
+                                                        image?.clientName,
+                                                        image?.projectName,
+                                                    ]
+                                                        .filter(Boolean)
+                                                        .join(" · ") ||
+                                                        "Hors page visible"}
+                                                </div>
+                                                {image?.rightsStatusLabel && (
+                                                    <div
+                                                        className={`mt-2 inline-flex max-w-full truncate rounded-full px-2 py-0.5 text-xs font-medium ${
+                                                            rightsExpired
+                                                                ? "bg-destructive text-destructive-foreground"
+                                                                : "bg-muted text-muted-foreground"
+                                                        }`}
+                                                    >
+                                                        {
+                                                            image.rightsStatusLabel
+                                                        }
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-9 w-9"
+                                                onClick={() =>
+                                                    removeFromSelection(id)
+                                                }
+                                                title="Retirer du panier"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        </div>
+                        {selectedImages.length > 3 && (
+                            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-background via-background/90 to-transparent" />
+                        )}
+                    </div>
+
+                    {selectedImages.length > 0 && (
+                        <div className="space-y-3 border-t border-border bg-background p-4 pb-[calc(1rem+max(env(safe-area-inset-bottom),1.5rem))] sm:pb-4">
+                            <div className="grid grid-cols-2 gap-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="gap-2"
+                                    onClick={() => requestDownload("web")}
+                                    disabled={selectionHasExpiredRights}
+                                >
+                                    <Download className="h-4 w-4" />
+                                    Web
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="gap-2"
+                                    onClick={() => requestDownload("hd")}
+                                    disabled={selectionHasExpiredRights}
+                                >
+                                    <Download className="h-4 w-4" />
+                                    HD
+                                </Button>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {canCreateSharedAlbums && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="flex-1 gap-2"
+                                        onClick={openShareDialog}
+                                        disabled={selectionHasExpiredRights}
+                                    >
+                                        <Share2 className="h-4 w-4" />
+                                        Partager
+                                    </Button>
+                                )}
+                                {selectionCanBeAssigned && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="flex-1 gap-2"
+                                        onClick={openBulkProjectDialog}
+                                    >
+                                        <FolderInput className="h-4 w-4" />
+                                        Lier
+                                    </Button>
+                                )}
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="flex-1"
+                                    onClick={clearSelection}
+                                >
+                                    Vider
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </SheetContent>
+            </Sheet>
 
             <ImageInfoSheet
                 image={detailImage}
