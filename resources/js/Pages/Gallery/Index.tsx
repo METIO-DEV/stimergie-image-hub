@@ -24,6 +24,7 @@ import {
 import { ImageEditModal } from "@/Components/Legacy/LegacyModals";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, router, usePage } from "@inertiajs/react";
+import { flushSync } from "react-dom";
 import {
     Crop,
     Download,
@@ -115,6 +116,11 @@ type CropSetting = {
 
 type CropSource = "web" | "hd";
 type GalleryColumnCount = 2 | 3 | 4 | 5;
+type ViewTransitionDocument = Document & {
+    startViewTransition?: (callback: () => void) => {
+        finished: Promise<void>;
+    };
+};
 
 const PAGE_SIZE = 60;
 const FILTER_DEBOUNCE_MS = 350;
@@ -713,6 +719,24 @@ export default function GalleryIndex({
         window.dispatchEvent(new Event(GALLERY_SELECTION_EVENT));
     };
 
+    const changeGalleryColumns = (nextColumns: GalleryColumnCount) => {
+        if (nextColumns === galleryColumns) {
+            return;
+        }
+
+        const transitionDocument = document as ViewTransitionDocument;
+
+        if (!transitionDocument.startViewTransition) {
+            setGalleryColumns(nextColumns);
+
+            return;
+        }
+
+        transitionDocument.startViewTransition(() => {
+            flushSync(() => setGalleryColumns(nextColumns));
+        });
+    };
+
     const handleGridTouchStart = (event: ReactTouchEvent<HTMLDivElement>) => {
         if (event.touches.length !== 2) {
             return;
@@ -736,7 +760,7 @@ export default function GalleryIndex({
             return;
         }
 
-        setGalleryColumns(
+        changeGalleryColumns(
             clampGalleryColumnCount(pinchStartColumns.current - steps),
         );
     };
@@ -1251,7 +1275,7 @@ export default function GalleryIndex({
                                     key={columnCount}
                                     type="button"
                                     onClick={() =>
-                                        setGalleryColumns(columnCount)
+                                        changeGalleryColumns(columnCount)
                                     }
                                     className={`flex h-7 w-8 items-center justify-center rounded-full transition ${
                                         active
