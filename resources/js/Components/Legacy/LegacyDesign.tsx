@@ -579,24 +579,23 @@ export function ImageInfoSheet({
                                         </Button>
                                     </div>
                                     <div
-                                        className="overflow-hidden rounded-md bg-muted"
-                                        style={{
-                                            paddingBottom:
-                                                zoom > 1
-                                                    ? `${(zoom - 1) * 42}%`
-                                                    : undefined,
-                                        }}
+                                        className={cn(
+                                            "rounded-md bg-muted",
+                                            zoom > 1
+                                                ? "max-h-[70vh] overflow-auto"
+                                                : "overflow-hidden",
+                                        )}
                                     >
                                         <img
                                             src={imageSrc}
                                             alt={image.title}
                                             className={cn(
-                                                "mx-auto block h-auto w-full origin-top object-contain transition-transform duration-200",
+                                                "mx-auto block h-auto max-w-none object-contain transition-[width] duration-200",
                                                 rightsExpired &&
                                                     "grayscale opacity-60",
                                             )}
                                             style={{
-                                                transform: `scale(${zoom})`,
+                                                width: `${zoom * 100}%`,
                                             }}
                                         />
                                     </div>
