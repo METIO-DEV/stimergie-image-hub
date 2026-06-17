@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Jobs\RunAssetTransferJob;
 use App\Jobs\RunBucketDatabaseSyncJob;
+use App\Jobs\RunMissingWebVariantGenerationJob;
 use App\Models\AssetFolderMapping;
 use App\Models\AssetTransferJob;
 use App\Models\Project;
@@ -122,6 +123,55 @@ class AssetTransferController extends Controller
         ]);
 
         RunBucketDatabaseSyncJob::dispatch($job->id)->onQueue('sync');
+
+        return response()->json([
+            'job' => $this->jobSummary($job->fresh()),
+        ], 201);
+    }
+
+    public function generateWebVariants(Request $request): JsonResponse
+    {
+        $this->authorizeSuperAdmin($request);
+
+        abort_if($this->activeWebVariantGeneration(), 409, 'Une génération de variantes web est déjà en cours.');
+
+        $data = $request->validate([
+            'project_id' => ['nullable', 'integer', 'exists:projects,id'],
+            'folder' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $scopeLabel = 'Tous les projets';
+
+        if (! empty($data['project_id'])) {
+            $project = Project::query()
+                ->with('client:id,name')
+                ->findOrFail((int) $data['project_id']);
+            $scopeLabel = trim(($project->client?->name ? "{$project->client->name} / " : '').$project->name);
+        } elseif (! empty($data['folder'])) {
+            $scopeLabel = trim((string) $data['folder']);
+        }
+
+        $job = AssetTransferJob::create([
+            'started_by' => $request->user()->id,
+            'status' => 'pending',
+            'mode' => 'web-variant-generation',
+            'total_folders' => 0,
+            'folders' => [$scopeLabel],
+            'completed_folders' => [],
+            'failed_folder_details' => [],
+            'metadata' => [
+                'created_from' => 'temporary_asset_transfer_ui',
+                'web_variant_generation' => [
+                    'project_id' => $data['project_id'] ?? null,
+                    'folder' => $data['folder'] ?? null,
+                    'source_prefix' => 'photos',
+                    'target_prefix' => 'images',
+                    'scope_label' => $scopeLabel,
+                ],
+            ],
+        ]);
+
+        RunMissingWebVariantGenerationJob::dispatch($job->id);
 
         return response()->json([
             'job' => $this->jobSummary($job->fresh()),
@@ -268,6 +318,15 @@ class AssetTransferController extends Controller
         return AssetTransferJob::query()
             ->whereIn('status', ['pending', 'running', 'cancelling'])
             ->where('mode', 'bucket-db-sync')
+            ->latest()
+            ->first();
+    }
+
+    private function activeWebVariantGeneration(): ?AssetTransferJob
+    {
+        return AssetTransferJob::query()
+            ->whereIn('status', ['pending', 'running', 'cancelling'])
+            ->where('mode', 'web-variant-generation')
             ->latest()
             ->first();
     }
@@ -488,6 +547,7 @@ class AssetTransferController extends Controller
             'finishedAt' => $job->finished_at?->toIso8601String(),
             'createdAt' => $job->created_at?->toIso8601String(),
             'syncTotals' => $this->syncTotals($job),
+            'webVariantTotals' => $this->webVariantTotals($job),
             'log' => $this->logTail($job),
         ];
     }
@@ -508,6 +568,25 @@ class AssetTransferController extends Controller
             'created' => (int) ($totals['created'] ?? 0),
             'updated' => (int) ($totals['updated'] ?? 0),
             'skipped' => (int) ($totals['skipped'] ?? 0),
+        ];
+    }
+
+    /**
+     * @return array{checked: int, generated: int, missingOriginals: int, failed: int}|null
+     */
+    private function webVariantTotals(AssetTransferJob $job): ?array
+    {
+        if ($job->mode !== 'web-variant-generation') {
+            return null;
+        }
+
+        $totals = ($job->metadata ?? [])['web_variant_generation']['totals'] ?? [];
+
+        return [
+            'checked' => (int) ($totals['checked'] ?? 0),
+            'generated' => (int) ($totals['generated'] ?? 0),
+            'missingOriginals' => (int) ($totals['missing_originals'] ?? 0),
+            'failed' => (int) ($totals['failed'] ?? 0),
         ];
     }
 

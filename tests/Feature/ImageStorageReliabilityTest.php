@@ -2,10 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\RunMissingWebVariantGenerationJob;
+use App\Models\AssetTransferJob;
 use App\Models\Client;
 use App\Models\Image;
 use App\Models\Project;
 use App\Support\ImageUrlResolver;
+use App\Support\ImageVariantGenerator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
@@ -195,6 +198,51 @@ class ImageStorageReliabilityTest extends TestCase
 
         Storage::disk('scaleway')->assertExists($image->object_key_web);
         Storage::disk('scaleway')->assertMissing('images/JPG/'.$otherImage->id.'.jpg');
+    }
+
+    public function test_web_variant_generation_job_processes_missing_project_variants(): void
+    {
+        Storage::fake('scaleway');
+
+        [$client, $project] = $this->clientAndProject();
+        $file = UploadedFile::fake()->image('source.jpg', 800, 600);
+        Storage::disk('scaleway')->put('photos/client/source.jpg', file_get_contents($file->getRealPath()));
+
+        $image = $this->image($client, $project, [
+            'legacy_id' => 'legacy-job-1',
+            'object_key_original' => 'photos/client/source.jpg',
+            'object_key_web' => null,
+            'object_key_hd' => 'photos/client/source.jpg',
+            'status' => 'pending_upload',
+        ]);
+        $job = AssetTransferJob::create([
+            'started_by' => null,
+            'status' => 'pending',
+            'mode' => 'web-variant-generation',
+            'total_folders' => 0,
+            'folders' => [$project->name],
+            'completed_folders' => [],
+            'failed_folder_details' => [],
+            'metadata' => [
+                'web_variant_generation' => [
+                    'project_id' => $project->id,
+                    'source_prefix' => 'photos',
+                    'target_prefix' => 'images',
+                    'scope_label' => $project->name,
+                ],
+            ],
+        ]);
+
+        (new RunMissingWebVariantGenerationJob($job->id))->handle(app(ImageVariantGenerator::class));
+
+        $image->refresh();
+        $job->refresh();
+
+        $this->assertSame('images/JPG/'.$image->id.'.jpg', $image->object_key_web);
+        $this->assertSame('completed', $job->status);
+        $this->assertSame(1, $job->total_folders);
+        $this->assertSame(1, $job->metadata['web_variant_generation']['totals']['generated']);
+        Storage::disk('scaleway')->assertExists($image->object_key_web);
     }
 
     public function test_image_url_resolver_never_uses_legacy_fallback(): void

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Jobs\RunAssetTransferJob;
 use App\Jobs\RunBucketDatabaseSyncJob;
+use App\Jobs\RunMissingWebVariantGenerationJob;
 use App\Models\AssetTransferJob;
 use App\Models\Client;
 use App\Models\Image;
@@ -136,6 +137,43 @@ class AssetTransferManagementTest extends TestCase
             'status' => 'pending',
             'mode' => 'bucket-db-sync',
         ]);
+    }
+
+    public function test_super_admin_can_start_web_variant_generation_for_project(): void
+    {
+        Queue::fake();
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $client = Client::create([
+            'name' => 'Client Web',
+            'slug' => 'client-web',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Web',
+            'slug' => 'projet-web',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson(route('asset-transfers.generate-web-variants'), [
+                'project_id' => $project->id,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('job.status', 'pending')
+            ->assertJsonPath('job.mode', 'web-variant-generation')
+            ->assertJsonPath('job.webVariantTotals.checked', 0);
+
+        $this->assertDatabaseHas('asset_transfer_jobs', [
+            'started_by' => $admin->id,
+            'status' => 'pending',
+            'mode' => 'web-variant-generation',
+        ]);
+        Queue::assertPushed(RunMissingWebVariantGenerationJob::class);
     }
 
     public function test_super_admin_can_map_and_ignore_asset_folders(): void

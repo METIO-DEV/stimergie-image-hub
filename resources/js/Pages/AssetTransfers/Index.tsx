@@ -82,6 +82,12 @@ type TransferJob = {
         updated: number;
         skipped: number;
     } | null;
+    webVariantTotals?: {
+        checked: number;
+        generated: number;
+        missingOriginals: number;
+        failed: number;
+    } | null;
     log: string;
 };
 
@@ -139,6 +145,9 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
     const activeJobIdsKey = activeJobIds.join(",");
     const activeTransferJob = activeJobs.find((job) => job.mode === "batch-copy");
     const activeSyncJob = activeJobs.find((job) => job.mode === "bucket-db-sync");
+    const activeWebVariantJob = activeJobs.find(
+        (job) => job.mode === "web-variant-generation",
+    );
     const missingFolders = useMemo(
         () => folders.filter((folder) => folder.onFtp && !folder.onBucket),
         [folders],
@@ -554,6 +563,44 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
         }
     };
 
+    const startWebVariantGeneration = async (projectId?: number) => {
+        setSubmitting(true);
+        setError(null);
+
+        try {
+            const response = await fetch(
+                route("asset-transfers.generate-web-variants"),
+                {
+                    method: "POST",
+                    headers: {
+                        Accept: "application/json",
+                        "Content-Type": "application/json",
+                        "X-CSRF-TOKEN": csrfToken(),
+                    },
+                    body: JSON.stringify(
+                        projectId ? { project_id: projectId } : {},
+                    ),
+                },
+            );
+            const payload = await response.json();
+
+            if (!response.ok) {
+                throw new Error(payload.message || "Génération impossible.");
+            }
+
+            setJobs((currentJobs) => mergeJob(currentJobs, payload.job));
+            setSelectedJobId(payload.job.id);
+        } catch (exception) {
+            setError(
+                exception instanceof Error
+                    ? exception.message
+                    : "Génération impossible.",
+            );
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
     return (
         <AuthenticatedLayout>
             <Head title="Transferts FTP" />
@@ -669,7 +716,7 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                 </section>
 
                 <section className="mt-8 overflow-hidden rounded-lg border bg-card">
-                    <div className="flex flex-col gap-2 border-b p-4 lg:flex-row lg:items-end lg:justify-between">
+                    <div className="flex flex-col gap-4 border-b p-4 lg:flex-row lg:items-end lg:justify-between">
                         <div>
                             <h2 className="text-xl font-semibold">
                                 Variantes web manquantes
@@ -678,9 +725,18 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                                 Projets avec des originaux disponibles mais sans version web exploitable.
                             </p>
                         </div>
-                        <code className="rounded bg-muted px-3 py-2 text-xs">
-                            scripts/generate-missing-web-variants.sh --dry-run
-                        </code>
+                        <Button
+                            type="button"
+                            onClick={() => void startWebVariantGeneration()}
+                            disabled={
+                                Boolean(activeWebVariantJob) ||
+                                submitting ||
+                                missingWebVariantTotal === 0
+                            }
+                        >
+                            <Play className="mr-2 h-4 w-4" />
+                            Générer toutes les versions web
+                        </Button>
                     </div>
                     <div className="max-h-[420px] overflow-auto">
                         <Table>
@@ -691,7 +747,7 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                                     <TableHead className="text-right">Originaux</TableHead>
                                     <TableHead className="text-right">Web OK</TableHead>
                                     <TableHead className="text-right">À générer</TableHead>
-                                    <TableHead>Commande</TableHead>
+                                    <TableHead className="text-right">Action</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -733,10 +789,23 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                                                     {audit.missingWebVariantCount}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell className="min-w-[320px]">
-                                                <code className="block whitespace-nowrap rounded bg-muted px-2 py-1 text-xs">
-                                                    php artisan images:generate-variants --project={audit.projectId} --missing-web-only
-                                                </code>
+                                            <TableCell className="text-right">
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    onClick={() =>
+                                                        void startWebVariantGeneration(
+                                                            audit.projectId,
+                                                        )
+                                                    }
+                                                    disabled={
+                                                        Boolean(activeWebVariantJob) ||
+                                                        submitting
+                                                    }
+                                                >
+                                                    <Play className="mr-2 h-4 w-4" />
+                                                    Générer
+                                                </Button>
                                             </TableCell>
                                         </TableRow>
                                     ))
@@ -1072,9 +1141,7 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                                         </div>
                                         <div className="mt-2 text-sm text-muted-foreground">
                                             {job.processedFolders}/{job.totalFolders}{" "}
-                                            {job.mode === "bucket-db-sync"
-                                                ? "projet(s)"
-                                                : "dossier(s)"}
+                                            {jobUnitLabel(job)}
                                         </div>
                                     </button>
                                 ))
@@ -1096,8 +1163,11 @@ function JobDetails({
     submitting: boolean;
     onStop: () => void;
 }) {
+    const checkedImages = job.webVariantTotals?.checked ?? job.processedFolders;
     const progress =
-        job.totalFolders > 0
+        job.mode === "web-variant-generation" && job.totalFolders > 0
+            ? Math.min(100, Math.round((checkedImages / job.totalFolders) * 100))
+            : job.totalFolders > 0
             ? Math.min(
                   100,
                   Math.round(
@@ -1126,7 +1196,10 @@ function JobDetails({
                 <div className="mb-2 flex justify-between text-xs text-muted-foreground">
                     <span>{progress}%</span>
                     <span>
-                        {job.processedFolders + job.failedFolders}/
+                        {job.mode === "web-variant-generation"
+                            ? checkedImages
+                            : job.processedFolders + job.failedFolders}
+                        /
                         {job.totalFolders}
                     </span>
                 </div>
@@ -1140,8 +1213,18 @@ function JobDetails({
 
             <div className="mt-5 grid gap-3 text-sm sm:grid-cols-3">
                 <SmallMetric
-                    label={job.mode === "bucket-db-sync" ? "Projets" : "Copiés"}
-                    value={job.processedFolders}
+                    label={
+                        job.mode === "bucket-db-sync"
+                            ? "Projets"
+                            : job.mode === "web-variant-generation"
+                              ? "Vérifiées"
+                              : "Copiés"
+                    }
+                    value={
+                        job.mode === "web-variant-generation"
+                            ? checkedImages
+                            : job.processedFolders
+                    }
                 />
                 <SmallMetric label="Erreurs" value={job.failedFolders} />
                 <SmallMetric label="Total" value={job.totalFolders} />
@@ -1158,6 +1241,27 @@ function JobDetails({
                     <SmallMetric
                         label="Ignorées"
                         value={job.syncTotals.skipped}
+                    />
+                </div>
+            )}
+
+            {job.webVariantTotals && (
+                <div className="mt-4 grid gap-3 text-sm sm:grid-cols-4">
+                    <SmallMetric
+                        label="Vérifiées"
+                        value={job.webVariantTotals.checked}
+                    />
+                    <SmallMetric
+                        label="Générées"
+                        value={job.webVariantTotals.generated}
+                    />
+                    <SmallMetric
+                        label="Originaux absents"
+                        value={job.webVariantTotals.missingOriginals}
+                    />
+                    <SmallMetric
+                        label="Échecs"
+                        value={job.webVariantTotals.failed}
                     />
                 </div>
             )}
@@ -1331,7 +1435,27 @@ function statusLabel(status: string): string {
 }
 
 function jobLabel(job: TransferJob): string {
-    return job.mode === "bucket-db-sync" ? "Resynchro DB" : "Transfert";
+    if (job.mode === "bucket-db-sync") {
+        return "Resynchro DB";
+    }
+
+    if (job.mode === "web-variant-generation") {
+        return "Génération web";
+    }
+
+    return "Transfert";
+}
+
+function jobUnitLabel(job: TransferJob): string {
+    if (job.mode === "bucket-db-sync") {
+        return "projet(s)";
+    }
+
+    if (job.mode === "web-variant-generation") {
+        return "image(s)";
+    }
+
+    return "dossier(s)";
 }
 
 function isActive(status: string): boolean {

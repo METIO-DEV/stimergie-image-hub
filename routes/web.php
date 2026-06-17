@@ -91,6 +91,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/asset-transfers/sources', [AssetTransferController::class, 'sources'])->name('asset-transfers.sources');
     Route::post('/asset-transfers', [AssetTransferController::class, 'store'])->name('asset-transfers.store');
     Route::post('/asset-transfers/resync-bucket', [AssetTransferController::class, 'resyncBucket'])->name('asset-transfers.resync-bucket');
+    Route::post('/asset-transfers/generate-web-variants', [AssetTransferController::class, 'generateWebVariants'])->name('asset-transfers.generate-web-variants');
     Route::post('/asset-transfers/folder-mappings', [AssetTransferController::class, 'mapFolder'])->name('asset-transfers.folder-mappings.store');
     Route::post('/asset-transfers/folder-mappings/ignore', [AssetTransferController::class, 'ignoreFolder'])->name('asset-transfers.folder-mappings.ignore');
     Route::post('/asset-transfers/folder-mappings/auto', [AssetTransferController::class, 'autoMapFolders'])->name('asset-transfers.folder-mappings.auto');
