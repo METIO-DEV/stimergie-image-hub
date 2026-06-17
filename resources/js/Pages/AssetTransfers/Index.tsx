@@ -32,6 +32,9 @@ type SourceFolder = {
     projectId?: number | null;
     projectName?: string | null;
     databaseImageCount: number;
+    imagesWithOriginalCount: number;
+    webVariantReadyCount: number;
+    missingWebVariantCount: number;
 };
 
 type ProjectOption = {
@@ -82,6 +85,17 @@ type TransferJob = {
     log: string;
 };
 
+type WebVariantAudit = {
+    projectId: number;
+    projectName: string;
+    clientName?: string | null;
+    sourceFolder?: string | null;
+    databaseImageCount: number;
+    imagesWithOriginalCount: number;
+    webVariantReadyCount: number;
+    missingWebVariantCount: number;
+};
+
 type Props = {
     jobs: TransferJob[];
 };
@@ -94,6 +108,7 @@ const csrfToken = () =>
 export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
     const [folders, setFolders] = useState<SourceFolder[]>([]);
     const [folderMatches, setFolderMatches] = useState<FolderMatch[]>([]);
+    const [webVariantAudits, setWebVariantAudits] = useState<WebVariantAudit[]>([]);
     const [projectOptions, setProjectOptions] = useState<ProjectOption[]>([]);
     const [mappingSelections, setMappingSelections] = useState<
         Record<string, string>
@@ -135,6 +150,14 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
             ),
         [folderMatches],
     );
+    const missingWebVariantTotal = useMemo(
+        () =>
+            webVariantAudits.reduce(
+                (total, audit) => total + audit.missingWebVariantCount,
+                0,
+            ),
+        [webVariantAudits],
+    );
 
     const loadSources = useCallback(async () => {
         sourcesAbortController.current?.abort();
@@ -161,6 +184,7 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
             }
 
             setFolders(payload.folders || []);
+            setWebVariantAudits(payload.webVariantAudits || []);
             const nextMatches: FolderMatch[] = payload.folderMatches || [];
             setFolderMatches(nextMatches);
             setProjectOptions(payload.projectOptions || []);
@@ -567,11 +591,12 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                     </div>
                 )}
 
-                <section className="mt-8 grid gap-4 md:grid-cols-4">
+                <section className="mt-8 grid gap-4 md:grid-cols-5">
                     <Metric label="FTP" value={folders.filter((folder) => folder.onFtp).length} />
                     <Metric label="Bucket" value={folders.filter((folder) => folder.onBucket).length} />
                     <Metric label="À transférer" value={missingFolders.length} />
                     <Metric label="À rapprocher" value={unresolvedFolderMatches.length} />
+                    <Metric label="Web manquant" value={missingWebVariantTotal} />
                 </section>
 
                 <section className="mt-8 rounded-lg border bg-card p-5">
@@ -640,6 +665,84 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                             <RefreshCw className="mr-2 h-4 w-4" />
                             Resynchroniser la base
                         </Button>
+                    </div>
+                </section>
+
+                <section className="mt-8 overflow-hidden rounded-lg border bg-card">
+                    <div className="flex flex-col gap-2 border-b p-4 lg:flex-row lg:items-end lg:justify-between">
+                        <div>
+                            <h2 className="text-xl font-semibold">
+                                Variantes web manquantes
+                            </h2>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                Projets avec des originaux disponibles mais sans version web exploitable.
+                            </p>
+                        </div>
+                        <code className="rounded bg-muted px-3 py-2 text-xs">
+                            scripts/generate-missing-web-variants.sh --dry-run
+                        </code>
+                    </div>
+                    <div className="max-h-[420px] overflow-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Projet</TableHead>
+                                    <TableHead>Dossier</TableHead>
+                                    <TableHead className="text-right">Originaux</TableHead>
+                                    <TableHead className="text-right">Web OK</TableHead>
+                                    <TableHead className="text-right">À générer</TableHead>
+                                    <TableHead>Commande</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {webVariantAudits.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell
+                                            colSpan={6}
+                                            className="py-10 text-center text-sm text-muted-foreground"
+                                        >
+                                            {loadingSources
+                                                ? "Chargement..."
+                                                : "Toutes les images avec original ont une version web exploitable."}
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    webVariantAudits.map((audit) => (
+                                        <TableRow key={audit.projectId}>
+                                            <TableCell className="min-w-[240px]">
+                                                <div className="font-medium">
+                                                    {audit.projectName}
+                                                </div>
+                                                {audit.clientName && (
+                                                    <div className="mt-1 text-xs text-muted-foreground">
+                                                        {audit.clientName}
+                                                    </div>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="min-w-[180px] text-sm">
+                                                {audit.sourceFolder || "Non renseigné"}
+                                            </TableCell>
+                                            <TableCell className="text-right text-sm">
+                                                {audit.imagesWithOriginalCount}
+                                            </TableCell>
+                                            <TableCell className="text-right text-sm">
+                                                {audit.webVariantReadyCount}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <Badge variant="destructive">
+                                                    {audit.missingWebVariantCount}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="min-w-[320px]">
+                                                <code className="block whitespace-nowrap rounded bg-muted px-2 py-1 text-xs">
+                                                    php artisan images:generate-variants --project={audit.projectId} --missing-web-only
+                                                </code>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
                     </div>
                 </section>
 
@@ -832,13 +935,14 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                                         <TableHead>FTP</TableHead>
                                         <TableHead>Bucket</TableHead>
                                         <TableHead>Base</TableHead>
+                                        <TableHead>Web</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {folders.length === 0 ? (
                                         <TableRow>
                                             <TableCell
-                                                colSpan={5}
+                                                colSpan={6}
                                                 className="py-10 text-center text-sm text-muted-foreground"
                                             >
                                                 {loadingSources
@@ -895,6 +999,22 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                                                     <span className="text-sm">
                                                         {folder.databaseImageCount}
                                                     </span>
+                                                </TableCell>
+                                                <TableCell>
+                                                    {folder.projectId ? (
+                                                        <WebVariantBadge
+                                                            missing={
+                                                                folder.missingWebVariantCount
+                                                            }
+                                                            ready={
+                                                                folder.webVariantReadyCount
+                                                            }
+                                                        />
+                                                    ) : (
+                                                        <span className="text-sm text-muted-foreground">
+                                                            -
+                                                        </span>
+                                                    )}
                                                 </TableCell>
                                             </TableRow>
                                         ))
@@ -1102,6 +1222,26 @@ function PresenceBadge({
         <Badge variant="outline">
             <XCircle className="mr-1 h-3 w-3" />
             {label || "Non"}
+        </Badge>
+    );
+}
+
+function WebVariantBadge({ missing, ready }: { missing: number; ready: number }) {
+    if (missing > 0) {
+        return (
+            <div className="flex flex-col gap-1">
+                <Badge variant="destructive">{missing} manquante(s)</Badge>
+                <span className="text-xs text-muted-foreground">
+                    {ready} prête(s)
+                </span>
+            </div>
+        );
+    }
+
+    return (
+        <Badge variant="secondary">
+            <CheckCircle2 className="mr-1 h-3 w-3" />
+            OK
         </Badge>
     );
 }

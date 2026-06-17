@@ -45,6 +45,7 @@ class AssetTransferController extends Controller
         return response()->json([
             'folders' => $this->sourceRows($ftpFolders, $bucketFolders, $folderMatcher),
             'folderMatches' => $this->folderMatchRows($ftpFolders, $bucketFolders, $folderMatcher),
+            'webVariantAudits' => $this->webVariantAuditRows(),
             'projectOptions' => $this->projectOptions(),
             'refreshedAt' => now()->toIso8601String(),
         ]);
@@ -278,17 +279,18 @@ class AssetTransferController extends Controller
      */
     private function sourceRows(array $ftpFolders, array $bucketFolders, ProjectFolderMatcher $folderMatcher): array
     {
-        $projects = Project::query()
-            ->withCount('images')
+        $projects = $this->projectsWithImageVariantCounts()
             ->get();
+        $projectsById = $projects->keyBy('id');
 
         return collect([...$ftpFolders, ...array_keys($bucketFolders)])
             ->unique()
             ->reject(fn (string $folder) => $this->isSystemFolder($folder))
             ->sort(SORT_NATURAL | SORT_FLAG_CASE)
             ->values()
-            ->map(function (string $folder) use ($bucketFolders, $folderMatcher, $ftpFolders, $projects): array {
-                $project = $folderMatcher->mappedProject($folder)
+            ->map(function (string $folder) use ($bucketFolders, $folderMatcher, $ftpFolders, $projects, $projectsById): array {
+                $mappedProject = $folderMatcher->mappedProject($folder);
+                $project = ($mappedProject ? $projectsById->get($mappedProject->id) : null)
                     ?? $folderMatcher->exactProject($folder, $projects);
                 $best = $project ? null : $folderMatcher->bestProject($folder, $projects);
 
@@ -304,6 +306,9 @@ class AssetTransferController extends Controller
                     'projectId' => $project?->id,
                     'projectName' => $project?->name,
                     'databaseImageCount' => $project?->images_count ?? 0,
+                    'imagesWithOriginalCount' => $project?->images_with_original_count ?? 0,
+                    'webVariantReadyCount' => max(0, ($project?->images_with_original_count ?? 0) - ($project?->missing_web_variant_count ?? 0)),
+                    'missingWebVariantCount' => $project?->missing_web_variant_count ?? 0,
                 ];
             })
             ->all();
@@ -399,6 +404,52 @@ class AssetTransferController extends Controller
             ->get()
             ->map(fn (Project $project) => $this->projectOption($project))
             ->all();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function webVariantAuditRows(): array
+    {
+        return $this->projectsWithImageVariantCounts()
+            ->with('client:id,name')
+            ->orderByDesc('missing_web_variant_count')
+            ->orderBy('name')
+            ->get()
+            ->filter(fn (Project $project): bool => (int) $project->missing_web_variant_count > 0)
+            ->map(fn (Project $project): array => [
+                'projectId' => $project->id,
+                'projectName' => $project->name,
+                'clientName' => $project->client?->name,
+                'sourceFolder' => $project->source_folder,
+                'databaseImageCount' => (int) $project->images_count,
+                'imagesWithOriginalCount' => (int) $project->images_with_original_count,
+                'webVariantReadyCount' => max(0, (int) $project->images_with_original_count - (int) $project->missing_web_variant_count),
+                'missingWebVariantCount' => (int) $project->missing_web_variant_count,
+            ])
+            ->all();
+    }
+
+    private function projectsWithImageVariantCounts()
+    {
+        return Project::query()
+            ->withCount([
+                'images',
+                'images as images_with_original_count' => fn ($query) => $query->whereNotNull('object_key_original'),
+                'images as missing_web_variant_count' => fn ($query) => $this->constrainMissingUsableWeb($query),
+            ]);
+    }
+
+    private function constrainMissingUsableWeb($query): void
+    {
+        $query
+            ->whereNotNull('object_key_original')
+            ->where(function ($query) {
+                $query
+                    ->whereNull('object_key_web')
+                    ->orWhereColumn('object_key_web', 'object_key_original')
+                    ->orWhereColumn('object_key_web', 'object_key_hd');
+            });
     }
 
     /**

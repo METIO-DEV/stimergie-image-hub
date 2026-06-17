@@ -149,6 +149,54 @@ class ImageStorageReliabilityTest extends TestCase
         }
     }
 
+    public function test_missing_web_variant_generation_targets_only_project_images_without_usable_web(): void
+    {
+        Storage::fake('scaleway');
+
+        [$client, $project] = $this->clientAndProject();
+        $otherProject = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Autre projet',
+            'slug' => 'autre-projet',
+            'status' => 'active',
+        ]);
+        $file = UploadedFile::fake()->image('source.jpg', 800, 600);
+        $otherFile = UploadedFile::fake()->image('other.jpg', 800, 600);
+
+        Storage::disk('scaleway')->put('photos/client/source.jpg', file_get_contents($file->getRealPath()));
+        Storage::disk('scaleway')->put('photos/other/source.jpg', file_get_contents($otherFile->getRealPath()));
+
+        $image = $this->image($client, $project, [
+            'legacy_id' => 'legacy-1',
+            'object_key_original' => 'photos/client/source.jpg',
+            'object_key_web' => 'photos/client/source.jpg',
+            'object_key_hd' => 'photos/client/source.jpg',
+            'status' => 'pending_upload',
+        ]);
+        $otherImage = $this->image($client, $otherProject, [
+            'legacy_id' => 'legacy-2',
+            'object_key_original' => 'photos/other/source.jpg',
+            'object_key_web' => null,
+            'object_key_hd' => 'photos/other/source.jpg',
+            'status' => 'pending_upload',
+        ]);
+
+        $this->artisan('images:generate-variants', [
+            '--project' => $project->id,
+            '--missing-web-only' => true,
+        ])->assertExitCode(0);
+
+        $image->refresh();
+        $otherImage->refresh();
+
+        $this->assertSame('images/JPG/'.$image->id.'.jpg', $image->object_key_web);
+        $this->assertSame('images/thumbs/'.$image->id.'.jpg', $image->object_key_thumb);
+        $this->assertNull($otherImage->object_key_web);
+
+        Storage::disk('scaleway')->assertExists($image->object_key_web);
+        Storage::disk('scaleway')->assertMissing('images/JPG/'.$otherImage->id.'.jpg');
+    }
+
     public function test_image_url_resolver_never_uses_legacy_fallback(): void
     {
         $image = new Image([

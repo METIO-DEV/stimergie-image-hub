@@ -6,6 +6,7 @@ use App\Jobs\RunAssetTransferJob;
 use App\Jobs\RunBucketDatabaseSyncJob;
 use App\Models\AssetTransferJob;
 use App\Models\Client;
+use App\Models\Image;
 use App\Models\Project;
 use App\Models\User;
 use App\Support\O2SwitchAssetBrowser;
@@ -224,5 +225,78 @@ class AssetTransferManagementTest extends TestCase
             'project_id' => $project->id,
             'status' => 'mapped',
         ]);
+    }
+
+    public function test_sources_report_projects_missing_web_variants(): void
+    {
+        $this->instance(O2SwitchAssetBrowser::class, new class extends O2SwitchAssetBrowser
+        {
+            public function ftpFolders(int $limit = 1000): array
+            {
+                return ['DOSSIER_WEB_MANQUANT'];
+            }
+
+            public function bucketFolders(string $prefix = 'photos'): array
+            {
+                return ['DOSSIER_WEB_MANQUANT' => 2];
+            }
+        });
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $client = Client::create([
+            'name' => 'Client Audit',
+            'slug' => 'client-audit',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Web Manquant',
+            'slug' => 'projet-web-manquant',
+            'source_folder' => 'DOSSIER_WEB_MANQUANT',
+            'status' => 'active',
+        ]);
+
+        Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Sans web',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/DOSSIER_WEB_MANQUANT/source.jpg',
+            'object_key_web' => null,
+            'object_key_hd' => 'photos/DOSSIER_WEB_MANQUANT/source.jpg',
+        ]);
+        Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Web pointe original',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/DOSSIER_WEB_MANQUANT/heavy.jpg',
+            'object_key_web' => 'photos/DOSSIER_WEB_MANQUANT/heavy.jpg',
+            'object_key_hd' => 'photos/DOSSIER_WEB_MANQUANT/heavy.jpg',
+        ]);
+        Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Web OK',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/DOSSIER_WEB_MANQUANT/original.jpg',
+            'object_key_web' => 'photos/DOSSIER_WEB_MANQUANT/JPG/original.jpg',
+            'object_key_hd' => 'photos/DOSSIER_WEB_MANQUANT/original.jpg',
+        ]);
+
+        $this->actingAs($admin)
+            ->getJson(route('asset-transfers.sources'))
+            ->assertOk()
+            ->assertJsonPath('folders.0.projectId', $project->id)
+            ->assertJsonPath('folders.0.missingWebVariantCount', 2)
+            ->assertJsonPath('folders.0.webVariantReadyCount', 1)
+            ->assertJsonPath('webVariantAudits.0.projectId', $project->id)
+            ->assertJsonPath('webVariantAudits.0.missingWebVariantCount', 2);
     }
 }

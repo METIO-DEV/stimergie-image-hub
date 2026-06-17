@@ -13,8 +13,11 @@ use Throwable;
 #[Signature('images:generate-variants
     {--source-prefix=photos : Prefixe des originaux legacy a traiter}
     {--target-prefix=images : Prefixe de destination des variantes}
+    {--project= : ID du projet a traiter}
+    {--folder= : Dossier source a traiter}
     {--limit= : Limite le nombre d images traitees}
     {--dry-run : Affiche les images concernees sans generer les variantes}
+    {--missing-web-only : Traite uniquement les images sans vraie variante web}
     {--force : Regenere les variantes meme si les cles web/thumb/hd sont deja renseignees}')]
 #[Description('Genere les variantes web/thumb/hd depuis les originaux deja presents dans le bucket')]
 class GenerateImageVariants extends Command
@@ -23,14 +26,20 @@ class GenerateImageVariants extends Command
     {
         $sourcePrefix = trim((string) $this->option('source-prefix'), '/');
         $targetPrefix = trim((string) $this->option('target-prefix'), '/') ?: 'images';
+        $projectId = $this->option('project') ? (int) $this->option('project') : null;
+        $folder = trim((string) $this->option('folder'));
         $limit = $this->option('limit') ? (int) $this->option('limit') : null;
         $dryRun = (bool) $this->option('dry-run');
+        $missingWebOnly = (bool) $this->option('missing-web-only');
         $force = (bool) $this->option('force');
 
         $query = Image::query()
             ->whereNotNull('object_key_original')
             ->where('object_key_original', 'like', "{$sourcePrefix}/%")
-            ->when(! $force, fn ($query) => $query->where(function ($query) {
+            ->when($projectId, fn ($query) => $query->where('project_id', $projectId))
+            ->when($folder !== '', fn ($query) => $this->constrainFolder($query, $sourcePrefix, $folder))
+            ->when($missingWebOnly, fn ($query) => $this->constrainMissingUsableWeb($query))
+            ->when(! $force && ! $missingWebOnly, fn ($query) => $query->where(function ($query) {
                 $query
                     ->whereNull('object_key_web')
                     ->orWhereNull('object_key_thumb')
@@ -116,5 +125,30 @@ class GenerateImageVariants extends Command
         $this->components->twoColumnDetail('Echecs', (string) $failed);
 
         return $failed > 0 ? self::FAILURE : self::SUCCESS;
+    }
+
+    private function constrainFolder($query, string $sourcePrefix, string $folder): void
+    {
+        $folderPrefix = trim($sourcePrefix.'/'.$folder, '/');
+
+        $query->where(function ($query) use ($folder, $folderPrefix): void {
+            $query
+                ->where('object_key_original', 'like', "{$folderPrefix}/%")
+                ->orWhereHas('project', function ($query) use ($folder): void {
+                    $query
+                        ->where('source_folder', $folder)
+                        ->orWhere('name', $folder);
+                });
+        });
+    }
+
+    private function constrainMissingUsableWeb($query): void
+    {
+        $query->where(function ($query): void {
+            $query
+                ->whereNull('object_key_web')
+                ->orWhereColumn('object_key_web', 'object_key_original')
+                ->orWhereColumn('object_key_web', 'object_key_hd');
+        });
     }
 }
