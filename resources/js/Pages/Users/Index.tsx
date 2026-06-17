@@ -119,7 +119,7 @@ export default function UsersIndex({ users, clients, roles }: Props) {
                 }
             />
 
-            <main className="mx-auto w-full max-w-7xl px-6 py-12">
+            <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
                 <div className="mb-8 flex flex-col gap-4 md:flex-row">
                     <div className="grid flex-grow grid-cols-1 gap-4 md:grid-cols-2">
                         <LegacySelect
@@ -206,8 +206,8 @@ function UsersTable({
     onDelete: (user: UserRow) => void;
 }) {
     return (
-        <div className="w-full overflow-hidden rounded-md border">
-            <Table>
+        <div className="mobile-card-table-wrapper w-full overflow-hidden rounded-md border">
+            <Table className="mobile-card-table">
                 <TableHeader>
                     <TableRow>
                         <TableHead>Nom</TableHead>
@@ -220,7 +220,7 @@ function UsersTable({
                 <TableBody>
                     {users.map((user) => (
                         <TableRow key={user.id}>
-                            <TableCell className="font-medium">
+                            <TableCell data-label="Nom" className="font-medium">
                                 <div className="flex items-center gap-2">
                                     <UserRound
                                         size={16}
@@ -229,7 +229,7 @@ function UsersTable({
                                     {user.name}
                                 </div>
                             </TableCell>
-                            <TableCell>
+                            <TableCell data-label="Email">
                                 <div className="flex items-center gap-2">
                                     <Mail
                                         size={16}
@@ -238,7 +238,7 @@ function UsersTable({
                                     {user.email}
                                 </div>
                             </TableCell>
-                            <TableCell>
+                            <TableCell data-label="Rôle">
                                 <Badge
                                     variant="outline"
                                     className={roleDisplay(user.role).color}
@@ -247,7 +247,7 @@ function UsersTable({
                                     {roleDisplay(user.role).label}
                                 </Badge>
                             </TableCell>
-                            <TableCell>
+                            <TableCell data-label="Entreprise">
                                 <div className="flex flex-wrap gap-1">
                                     {user.clients.length > 0 ? (
                                         user.clients.map((client) => (
@@ -267,8 +267,8 @@ function UsersTable({
                                     )}
                                 </div>
                             </TableCell>
-                            <TableCell className="text-right">
-                                <div className="flex justify-end gap-2">
+                            <TableCell data-label="Actions" className="text-right">
+                                <div className="flex gap-2 sm:justify-end">
                                     <Button
                                         variant="ghost"
                                         size="icon"

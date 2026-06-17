@@ -71,7 +71,7 @@ export default function DownloadsIndex({
                         </Button>
                     </div>
 
-                    <Card className="rounded-lg border bg-card p-6">
+                    <Card className="rounded-lg border bg-card p-4 sm:p-6">
                         <h2 className="mb-4 text-xl font-semibold">
                             Historique des demandes
                         </h2>
@@ -100,15 +100,8 @@ function DownloadsTable({
     onRefresh: () => void;
 }) {
     return (
-        <div className="w-full overflow-auto">
-            <div className="mb-4 flex justify-end">
-                <Button variant="outline" size="sm" onClick={onRefresh}>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Actualiser
-                </Button>
-            </div>
-
-            <Table>
+        <div className="mobile-card-table-wrapper w-full overflow-auto">
+            <Table className="mobile-card-table">
                 <TableCaption>
                     {downloads.length === 0
                         ? "Aucune demande de téléchargement pour le moment"
@@ -145,10 +138,13 @@ function DownloadsTable({
                     ) : (
                         downloads.map((download) => (
                             <TableRow key={download.id}>
-                                <TableCell>
+                                <TableCell data-label="Demandé le">
                                     {formatDate(download.createdAt)}
                                 </TableCell>
-                                <TableCell className="max-w-[260px] truncate">
+                                <TableCell
+                                    data-label="Contenu"
+                                    className="max-w-[260px] truncate"
+                                >
                                     {download.title}
                                     {download.isHd && (
                                         <Badge
@@ -164,18 +160,21 @@ function DownloadsTable({
                                         {download.imageCount > 1 ? "s" : ""}
                                     </div>
                                 </TableCell>
-                                <TableCell>
+                                <TableCell data-label="Statut">
                                     <StatusBadge status={download.status} />
                                     <div className="mt-1 text-xs text-muted-foreground">
                                         ID: {String(download.id).slice(0, 8)}...
                                     </div>
                                 </TableCell>
-                                <TableCell className="text-right">
+                                <TableCell
+                                    data-label="Actions"
+                                    className="text-right"
+                                >
                                     <Button
                                         asChild={download.status === "ready"}
                                         variant="outline"
                                         size="sm"
-                                        className="py-4"
+                                        className="w-full py-4 sm:w-auto"
                                         disabled={download.status !== "ready"}
                                     >
                                         {download.status === "ready" &&

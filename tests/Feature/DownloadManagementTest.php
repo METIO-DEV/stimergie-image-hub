@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\PrepareDownloadArchive;
 use App\Models\Client;
 use App\Models\ClientMembership;
 use App\Models\DownloadJob;
@@ -9,9 +10,12 @@ use App\Models\Image;
 use App\Models\Project;
 use App\Models\ProjectAccessPeriod;
 use App\Models\User;
+use App\Support\ImageUrlResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 use Tests\TestCase;
 use ZipArchive;
 
@@ -89,6 +93,52 @@ class DownloadManagementTest extends TestCase
         @unlink($tempZip);
 
         $this->assertTrue($job->is_hd);
+    }
+
+    public function test_grouped_hd_download_archive_uses_every_hd_object_key(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        [$client, $project] = $this->clientAndProject('grouped-hd-downloads');
+        $firstImage = $this->image($client, $project, [
+            'title' => 'First HD',
+            'object_key_web' => 'images/web/first.jpg',
+            'object_key_hd' => 'images/hd/first.jpg',
+        ]);
+        $secondImage = $this->image($client, $project, [
+            'title' => 'Second HD',
+            'object_key_web' => 'images/web/second.jpg',
+            'object_key_hd' => 'images/hd/second.jpg',
+        ]);
+
+        Storage::disk('scaleway')->put('images/web/first.jpg', 'first-web');
+        Storage::disk('scaleway')->put('images/web/second.jpg', 'second-web');
+        Storage::disk('scaleway')->put('images/hd/first.jpg', 'first-hd');
+        Storage::disk('scaleway')->put('images/hd/second.jpg', 'second-hd');
+
+        $this->actingAs($admin)->post(route('downloads.store'), [
+            'variant' => 'hd',
+            'image_ids' => [$firstImage->id, $secondImage->id],
+        ])->assertRedirect(route('downloads.index'));
+
+        $job = DownloadJob::query()->firstOrFail();
+        $entries = $this->zipEntries($job);
+
+        $this->assertSame('ready', $job->status);
+        $this->assertTrue($job->is_hd);
+        $this->assertSame(2, $job->image_count);
+        $this->assertSame([
+            '001-first-hd.jpg' => 'first-hd',
+            '002-second-hd.jpg' => 'second-hd',
+        ], $entries);
+        $this->assertSame('completed', $job->payload['archive_progress']['status']);
+        $this->assertSame(2, $job->payload['archive_progress']['processed']);
+        $this->assertSame(2, $job->payload['archive_progress']['added']);
+        $this->assertSame(0, $job->payload['archive_progress']['skipped']);
     }
 
     public function test_cropped_download_archive_applies_selected_preset(): void
@@ -211,6 +261,151 @@ class DownloadManagementTest extends TestCase
         $this->assertSame(1920, $size[1]);
     }
 
+    public function test_cropped_download_falls_back_to_hd_when_requested_web_source_is_missing(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        [$client, $project] = $this->clientAndProject();
+        $source = UploadedFile::fake()->image('source-hd-only.jpg', 1200, 800);
+        $image = $this->image($client, $project, [
+            'title' => 'HD Only',
+            'object_key_original' => 'images/original/source-hd-only.jpg',
+            'object_key_hd' => 'images/original/source-hd-only.jpg',
+        ]);
+
+        Storage::disk('scaleway')->put(
+            'images/original/source-hd-only.jpg',
+            file_get_contents($source->getRealPath()),
+        );
+
+        $this->actingAs($admin)->post(route('downloads.store'), [
+            'variant' => 'crop',
+            'crop_preset' => 'web_banner',
+            'crop_source' => 'web',
+            'image_ids' => [$image->id],
+            'crops' => [[
+                'image_id' => $image->id,
+                'focus_x' => 0.5,
+                'focus_y' => 0.5,
+                'zoom' => 1,
+            ]],
+        ])->assertRedirect(route('downloads.index'));
+
+        $job = DownloadJob::query()->firstOrFail();
+        $tempZip = tempnam(sys_get_temp_dir(), 'download-crop-fallback-test-');
+        $tempImage = tempnam(sys_get_temp_dir(), 'download-crop-fallback-image-');
+
+        file_put_contents($tempZip, Storage::disk('scaleway')->get($job->object_key));
+
+        $zip = new ZipArchive;
+
+        try {
+            $this->assertTrue($zip->open($tempZip));
+            $this->assertStringContainsString('bandeau-web-3-1.jpg', $zip->getNameIndex(0));
+            file_put_contents($tempImage, $zip->getFromIndex(0));
+        } finally {
+            $zip->close();
+            @unlink($tempZip);
+        }
+
+        $size = getimagesize($tempImage);
+        @unlink($tempImage);
+
+        $this->assertSame('ready', $job->status);
+        $this->assertSame(1, $job->image_count);
+        $this->assertSame('web', $job->payload['crop_source']);
+        $this->assertSame('web', $job->payload['crop_source_fallbacks'][0]['from']);
+        $this->assertSame('hd', $job->payload['crop_source_fallbacks'][0]['to']);
+        $this->assertSame('images/original/source-hd-only.jpg', $job->payload['crop_source_fallbacks'][0]['object_key']);
+        $this->assertSame([2400, 800], [$size[0], $size[1]]);
+    }
+
+    public function test_grouped_cropped_download_archive_contains_one_crop_per_selected_image(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        [$client, $project] = $this->clientAndProject('grouped-crop-downloads');
+        $firstSource = UploadedFile::fake()->image('first.jpg', 1200, 800);
+        $secondSource = UploadedFile::fake()->image('second.jpg', 800, 1200);
+        $firstImage = $this->image($client, $project, [
+            'title' => 'First Crop',
+            'object_key_hd' => 'images/original/first.jpg',
+        ]);
+        $secondImage = $this->image($client, $project, [
+            'title' => 'Second Crop',
+            'object_key_hd' => 'images/original/second.jpg',
+        ]);
+
+        Storage::disk('scaleway')->put(
+            'images/original/first.jpg',
+            file_get_contents($firstSource->getRealPath()),
+        );
+        Storage::disk('scaleway')->put(
+            'images/original/second.jpg',
+            file_get_contents($secondSource->getRealPath()),
+        );
+
+        $this->actingAs($admin)->post(route('downloads.store'), [
+            'variant' => 'crop',
+            'crop_preset' => 'magazine',
+            'crop_source' => 'hd',
+            'image_ids' => [$firstImage->id, $secondImage->id],
+            'crops' => [
+                [
+                    'image_id' => $firstImage->id,
+                    'focus_x' => 0.25,
+                    'focus_y' => 0.5,
+                    'zoom' => 1.1,
+                ],
+                [
+                    'image_id' => $secondImage->id,
+                    'focus_x' => 0.75,
+                    'focus_y' => 0.5,
+                    'zoom' => 1.4,
+                ],
+            ],
+        ])->assertRedirect(route('downloads.index'));
+
+        $job = DownloadJob::query()->firstOrFail();
+        $tempZip = tempnam(sys_get_temp_dir(), 'download-grouped-crop-test-');
+        $firstTempImage = tempnam(sys_get_temp_dir(), 'download-grouped-crop-image-');
+        $secondTempImage = tempnam(sys_get_temp_dir(), 'download-grouped-crop-image-');
+
+        file_put_contents($tempZip, Storage::disk('scaleway')->get($job->object_key));
+
+        $zip = new ZipArchive;
+
+        try {
+            $this->assertTrue($zip->open($tempZip));
+            $this->assertSame(2, $zip->numFiles);
+            $this->assertSame('001-first-crop-magazine-4-3.jpg', $zip->getNameIndex(0));
+            $this->assertSame('002-second-crop-magazine-4-3.jpg', $zip->getNameIndex(1));
+            file_put_contents($firstTempImage, $zip->getFromIndex(0));
+            file_put_contents($secondTempImage, $zip->getFromIndex(1));
+        } finally {
+            $zip->close();
+            @unlink($tempZip);
+        }
+
+        $firstSize = getimagesize($firstTempImage);
+        $secondSize = getimagesize($secondTempImage);
+        @unlink($firstTempImage);
+        @unlink($secondTempImage);
+
+        $this->assertSame('ready', $job->status);
+        $this->assertSame(2, $job->image_count);
+        $this->assertSame([1600, 1200], [$firstSize[0], $firstSize[1]]);
+        $this->assertSame([1600, 1200], [$secondSize[0], $secondSize[1]]);
+    }
+
     public function test_cropped_download_requires_crop_for_every_image(): void
     {
         Storage::fake('scaleway');
@@ -294,6 +489,51 @@ class DownloadManagementTest extends TestCase
         $this->assertSame(2, $job->image_count);
         $this->assertSame([
             ['id' => $missingImage->id, 'title' => 'Matcha Latte'],
+        ], $job->payload['skipped_images']);
+    }
+
+    public function test_download_archive_failure_records_progress_when_no_sources_are_available(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        [$client, $project] = $this->clientAndProject('missing-downloads');
+        $image = $this->image($client, $project, [
+            'object_key_web' => 'images/web/missing.jpg',
+        ]);
+        $job = DownloadJob::create([
+            'user_id' => $admin->id,
+            'title' => 'Archive missing',
+            'status' => 'pending',
+            'is_hd' => false,
+            'image_count' => 1,
+            'storage_provider' => 'scaleway',
+            'payload' => [
+                'variant' => 'web',
+                'requested_image_ids' => [$image->id],
+            ],
+        ]);
+
+        try {
+            (new PrepareDownloadArchive($job->id))->handle(app(ImageUrlResolver::class));
+            $this->fail('The download archive job should fail when every source is missing.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('Aucune image telechargeable trouvee.', $exception->getMessage());
+        }
+
+        $job->refresh();
+
+        $this->assertSame('failed', $job->status);
+        $this->assertSame('Aucune image telechargeable trouvee.', $job->error_details);
+        $this->assertSame('failed', $job->payload['archive_progress']['status']);
+        $this->assertSame(1, $job->payload['archive_progress']['processed']);
+        $this->assertSame(0, $job->payload['archive_progress']['added']);
+        $this->assertSame(1, $job->payload['archive_progress']['skipped']);
+        $this->assertSame([
+            ['id' => $image->id, 'title' => 'Matcha Latte'],
         ], $job->payload['skipped_images']);
     }
 
@@ -517,6 +757,49 @@ class DownloadManagementTest extends TestCase
         ]);
     }
 
+    public function test_failed_download_archive_can_be_retried_from_command(): void
+    {
+        Storage::fake('scaleway');
+        Queue::fake();
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $job = DownloadJob::create([
+            'user_id' => $admin->id,
+            'title' => 'Archive echouee',
+            'status' => 'failed',
+            'is_hd' => true,
+            'image_count' => 1,
+            'storage_provider' => 'scaleway',
+            'object_key' => 'downloads/1/archive-echouee.zip',
+            'download_url' => '/storage/downloads/1/archive-echouee.zip',
+            'download_url_expires_at' => now()->addDay(),
+            'processed_at' => now()->subMinute(),
+            'error_details' => 'Timeout',
+            'payload' => [
+                'variant' => 'hd',
+                'requested_image_ids' => [123],
+            ],
+        ]);
+        Storage::disk('scaleway')->put($job->object_key, 'partial-zip');
+
+        $this->artisan('downloads:retry-failed', ['--id' => [$job->id]])
+            ->expectsOutput('Archives relancees: 1')
+            ->assertExitCode(0);
+
+        $job->refresh();
+
+        $this->assertSame('pending', $job->status);
+        $this->assertNull($job->object_key);
+        $this->assertNull($job->download_url);
+        $this->assertNull($job->error_details);
+        $this->assertSame('pending', $job->payload['archive_progress']['status']);
+        Storage::disk('scaleway')->assertMissing('downloads/1/archive-echouee.zip');
+        Queue::assertPushed(PrepareDownloadArchive::class);
+    }
+
     public function test_legacy_stimergie_download_url_is_not_redirected(): void
     {
         $admin = User::factory()->create([
@@ -596,7 +879,7 @@ class DownloadManagementTest extends TestCase
         return Image::create([
             'client_id' => $client->id,
             'project_id' => $project->id,
-            'title' => 'Matcha Latte',
+            'title' => $overrides['title'] ?? 'Matcha Latte',
             'status' => 'ready',
             'storage_provider' => 'scaleway',
             'object_key_original' => $overrides['object_key_original'] ?? null,
@@ -606,5 +889,30 @@ class DownloadManagementTest extends TestCase
             'rights_ends_at' => $overrides['rights_ends_at'] ?? null,
             'size_bytes' => $overrides['size_bytes'] ?? null,
         ]);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function zipEntries(DownloadJob $job): array
+    {
+        $tempZip = tempnam(sys_get_temp_dir(), 'download-entries-test-');
+        file_put_contents($tempZip, Storage::disk('scaleway')->get($job->object_key));
+
+        $zip = new ZipArchive;
+        $entries = [];
+
+        try {
+            $this->assertTrue($zip->open($tempZip));
+
+            for ($index = 0; $index < $zip->numFiles; $index++) {
+                $entries[$zip->getNameIndex($index)] = $zip->getFromIndex($index);
+            }
+        } finally {
+            $zip->close();
+            @unlink($tempZip);
+        }
+
+        return $entries;
     }
 }

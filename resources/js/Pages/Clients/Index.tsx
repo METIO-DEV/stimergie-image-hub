@@ -93,7 +93,10 @@ export default function ClientsIndex({ clients, canCreateClient }: Props) {
                 description="Consultez et administrez les entreprises auxquelles vous avez un rôle de gestion."
                 action={
                     canCreateClient && (
-                        <Button asChild className="h-auto gap-2 whitespace-normal text-left">
+                        <Button
+                            asChild
+                            className="h-auto w-full gap-2 whitespace-normal text-left sm:w-auto"
+                        >
                             <Link href={route("clients.create")}>
                                 <PlusCircle size={18} />
                                 Ajouter une entreprise
@@ -103,7 +106,7 @@ export default function ClientsIndex({ clients, canCreateClient }: Props) {
                 }
             />
 
-            <main className="mx-auto max-w-7xl px-6 py-8">
+            <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
                 <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row">
                     <div className="w-full md:w-2/3">
                         <Input
@@ -233,8 +236,8 @@ function ClientsTable({
     onDelete: (client: ClientSummary) => void;
 }) {
     return (
-        <div className="w-full overflow-hidden rounded-md border">
-            <Table>
+        <div className="mobile-card-table-wrapper w-full overflow-hidden rounded-md border">
+            <Table className="mobile-card-table">
                 <TableHeader>
                     <TableRow>
                         <TableHead>Nom</TableHead>
@@ -247,7 +250,10 @@ function ClientsTable({
                 <TableBody>
                     {clients.map((client) => (
                         <TableRow key={client.id}>
-                            <TableCell className="font-medium">
+                            <TableCell
+                                data-label="Entreprise"
+                                className="font-medium"
+                            >
                                 <div className="flex items-center gap-2">
                                     {client.logo ? (
                                         <div className="h-8 w-8 overflow-hidden rounded-full border">
@@ -266,37 +272,43 @@ function ClientsTable({
                                     {client.name}
                                 </div>
                             </TableCell>
-                            <TableCell>{client.slug}</TableCell>
-                            <TableCell>{client.projectsCount}</TableCell>
-                            <TableCell>
+                            <TableCell data-label="Identifiant">
+                                {client.slug}
+                            </TableCell>
+                            <TableCell data-label="Projets">
+                                {client.projectsCount}
+                            </TableCell>
+                            <TableCell data-label="Images">
                                 <div className="flex items-center gap-2">
                                     <ImageIcon className="h-4 w-4 text-muted-foreground" />
                                     {client.imagesCount}
                                 </div>
                             </TableCell>
-                            <TableCell className="text-right">
-                                <Button variant="ghost" size="icon" asChild>
-                                    <Link
-                                        href={route("clients.show", client.id)}
-                                        title={
-                                            client.canUpdate
-                                                ? "Modifier"
-                                                : "Voir"
-                                        }
-                                    >
-                                        <Pencil size={16} />
-                                    </Link>
-                                </Button>
-                                {client.canDelete && (
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        title="Supprimer"
-                                        onClick={() => onDelete(client)}
-                                    >
-                                        <Trash2 size={16} />
+                            <TableCell data-label="Actions" className="text-right">
+                                <div className="flex gap-2 sm:justify-end">
+                                    <Button variant="ghost" size="icon" asChild>
+                                        <Link
+                                            href={route("clients.show", client.id)}
+                                            title={
+                                                client.canUpdate
+                                                    ? "Modifier"
+                                                    : "Voir"
+                                            }
+                                        >
+                                            <Pencil size={16} />
+                                        </Link>
                                     </Button>
-                                )}
+                                    {client.canDelete && (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            title="Supprimer"
+                                            onClick={() => onDelete(client)}
+                                        >
+                                            <Trash2 size={16} />
+                                        </Button>
+                                    )}
+                                </div>
                             </TableCell>
                         </TableRow>
                     ))}

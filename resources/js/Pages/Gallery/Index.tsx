@@ -91,6 +91,7 @@ type SelectionSnapshot = {
     title: string;
     thumbUrl?: string | null;
     imageUrl?: string | null;
+    hasWebVariant?: boolean;
     clientName?: string | null;
     projectName?: string | null;
     rightsStatus?: LegacyImage["rightsStatus"];
@@ -206,6 +207,7 @@ const imageToSelectionSnapshot = (image: LegacyImage): SelectionSnapshot => ({
     title: image.title,
     thumbUrl: image.thumbUrl,
     imageUrl: image.imageUrl,
+    hasWebVariant: image.hasWebVariant,
     clientName: image.clientName || image.client?.name || null,
     projectName: image.projectName || null,
     rightsStatus: image.rightsStatus,
@@ -330,6 +332,9 @@ export default function GalleryIndex({
         .filter((image): image is LegacyImage | SelectionSnapshot =>
             Boolean(image),
         );
+    const selectedCropHasMissingWebVariant = selectedCropItems.some(
+        (image) => image.hasWebVariant === false,
+    );
     const paginatedImages = images;
     const hasActiveFilters =
         search.trim() !== "" ||
@@ -895,6 +900,12 @@ export default function GalleryIndex({
             },
         );
     };
+
+    useEffect(() => {
+        if (cropSource === "web" && selectedCropHasMissingWebVariant) {
+            setCropSource("hd");
+        }
+    }, [cropSource, selectedCropHasMissingWebVariant]);
 
     const openCropDialog = () => {
         if (selectionHasExpiredRights || selectedImages.length === 0) {
@@ -1897,6 +1908,7 @@ export default function GalleryIndex({
                 onPresetChange={setCropPreset}
                 source={cropSource}
                 onSourceChange={setCropSource}
+                webSourceAvailable={!selectedCropHasMissingWebVariant}
                 settings={cropSettings}
                 onSettingChange={updateCurrentCrop}
                 onSubmit={requestCroppedDownload}
@@ -2064,6 +2076,7 @@ function CropExportDialog({
     onPresetChange,
     source,
     onSourceChange,
+    webSourceAvailable,
     settings,
     onSettingChange,
     onSubmit,
@@ -2077,6 +2090,7 @@ function CropExportDialog({
     onPresetChange: (preset: CropPresetKey) => void;
     source: CropSource;
     onSourceChange: (source: CropSource) => void;
+    webSourceAvailable: boolean;
     settings: Record<string, CropSetting>;
     onSettingChange: (updates: Partial<CropSetting>) => void;
     onSubmit: () => void;
@@ -2096,13 +2110,18 @@ function CropExportDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[92dvh] max-w-5xl overflow-hidden p-0">
-                <DialogHeader className="border-b border-border px-5 py-4">
+            <DialogContent className="flex h-[100dvh] w-full max-w-none grid-rows-none flex-col gap-0 overflow-hidden p-0 sm:h-auto sm:max-h-[92dvh] sm:max-w-5xl">
+                <DialogHeader className="shrink-0 border-b border-border px-4 py-4 pr-12 text-left sm:px-5">
                     <DialogTitle>Formats d'export</DialogTitle>
+                    <p className="text-sm text-muted-foreground">
+                        {images.length} image{images.length > 1 ? "s" : ""} à
+                        recadrer · {selectedPreset.label}{" "}
+                        {selectedPreset.ratioLabel}
+                    </p>
                 </DialogHeader>
-                <div className="grid min-h-0 gap-0 md:grid-cols-[16rem_minmax(0,1fr)]">
-                    <div className="max-h-[70dvh] overflow-y-auto border-b border-border p-3 md:border-b-0 md:border-r">
-                        <div className="grid grid-cols-2 gap-2 md:grid-cols-1">
+                <div className="grid min-h-0 flex-1 gap-0 overflow-hidden md:grid-cols-[16rem_minmax(0,1fr)]">
+                    <div className="shrink-0 overflow-x-auto border-b border-border p-3 md:max-h-[70dvh] md:overflow-y-auto md:border-b-0 md:border-r">
+                        <div className="flex min-w-max gap-2 md:grid md:min-w-0 md:grid-cols-1">
                             {images.map((image) => {
                                 const id = normalizeImageId(image.id);
                                 const src = image.thumbUrl || image.imageUrl;
@@ -2112,7 +2131,7 @@ function CropExportDialog({
                                     <button
                                         key={id}
                                         type="button"
-                                        className={`grid grid-cols-[3rem_minmax(0,1fr)] gap-2 rounded-md border p-2 text-left transition ${
+                                        className={`grid w-44 shrink-0 grid-cols-[3rem_minmax(0,1fr)] gap-2 rounded-md border p-2 text-left transition md:w-full ${
                                             active
                                                 ? "border-primary bg-primary/5"
                                                 : "border-border hover:bg-muted"
@@ -2139,11 +2158,11 @@ function CropExportDialog({
                         </div>
                     </div>
 
-                    <div className="max-h-[70dvh] overflow-y-auto p-5">
+                    <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-24 sm:p-5 sm:pb-5">
                         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
                             <div className="space-y-4">
                                 <div
-                                    className="relative mx-auto w-full max-w-2xl overflow-hidden rounded-md bg-muted"
+                                    className="relative mx-auto w-full max-w-2xl overflow-hidden rounded-md bg-muted shadow-sm"
                                     style={{
                                         aspectRatio: `${selectedPreset.width} / ${selectedPreset.height}`,
                                     }}
@@ -2168,7 +2187,11 @@ function CropExportDialog({
                             </div>
 
                             <div className="space-y-5">
-                                <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-2">
+                                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        Format
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
                                     {EXPORT_PRESETS.map((candidate) => (
                                         <button
                                             key={candidate.key}
@@ -2190,37 +2213,58 @@ function CropExportDialog({
                                             </span>
                                         </button>
                                     ))}
+                                    </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-2">
-                                    {(["web", "hd"] as const).map((candidate) => (
-                                        <button
-                                            key={candidate}
-                                            type="button"
-                                            className={`rounded-md border px-3 py-2 text-left text-sm transition ${
-                                                candidate === source
-                                                    ? "border-primary bg-primary text-primary-foreground"
-                                                    : "border-border hover:bg-muted"
-                                            }`}
-                                            onClick={() =>
-                                                onSourceChange(candidate)
-                                            }
-                                        >
-                                            <span className="block font-semibold">
-                                                {candidate === "web"
-                                                    ? "Web"
-                                                    : "HD"}
-                                            </span>
-                                            <span className="text-xs opacity-80">
-                                                {candidate === "web"
-                                                    ? "Plus rapide"
-                                                    : "Source originale"}
-                                            </span>
-                                        </button>
-                                    ))}
+                                <div className="space-y-2">
+                                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        Source
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                    {(["web", "hd"] as const).map(
+                                        (candidate) => {
+                                            const disabled =
+                                                candidate === "web" &&
+                                                !webSourceAvailable;
+
+                                            return (
+                                                <button
+                                                    key={candidate}
+                                                    type="button"
+                                                    disabled={disabled}
+                                                    className={`rounded-md border px-3 py-2 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                                                        candidate === source
+                                                            ? "border-primary bg-primary text-primary-foreground"
+                                                            : "border-border hover:bg-muted"
+                                                    }`}
+                                                    onClick={() =>
+                                                        !disabled &&
+                                                        onSourceChange(candidate)
+                                                    }
+                                                >
+                                                    <span className="block font-semibold">
+                                                        {candidate === "web"
+                                                            ? "Web"
+                                                            : "HD"}
+                                                    </span>
+                                                    <span className="text-xs opacity-80">
+                                                        {candidate === "web"
+                                                            ? webSourceAvailable
+                                                                ? "Plus rapide"
+                                                                : "Indisponible"
+                                                            : "Source originale"}
+                                                    </span>
+                                                </button>
+                                            );
+                                        },
+                                    )}
+                                    </div>
                                 </div>
 
-                                <div className="space-y-4">
+                                <div className="space-y-4 rounded-md border border-border bg-card p-4">
+                                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        Cadrage
+                                    </div>
                                     <CropRange
                                         label="Horizontal"
                                         min={0}
@@ -2260,11 +2304,19 @@ function CropExportDialog({
                         </div>
                     </div>
                 </div>
-                <DialogFooter className="border-t border-border px-5 py-4">
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>
+                <DialogFooter className="fixed inset-x-0 bottom-0 z-10 gap-2 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:static sm:px-5 sm:py-4">
+                    <Button
+                        variant="outline"
+                        className="w-full sm:w-auto"
+                        onClick={() => onOpenChange(false)}
+                    >
                         Annuler
                     </Button>
-                    <Button disabled={images.length === 0} onClick={onSubmit}>
+                    <Button
+                        className="w-full sm:w-auto"
+                        disabled={images.length === 0}
+                        onClick={onSubmit}
+                    >
                         <Download className="mr-2 h-4 w-4" />
                         Exporter
                     </Button>
@@ -2290,10 +2342,10 @@ function CropRange({
     onChange: (value: number) => void;
 }) {
     return (
-        <label className="block space-y-2 text-sm">
+        <label className="block space-y-3 text-sm">
             <span className="flex items-center justify-between gap-3 font-medium">
                 <span>{label}</span>
-                <span className="text-xs text-muted-foreground">
+                <span className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
                     {label === "Zoom" ? `${value.toFixed(2)}x` : `${value}%`}
                 </span>
             </span>
@@ -2304,7 +2356,7 @@ function CropRange({
                 step={step}
                 value={value}
                 onChange={(event) => onChange(Number(event.target.value))}
-                className="w-full accent-primary"
+                className="h-8 w-full accent-primary"
             />
         </label>
     );

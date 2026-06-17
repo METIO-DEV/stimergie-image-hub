@@ -30,10 +30,11 @@ Services exposes :
 - Vite : http://localhost:5174
 - PostgreSQL : localhost:55432
 
-Le compose lance aussi un worker :
+Le compose lance aussi deux workers :
 
 ```sh
-php artisan queue:work --sleep=1 --tries=3 --timeout=120
+php artisan queue:work --sleep=1 --tries=3 --timeout=900
+php artisan queue:work --queue=sync --sleep=1 --tries=1 --timeout=0
 ```
 
 ## Deploiement Dokploy
@@ -45,7 +46,8 @@ La configuration prod construit une seule image applicative :
 - `composer install --no-dev` est execute pendant le build Docker.
 - `npm ci && npm run build` est execute pendant le build Docker.
 - `app` sert Laravel via Apache sur le port interne `80`.
-- `queue` reutilise la meme image pour `php artisan queue:work`.
+- `queue` reutilise la meme image pour `php artisan queue:work` avec un timeout adapte aux archives ZIP.
+- `queue-sync` traite la queue `sync` pour les transferts et generations de variantes.
 - `pgsql` persiste ses donnees dans un volume Docker nomme.
 
 Variables minimales a renseigner dans l'environnement Dokploy :
@@ -56,6 +58,7 @@ APP_URL=https://votre-domaine.tld
 DB_PASSWORD=mot-de-passe-solide
 POSTGRES_DB=stimergie
 POSTGRES_USER=stimergie
+DB_QUEUE_RETRY_AFTER=1200
 SCALEWAY_ACCESS_KEY_ID=...
 SCALEWAY_SECRET_KEY=...
 SCALEWAY_OBJECT_STORAGE_BUCKET=...

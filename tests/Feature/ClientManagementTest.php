@@ -141,7 +141,7 @@ class ClientManagementTest extends TestCase
         $this->actingAs($user)
             ->get(route('clients.index'))
             ->assertRedirect(route('gallery.index'))
-            ->assertSessionHas('warning', "La gestion des entreprises est réservée aux Admin Client owner/manager.");
+            ->assertSessionHas('warning', 'La gestion des entreprises est réservée aux Admin Client owner/manager.');
     }
 
     public function test_client_management_lists_only_owned_or_managed_clients_for_admin_client(): void
@@ -372,6 +372,8 @@ class ClientManagementTest extends TestCase
     private function createClientWithOwner(): array
     {
         $owner = User::factory()->create([
+            'name' => 'Client Owner',
+            'email' => 'client-owner@example.test',
             'platform_role' => 'admin_client',
             'status' => 'active',
         ]);

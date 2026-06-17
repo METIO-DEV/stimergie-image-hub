@@ -406,7 +406,7 @@ export default function ImagesIndex({
                 }
             />
 
-            <main className="mx-auto max-w-7xl px-6 py-12">
+            <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
                 <Tabs
                     value={activeTab}
                     onValueChange={(value) => setActiveTab(value as ImagesTab)}
@@ -1828,8 +1828,8 @@ function ImagesTable({
     onClientOpen: (image: LegacyImage) => void;
 }) {
     return (
-        <div className="overflow-hidden rounded-md border">
-            <Table>
+        <div className="mobile-card-table-wrapper overflow-hidden rounded-md border">
+            <Table className="mobile-card-table">
                 <TableHeader>
                     <TableRow>
                         <TableHead>Image</TableHead>
@@ -1865,7 +1865,7 @@ function ImagesTable({
 
                             return (
                                 <TableRow key={image.id}>
-                                    <TableCell>
+                                    <TableCell data-label="Image">
                                         <button
                                             type="button"
                                             className={`relative h-16 w-16 overflow-hidden rounded ${
@@ -1888,10 +1888,13 @@ function ImagesTable({
                                             )}
                                         </button>
                                     </TableCell>
-                                    <TableCell className="font-medium">
+                                    <TableCell
+                                        data-label="Titre"
+                                        className="font-medium"
+                                    >
                                         {image.title}
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell data-label="Entreprise">
                                         {image.clientName ? (
                                             <button
                                                 type="button"
@@ -1906,12 +1909,12 @@ function ImagesTable({
                                             "N/A"
                                         )}
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell data-label="Dimensions">
                                         {image.width && image.height
                                             ? `${image.width} × ${image.height}`
                                             : "-"}
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell data-label="Orientation">
                                         <Badge
                                             variant="outline"
                                             className="capitalize"
@@ -1919,7 +1922,10 @@ function ImagesTable({
                                             {labelOrientation(image.orientation)}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell title={tagPreview || undefined}>
+                                    <TableCell
+                                        data-label="Tags"
+                                        title={tagPreview || undefined}
+                                    >
                                         <div className="flex flex-wrap gap-1">
                                             {imageTags.length > 0 ? (
                                                 <>
@@ -1952,12 +1958,15 @@ function ImagesTable({
                                             )}
                                         </div>
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell data-label="Ajoutée le">
                                         {formatDate(image.createdAt)}
                                     </TableCell>
                                     {canManageImages && (
-                                        <TableCell className="text-right">
-                                            <div className="flex justify-end gap-1">
+                                        <TableCell
+                                            data-label="Actions"
+                                            className="text-right"
+                                        >
+                                            <div className="flex gap-1 sm:justify-end">
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"

@@ -36,13 +36,32 @@ class PrepareDownloadArchive implements ShouldQueue
             ->unique()
             ->values();
 
-        $job->update(['status' => 'processing']);
+        $job->update([
+            'status' => 'processing',
+            'payload' => [
+                ...($job->payload ?? []),
+                'archive_progress' => [
+                    'status' => 'processing',
+                    'started_at' => now()->toIso8601String(),
+                    'total' => $imageIds->count(),
+                    'processed' => 0,
+                    'added' => 0,
+                    'skipped' => 0,
+                ],
+            ],
+        ]);
 
         try {
             $images = Image::query()
-                ->with(['client:id,name', 'project:id,name'])
+                ->with([
+                    'client:id,name',
+                    'project:id,name',
+                    'variants:id,image_id,kind,object_key',
+                ])
                 ->whereIn('id', $imageIds)
-                ->get();
+                ->get()
+                ->sortBy(fn (Image $image) => $imageIds->search($image->id))
+                ->values();
 
             $result = $this->buildArchive($job, $images, $variant, $imageUrls, $cropPreset, $cropSource, $cropSettings);
 
@@ -56,13 +75,31 @@ class PrepareDownloadArchive implements ShouldQueue
                 'error_details' => null,
                 'payload' => [
                     ...($job->payload ?? []),
+                    'archive_progress' => [
+                        ...data_get($job->payload, 'archive_progress', []),
+                        'status' => 'completed',
+                        'processed' => $images->count(),
+                        'added' => $result['imageCount'],
+                        'skipped' => count($result['skippedImages']),
+                        'finished_at' => now()->toIso8601String(),
+                    ],
                     'skipped_images' => $result['skippedImages'],
+                    'crop_source_fallbacks' => $result['cropSourceFallbacks'],
                 ],
             ]);
         } catch (Throwable $exception) {
             $job->update([
                 'status' => 'failed',
                 'error_details' => $exception->getMessage(),
+                'payload' => [
+                    ...($job->payload ?? []),
+                    'archive_progress' => [
+                        ...data_get($job->payload, 'archive_progress', []),
+                        'status' => 'failed',
+                        'failed_at' => now()->toIso8601String(),
+                        'error' => $exception->getMessage(),
+                    ],
+                ],
             ]);
 
             throw $exception;
@@ -72,7 +109,7 @@ class PrepareDownloadArchive implements ShouldQueue
     /**
      * @param  Collection<int, Image>  $images
      * @param  array<int, array{focus_x: float, focus_y: float, zoom: float}>  $cropSettings
-     * @return array{objectKey: string, downloadUrl: string, imageCount: int, skippedImages: array<int, array{id: int, title: string}>}
+     * @return array{objectKey: string, downloadUrl: string, imageCount: int, skippedImages: array<int, array{id: int, title: string}>, cropSourceFallbacks: array<int, array{id: int, title: string, from: string, to: string, object_key: string|null}>}
      */
     private function buildArchive(
         DownloadJob $job,
@@ -86,7 +123,10 @@ class PrepareDownloadArchive implements ShouldQueue
         $tempPath = tempnam(sys_get_temp_dir(), 'stimergie-download-');
         $zip = new ZipArchive;
         $zipIsOpen = false;
-        $temporaryImagePaths = [];
+        $processed = 0;
+        $added = 0;
+        $skipped = [];
+        $cropSourceFallbacks = [];
 
         if ($tempPath === false || $zip->open($tempPath, ZipArchive::OVERWRITE) !== true) {
             throw new RuntimeException('Impossible de creer l archive ZIP.');
@@ -95,58 +135,83 @@ class PrepareDownloadArchive implements ShouldQueue
         $zipIsOpen = true;
 
         try {
-            $added = 0;
-            $skipped = [];
-
             foreach ($images as $image) {
+                $processed++;
                 $source = $variant === 'crop'
                     ? $this->cropSource($image, $imageUrls, $cropSource)
                     : $imageUrls->downloadSource($image, $variant);
 
+                if (($source['fallbackFrom'] ?? null) === 'web') {
+                    $cropSourceFallbacks[] = [
+                        'id' => $image->id,
+                        'title' => $image->title,
+                        'from' => 'web',
+                        'to' => 'hd',
+                        'object_key' => $source['objectKey'],
+                    ];
+                }
+
                 if (! $source['objectKey'] || ! Storage::disk($source['disk'])->exists($source['objectKey'])) {
                     $skipped[] = ['id' => $image->id, 'title' => $image->title];
+                    $this->updateProgress($job, $processed, $added, $skipped, $image);
 
                     continue;
                 }
 
-                $temporaryImagePath = $this->copyObjectToTemporaryFile(
-                    $source['disk'],
-                    $source['objectKey'],
-                );
-                $temporaryImagePaths[] = $temporaryImagePath;
+                $temporaryImagePaths = [];
 
-                if ($variant === 'crop') {
-                    $temporaryImagePath = $this->cropImage(
-                        $temporaryImagePath,
-                        ImageExportPresets::get($cropPreset),
-                        $cropSettings[$image->id] ?? ['focus_x' => 0.5, 'focus_y' => 0.5, 'zoom' => 1.0],
+                try {
+                    $temporaryImagePath = $this->copyObjectToTemporaryFile(
+                        $source['disk'],
+                        $source['objectKey'],
                     );
                     $temporaryImagePaths[] = $temporaryImagePath;
+
+                    if ($variant === 'crop') {
+                        $temporaryImagePath = $this->cropImage(
+                            $temporaryImagePath,
+                            ImageExportPresets::get($cropPreset),
+                            $cropSettings[$image->id] ?? ['focus_x' => 0.5, 'focus_y' => 0.5, 'zoom' => 1.0],
+                        );
+                        $temporaryImagePaths[] = $temporaryImagePath;
+                    }
+
+                    $entryName = $this->archiveFilename($image, $variant, $added + 1, $source['objectKey'], $cropPreset);
+
+                    $addedToArchive = $zip->addFile($temporaryImagePath, $entryName);
+
+                    if (! $addedToArchive) {
+                        throw new RuntimeException("Impossible d ajouter l image {$image->id} a l archive ZIP.");
+                    }
+
+                    $this->storeEntryWithoutCompression($zip, $entryName);
+
+                    if (! $zip->close()) {
+                        throw new RuntimeException('Impossible de finaliser une entree de l archive ZIP.');
+                    }
+
+                    $zipIsOpen = false;
+                    $added++;
+                    $this->updateProgress($job, $processed, $added, $skipped, $image);
+
+                    if ($zip->open($tempPath, ZipArchive::CREATE) !== true) {
+                        throw new RuntimeException('Impossible de rouvrir l archive ZIP.');
+                    }
+
+                    $zipIsOpen = true;
+                } finally {
+                    foreach ($temporaryImagePaths as $temporaryImagePath) {
+                        @unlink($temporaryImagePath);
+                    }
                 }
-
-                $addedToArchive = $zip->addFile(
-                    $temporaryImagePath,
-                    $this->archiveFilename($image, $variant, $added + 1, $imageUrls, $cropPreset),
-                );
-
-                if (! $addedToArchive) {
-                    throw new RuntimeException("Impossible d ajouter l image {$image->id} a l archive ZIP.");
-                }
-
-                $added++;
             }
 
             if ($added === 0) {
                 throw new RuntimeException('Aucune image telechargeable trouvee.');
             }
 
-            $archiveWasClosed = $zip->close();
-
+            $this->closeArchive($zip, $zipIsOpen);
             $zipIsOpen = false;
-
-            if (! $archiveWasClosed) {
-                throw new RuntimeException('Impossible de finaliser l archive ZIP.');
-            }
 
             $disk = (string) config('filesystems.image_disk', 'scaleway');
             $objectKey = sprintf(
@@ -163,14 +228,11 @@ class PrepareDownloadArchive implements ShouldQueue
                 'downloadUrl' => $this->temporaryDownloadUrl($disk, $objectKey, now()->addDays(7)),
                 'imageCount' => $added,
                 'skippedImages' => $skipped,
+                'cropSourceFallbacks' => $cropSourceFallbacks,
             ];
         } finally {
             if ($zipIsOpen) {
                 $zip->close();
-            }
-
-            foreach ($temporaryImagePaths as $temporaryImagePath) {
-                @unlink($temporaryImagePath);
             }
 
             @unlink($tempPath);
@@ -178,28 +240,50 @@ class PrepareDownloadArchive implements ShouldQueue
     }
 
     /**
-     * @return array{provider: string|null, disk: string, objectKey: string|null}
+     * @return array{provider: string|null, disk: string, objectKey: string|null, fallbackFrom?: string}
      */
     private function cropSource(Image $image, ImageUrlResolver $imageUrls, string $cropSource): array
     {
         if ($cropSource === 'web') {
-            $source = $imageUrls->downloadSource($image, 'web');
+            $webObjectKey = $this->standaloneWebObjectKey($image);
 
-            if (
-                ! $image->object_key_web ||
-                $source['objectKey'] !== $image->object_key_web ||
-                in_array($image->object_key_web, array_filter([
-                    $image->object_key_original,
-                    $image->object_key_hd,
-                ]), true)
-            ) {
-                $source['objectKey'] = null;
+            if ($webObjectKey) {
+                return [
+                    'provider' => $image->storage_provider,
+                    'disk' => $imageUrls->disk($image->storage_provider),
+                    'objectKey' => $webObjectKey,
+                ];
             }
+
+            $source = $imageUrls->downloadSource($image, 'hd');
+            $source['fallbackFrom'] = 'web';
 
             return $source;
         }
 
         return $imageUrls->downloadSource($image, 'hd');
+    }
+
+    private function standaloneWebObjectKey(Image $image): ?string
+    {
+        $objectKey = null;
+
+        if ($image->relationLoaded('variants')) {
+            $objectKey = $image->variants
+                ->firstWhere('kind', 'web')
+                ?->object_key;
+        }
+
+        $objectKey = $objectKey ?: $image->object_key_web;
+
+        if (! is_string($objectKey) || $objectKey === '') {
+            return null;
+        }
+
+        return in_array($objectKey, array_filter([
+            $image->object_key_original,
+            $image->object_key_hd,
+        ]), true) ? null : $objectKey;
     }
 
     private function copyObjectToTemporaryFile(string $disk, string $objectKey): string
@@ -344,19 +428,57 @@ class PrepareDownloadArchive implements ShouldQueue
         Image $image,
         string $variant,
         int $index,
-        ImageUrlResolver $imageUrls,
+        ?string $objectKey,
         string $cropPreset,
     ): string {
         $extension = $variant === 'crop'
             ? 'jpg'
-            : (pathinfo(
-                $imageUrls->downloadSource($image, $variant)['objectKey'] ?? '',
-                PATHINFO_EXTENSION,
-            ) ?: 'jpg');
+            : (pathinfo($objectKey ?? '', PATHINFO_EXTENSION) ?: 'jpg');
         $name = Str::slug($image->title) ?: "image-{$image->id}";
         $suffix = $variant === 'crop' ? '-'.ImageExportPresets::get($cropPreset)['slug'] : '';
 
         return sprintf('%03d-%s%s.%s', $index, $name, $suffix, $extension);
+    }
+
+    /**
+     * JPEG, PNG and WebP files are already compressed. Storing them as-is avoids
+     * wasting CPU on ZIP deflate and keeps large HD archives predictable.
+     */
+    private function storeEntryWithoutCompression(ZipArchive $zip, string $entryName): void
+    {
+        if (method_exists($zip, 'setCompressionName')) {
+            $zip->setCompressionName($entryName, ZipArchive::CM_STORE);
+        }
+    }
+
+    private function closeArchive(ZipArchive $zip, bool $zipIsOpen): void
+    {
+        if ($zipIsOpen && ! $zip->close()) {
+            throw new RuntimeException('Impossible de finaliser l archive ZIP.');
+        }
+    }
+
+    /**
+     * @param  array<int, array{id: int, title: string}>  $skipped
+     */
+    private function updateProgress(DownloadJob $job, int $processed, int $added, array $skipped, Image $image): void
+    {
+        $job->forceFill([
+            'image_count' => $added,
+            'payload' => [
+                ...($job->payload ?? []),
+                'archive_progress' => [
+                    ...data_get($job->payload, 'archive_progress', []),
+                    'status' => 'processing',
+                    'processed' => $processed,
+                    'added' => $added,
+                    'skipped' => count($skipped),
+                    'current_image_id' => $image->id,
+                    'updated_at' => now()->toIso8601String(),
+                ],
+                'skipped_images' => $skipped,
+            ],
+        ])->save();
     }
 
     /**

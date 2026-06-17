@@ -45,7 +45,7 @@ export default function Dashboard({
         <AuthenticatedLayout>
             <Head title="Tableau de bord administrateur" />
 
-            <div className="container py-10">
+            <div className="container px-4 py-8 sm:py-10">
                 <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-end md:justify-between">
                     <div className="min-w-0">
                         <h1 className="break-words text-3xl font-bold leading-tight tracking-normal text-foreground md:text-4xl">
@@ -65,7 +65,7 @@ export default function Dashboard({
                     </Link>
                 </div>
 
-                <div className="mt-10 grid gap-7 md:grid-cols-2 xl:grid-cols-4">
+                <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <MetricCard
                         label="Entreprises"
                         value={stats.clients}
@@ -96,7 +96,7 @@ export default function Dashboard({
                     />
                 </div>
 
-                <div className="mt-12 grid gap-7 lg:grid-cols-[1.1fr_0.9fr]">
+                <div className="mt-10 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
                     <div>
                         <h2 className="break-words text-2xl font-bold leading-tight tracking-normal text-foreground md:text-3xl">
                             Imports dossiers
@@ -134,7 +134,7 @@ export default function Dashboard({
                     Fonctionnalités
                 </h2>
 
-                <div className="mt-10 grid gap-7 lg:grid-cols-3">
+                <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <FeatureCard
                         title="Entreprises"
                         subtitle="Gérer les entreprises et leurs informations"

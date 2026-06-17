@@ -86,7 +86,7 @@ export default function ImportsIndex({ imports, stats }: Props) {
         <AuthenticatedLayout>
             <Head title="Suivi des imports" />
 
-            <main className="container py-10">
+            <main className="container px-4 py-8 sm:py-10">
                 <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-end md:justify-between">
                     <div className="min-w-0">
                         <h1 className="break-words text-3xl font-bold leading-tight tracking-normal md:text-4xl">
@@ -97,7 +97,10 @@ export default function ImportsIndex({ imports, stats }: Props) {
                             et les fichiers en erreur ou en doublon.
                         </p>
                     </div>
-                    <Button asChild className="h-auto whitespace-normal text-left">
+                    <Button
+                        asChild
+                        className="h-auto w-full whitespace-normal text-left sm:w-auto"
+                    >
                         <Link href={route("images.index")}>
                             <ImagePlus className="mr-2 h-4 w-4" />
                             Importer un dossier
@@ -263,8 +266,8 @@ function ImportDetails({ importBatch }: { importBatch: ImportBatch }) {
                 )}
             </div>
 
-            <div className="overflow-x-auto">
-                <Table>
+            <div className="mobile-card-table-wrapper overflow-x-auto">
+                <Table className="mobile-card-table">
                     <TableHeader>
                         <TableRow>
                             <TableHead>Fichier</TableHead>
@@ -286,7 +289,10 @@ function ImportDetails({ importBatch }: { importBatch: ImportBatch }) {
                         ) : (
                             importBatch.items.map((item) => (
                                 <TableRow key={item.id}>
-                                    <TableCell className="min-w-[280px]">
+                                    <TableCell
+                                        data-label="Fichier"
+                                        className="min-w-[280px]"
+                                    >
                                         <div className="font-medium">
                                             {item.relativePath || item.filename}
                                         </div>
@@ -301,11 +307,13 @@ function ImportDetails({ importBatch }: { importBatch: ImportBatch }) {
                                             </div>
                                         )}
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell data-label="Statut">
                                         <StatusBadge status={item.status} />
                                     </TableCell>
-                                    <TableCell>{item.attempts}</TableCell>
-                                    <TableCell>
+                                    <TableCell data-label="Essais">
+                                        {item.attempts}
+                                    </TableCell>
+                                    <TableCell data-label="Traitement">
                                         {formatDate(item.processedAt)}
                                     </TableCell>
                                 </TableRow>

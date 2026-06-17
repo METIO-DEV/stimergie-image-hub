@@ -61,6 +61,7 @@ export type LegacyImage = {
     downloadUrl?: string | null;
     webDownloadUrl?: string | null;
     hdDownloadUrl?: string | null;
+    hasWebVariant?: boolean;
     width?: number | null;
     height?: number | null;
     rightsStartsAt?: string | null;

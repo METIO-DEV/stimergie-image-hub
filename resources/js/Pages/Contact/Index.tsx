@@ -35,8 +35,8 @@ export default function ContactIndex() {
         <AuthenticatedLayout>
             <Head title="Contact" />
 
-            <main className="flex min-h-[calc(100vh-4rem)] items-start justify-center px-6 py-16">
-                <div className="w-full max-w-[500px] rounded-lg border bg-[#c8bfac] p-6 shadow-xl">
+            <main className="flex min-h-[calc(100vh-4rem)] items-start justify-center px-4 py-8 sm:px-6 sm:py-16">
+                <div className="w-full max-w-[560px] rounded-lg border bg-card p-4 shadow-sm sm:p-6">
                     <div className="mb-6 flex items-center gap-3">
                         <Mail className="h-5 w-5" />
                         <h1 className="text-xl font-bold">
@@ -121,11 +121,20 @@ export default function ContactIndex() {
                                 />
                             </div>
 
-                            <div className="flex justify-end gap-2 pt-4">
-                                <Button type="button" variant="outline">
+                            <div className="grid gap-2 pt-2 sm:flex sm:justify-end">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="w-full sm:w-auto"
+                                    onClick={() => reset()}
+                                >
                                     Annuler
                                 </Button>
-                                <Button type="submit" disabled={processing}>
+                                <Button
+                                    type="submit"
+                                    className="w-full sm:w-auto"
+                                    disabled={processing}
+                                >
                                     {processing ? "Envoi..." : "Envoyer"}
                                 </Button>
                             </div>

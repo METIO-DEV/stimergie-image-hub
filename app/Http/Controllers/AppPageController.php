@@ -458,6 +458,7 @@ class AppPageController extends Controller
             'downloadUrl' => $canDownload ? route('images.download', ['image' => $image, 'variant' => 'hd']) : null,
             'webDownloadUrl' => $canDownload ? route('images.download', ['image' => $image, 'variant' => 'web']) : null,
             'hdDownloadUrl' => $canDownload ? route('images.download', ['image' => $image, 'variant' => 'hd']) : null,
+            'hasWebVariant' => $this->hasStandaloneWebVariant($image),
             'width' => $image->width,
             'height' => $image->height,
             'rightsStartsAt' => $image->rights_starts_at?->toDateString(),
@@ -488,6 +489,26 @@ class AppPageController extends Controller
             'active' => 'Cession active',
             default => 'Cession non limitée',
         };
+    }
+
+    private function hasStandaloneWebVariant(Image $image): bool
+    {
+        $objectKey = null;
+
+        if ($image->relationLoaded('variants')) {
+            $objectKey = $image->variants
+                ->firstWhere('kind', 'web')
+                ?->object_key;
+        }
+
+        $objectKey = $objectKey ?: $image->object_key_web;
+
+        return is_string($objectKey)
+            && $objectKey !== ''
+            && ! in_array($objectKey, array_filter([
+                $image->object_key_original,
+                $image->object_key_hd,
+            ]), true);
     }
 
     private function canRequestRightsExtension(Image $image, User $user): bool
