@@ -28,6 +28,7 @@ class PrepareDownloadArchive implements ShouldQueue
         $job = DownloadJob::query()->findOrFail($this->downloadJobId);
         $variant = (string) data_get($job->payload, 'variant', 'web');
         $cropPreset = (string) data_get($job->payload, 'crop_preset', 'square');
+        $cropSource = (string) data_get($job->payload, 'crop_source', 'web');
         $cropSettings = $this->cropSettingsByImage(data_get($job->payload, 'crops', []));
         $imageIds = collect(data_get($job->payload, 'requested_image_ids', []))
             ->map(fn ($imageId) => (int) $imageId)
@@ -43,7 +44,7 @@ class PrepareDownloadArchive implements ShouldQueue
                 ->whereIn('id', $imageIds)
                 ->get();
 
-            $result = $this->buildArchive($job, $images, $variant, $imageUrls, $cropPreset, $cropSettings);
+            $result = $this->buildArchive($job, $images, $variant, $imageUrls, $cropPreset, $cropSource, $cropSettings);
 
             $job->update([
                 'status' => 'ready',
@@ -79,6 +80,7 @@ class PrepareDownloadArchive implements ShouldQueue
         string $variant,
         ImageUrlResolver $imageUrls,
         string $cropPreset,
+        string $cropSource,
         array $cropSettings,
     ): array {
         $tempPath = tempnam(sys_get_temp_dir(), 'stimergie-download-');
@@ -97,7 +99,9 @@ class PrepareDownloadArchive implements ShouldQueue
             $skipped = [];
 
             foreach ($images as $image) {
-                $source = $imageUrls->downloadSource($image, $variant === 'crop' ? 'hd' : $variant);
+                $source = $variant === 'crop'
+                    ? $this->cropSource($image, $imageUrls, $cropSource)
+                    : $imageUrls->downloadSource($image, $variant);
 
                 if (! $source['objectKey'] || ! Storage::disk($source['disk'])->exists($source['objectKey'])) {
                     $skipped[] = ['id' => $image->id, 'title' => $image->title];
@@ -148,7 +152,7 @@ class PrepareDownloadArchive implements ShouldQueue
             $objectKey = sprintf(
                 'downloads/%d/%s-%s.zip',
                 $job->user_id,
-                $variant === 'crop' ? ImageExportPresets::get($cropPreset)['slug'] : $variant,
+                $variant === 'crop' ? ImageExportPresets::get($cropPreset)['slug'].'-'.$cropSource : $variant,
                 Str::uuid(),
             );
 
@@ -171,6 +175,31 @@ class PrepareDownloadArchive implements ShouldQueue
 
             @unlink($tempPath);
         }
+    }
+
+    /**
+     * @return array{provider: string|null, disk: string, objectKey: string|null}
+     */
+    private function cropSource(Image $image, ImageUrlResolver $imageUrls, string $cropSource): array
+    {
+        if ($cropSource === 'web') {
+            $source = $imageUrls->downloadSource($image, 'web');
+
+            if (
+                ! $image->object_key_web ||
+                $source['objectKey'] !== $image->object_key_web ||
+                in_array($image->object_key_web, array_filter([
+                    $image->object_key_original,
+                    $image->object_key_hd,
+                ]), true)
+            ) {
+                $source['objectKey'] = null;
+            }
+
+            return $source;
+        }
+
+        return $imageUrls->downloadSource($image, 'hd');
     }
 
     private function copyObjectToTemporaryFile(string $disk, string $objectKey): string

@@ -40,6 +40,7 @@ class DownloadController extends Controller
                 'requested_image_ids' => $images->pluck('id')->values(),
                 ...($variant === 'crop' ? [
                     'crop_preset' => $data['crop_preset'],
+                    'crop_source' => $data['crop_source'],
                     'crops' => $data['crops'],
                 ] : []),
             ],

@@ -58,6 +58,7 @@ class StoreDownloadRequest extends FormRequest
             'image_ids' => ['required', 'array', 'min:1', 'max:'.self::MAX_IMAGE_COUNT],
             'image_ids.*' => ['integer', Rule::exists('images', 'id')],
             'crop_preset' => ['nullable', 'required_if:variant,crop', 'string', Rule::in(array_keys(ImageExportPresets::all()))],
+            'crop_source' => ['nullable', 'required_if:variant,crop', 'string', Rule::in(['web', 'hd'])],
             'crops' => ['nullable', 'required_if:variant,crop', 'array'],
             'crops.*.image_id' => ['required_with:crops', 'integer', 'distinct', Rule::exists('images', 'id')],
             'crops.*.focus_x' => ['required_with:crops', 'numeric', 'min:0', 'max:1'],

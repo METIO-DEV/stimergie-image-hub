@@ -320,7 +320,7 @@ export function MasonryGrid({
                             (selectedId) =>
                                 String(selectedId) === String(imageId),
                         );
-                        const src = image.thumbUrl;
+                        const src = image.thumbUrl || image.imageUrl;
                         const rightsExpired =
                             image.rightsStatus === "expired";
                         const rightsWarning =
@@ -382,6 +382,11 @@ export function MasonryGrid({
                                             imageClassName(image),
                                             rightsExpired && "opacity-45",
                                         )}
+                                        style={{
+                                            aspectRatio: imageHeightFactor(image)
+                                                ? 1 / imageHeightFactor(image)
+                                                : undefined,
+                                        }}
                                     />
                                 )}
 

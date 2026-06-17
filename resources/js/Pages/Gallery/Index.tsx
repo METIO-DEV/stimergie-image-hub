@@ -107,6 +107,8 @@ type CropSetting = {
     zoom: number;
 };
 
+type CropSource = "web" | "hd";
+
 const PAGE_SIZE = 60;
 const FILTER_DEBOUNCE_MS = 350;
 const DEFAULT_CROP_SETTING: CropSetting = {
@@ -207,6 +209,7 @@ export default function GalleryIndex({
     const [shareExpiresAt, setShareExpiresAt] = useState("");
     const [cropOpen, setCropOpen] = useState(false);
     const [cropPreset, setCropPreset] = useState<CropPresetKey>("square");
+    const [cropSource, setCropSource] = useState<CropSource>("web");
     const [cropImageId, setCropImageId] = useState<string | null>(null);
     const [cropSettings, setCropSettings] = useState<
         Record<string, CropSetting>
@@ -646,6 +649,7 @@ export default function GalleryIndex({
     const clearSelection = () => {
         setSelectedImages([]);
         setSelectionSnapshots({});
+        window.localStorage.removeItem(selectionStorageKey);
     };
 
     const openBulkProjectDialog = () => {
@@ -744,6 +748,7 @@ export default function GalleryIndex({
             {
                 variant: "crop",
                 crop_preset: cropPreset,
+                crop_source: cropSource,
                 image_ids: selectedImageIdsForRequest,
                 crops: selectedImages.map((id) => {
                     const setting = cropSettings[id] ?? DEFAULT_CROP_SETTING;
@@ -1633,6 +1638,8 @@ export default function GalleryIndex({
                 onSelectedImageChange={setCropImageId}
                 preset={cropPreset}
                 onPresetChange={setCropPreset}
+                source={cropSource}
+                onSourceChange={setCropSource}
                 settings={cropSettings}
                 onSettingChange={updateCurrentCrop}
                 onSubmit={requestCroppedDownload}
@@ -1798,6 +1805,8 @@ function CropExportDialog({
     onSelectedImageChange,
     preset,
     onPresetChange,
+    source,
+    onSourceChange,
     settings,
     onSettingChange,
     onSubmit,
@@ -1809,6 +1818,8 @@ function CropExportDialog({
     onSelectedImageChange: (id: string) => void;
     preset: CropPresetKey;
     onPresetChange: (preset: CropPresetKey) => void;
+    source: CropSource;
+    onSourceChange: (source: CropSource) => void;
     settings: Record<string, CropSetting>;
     onSettingChange: (updates: Partial<CropSetting>) => void;
     onSubmit: () => void;
@@ -1919,6 +1930,34 @@ function CropExportDialog({
                                             </span>
                                             <span className="text-xs opacity-80">
                                                 {candidate.ratioLabel}
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2">
+                                    {(["web", "hd"] as const).map((candidate) => (
+                                        <button
+                                            key={candidate}
+                                            type="button"
+                                            className={`rounded-md border px-3 py-2 text-left text-sm transition ${
+                                                candidate === source
+                                                    ? "border-primary bg-primary text-primary-foreground"
+                                                    : "border-border hover:bg-muted"
+                                            }`}
+                                            onClick={() =>
+                                                onSourceChange(candidate)
+                                            }
+                                        >
+                                            <span className="block font-semibold">
+                                                {candidate === "web"
+                                                    ? "Web"
+                                                    : "HD"}
+                                            </span>
+                                            <span className="text-xs opacity-80">
+                                                {candidate === "web"
+                                                    ? "Plus rapide"
+                                                    : "Source originale"}
                                             </span>
                                         </button>
                                     ))}

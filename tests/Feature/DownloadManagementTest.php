@@ -114,6 +114,7 @@ class DownloadManagementTest extends TestCase
         $this->actingAs($admin)->post(route('downloads.store'), [
             'variant' => 'crop',
             'crop_preset' => 'square',
+            'crop_source' => 'hd',
             'image_ids' => [$image->id],
             'crops' => [[
                 'image_id' => $image->id,
@@ -146,8 +147,68 @@ class DownloadManagementTest extends TestCase
         $this->assertSame('ready', $job->status);
         $this->assertFalse($job->is_hd);
         $this->assertSame('square', $job->payload['crop_preset']);
+        $this->assertSame('hd', $job->payload['crop_source']);
         $this->assertSame(1600, $size[0]);
         $this->assertSame(1600, $size[1]);
+    }
+
+    public function test_cropped_download_can_use_web_source(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        [$client, $project] = $this->clientAndProject();
+        $source = UploadedFile::fake()->image('source-web.jpg', 900, 1600);
+        $image = $this->image($client, $project, [
+            'object_key_original' => 'images/original/source-web.jpg',
+            'object_key_web' => 'images/web/source-web.jpg',
+            'object_key_hd' => 'images/original/source-web.jpg',
+        ]);
+
+        Storage::disk('scaleway')->put(
+            'images/web/source-web.jpg',
+            file_get_contents($source->getRealPath()),
+        );
+
+        $this->actingAs($admin)->post(route('downloads.store'), [
+            'variant' => 'crop',
+            'crop_preset' => 'story',
+            'crop_source' => 'web',
+            'image_ids' => [$image->id],
+            'crops' => [[
+                'image_id' => $image->id,
+                'focus_x' => 0.5,
+                'focus_y' => 0.5,
+                'zoom' => 1,
+            ]],
+        ])->assertRedirect(route('downloads.index'));
+
+        $job = DownloadJob::query()->firstOrFail();
+        $tempZip = tempnam(sys_get_temp_dir(), 'download-crop-web-test-');
+        $tempImage = tempnam(sys_get_temp_dir(), 'download-crop-web-image-');
+
+        file_put_contents($tempZip, Storage::disk('scaleway')->get($job->object_key));
+
+        $zip = new ZipArchive;
+
+        try {
+            $this->assertTrue($zip->open($tempZip));
+            $this->assertStringContainsString('story-9-16.jpg', $zip->getNameIndex(0));
+            file_put_contents($tempImage, $zip->getFromIndex(0));
+        } finally {
+            $zip->close();
+            @unlink($tempZip);
+        }
+
+        $size = getimagesize($tempImage);
+        @unlink($tempImage);
+
+        $this->assertSame('web', $job->payload['crop_source']);
+        $this->assertSame(1080, $size[0]);
+        $this->assertSame(1920, $size[1]);
     }
 
     public function test_cropped_download_requires_crop_for_every_image(): void
@@ -165,6 +226,7 @@ class DownloadManagementTest extends TestCase
         $this->actingAs($admin)->post(route('downloads.store'), [
             'variant' => 'crop',
             'crop_preset' => 'story',
+            'crop_source' => 'web',
             'image_ids' => [$firstImage->id, $secondImage->id],
             'crops' => [[
                 'image_id' => $firstImage->id,
