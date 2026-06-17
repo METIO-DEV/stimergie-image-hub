@@ -288,68 +288,126 @@ export function MasonryGrid({
     columnCount?: 2 | 3 | 4 | 5;
 }) {
     const [hoveredId, setHoveredId] = useState<string | number | null>(null);
-    const [transitioning, setTransitioning] = useState(false);
+    const [renderedColumnCount, setRenderedColumnCount] = useState(columnCount);
+    const [animationPhase, setAnimationPhase] = useState<
+        "idle" | "exiting" | "entering"
+    >("idle");
+    const [animationDirection, setAnimationDirection] = useState<
+        "denser" | "roomier"
+    >("denser");
+    const exitTimeout = useRef<number | null>(null);
+    const enterFrame = useRef<number | null>(null);
+    const renderedColumnCountRef = useRef(columnCount);
     const columns = useMemo(
-        () => distributeImages(images, columnCount),
-        [columnCount, images],
+        () => distributeImages(images, renderedColumnCount),
+        [images, renderedColumnCount],
     );
     const gridStyle = {
-        gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
+        gridTemplateColumns: `repeat(${renderedColumnCount}, minmax(0, 1fr))`,
     };
     const overlaySizeClass =
-        columnCount >= 5
+        renderedColumnCount >= 5
             ? "h-5 w-5 left-1.5 top-1.5 border"
-            : columnCount >= 4
+            : renderedColumnCount >= 4
               ? "h-6 w-6 left-2 top-2 border"
-              : columnCount >= 3
+              : renderedColumnCount >= 3
                 ? "h-7 w-7 left-2.5 top-2.5 border-2"
                 : "h-8 w-8 left-3 top-3 border-2";
     const overlayIconClass =
-        columnCount >= 5
+        renderedColumnCount >= 5
             ? "h-2.5 w-2.5"
-            : columnCount >= 4
+            : renderedColumnCount >= 4
               ? "h-3 w-3"
               : "h-3.5 w-3.5";
     const downloadSizeClass =
-        columnCount >= 5
+        renderedColumnCount >= 5
             ? "h-6 w-6 right-1.5 top-1.5"
-            : columnCount >= 4
+            : renderedColumnCount >= 4
               ? "h-7 w-7 right-2 top-2"
-              : columnCount >= 3
+              : renderedColumnCount >= 3
                 ? "h-8 w-8 right-2.5 top-2.5"
                 : "h-9 w-9 right-3 top-3";
+    const gridAnimationClass =
+        animationPhase === "exiting"
+            ? animationDirection === "denser"
+                ? "translate-y-3 scale-[0.985] opacity-0 blur-[1px]"
+                : "-translate-y-3 scale-[1.015] opacity-0 blur-[1px]"
+            : animationPhase === "entering"
+              ? animationDirection === "denser"
+                  ? "-translate-y-3 scale-[1.015] opacity-0 blur-[1px]"
+                  : "translate-y-3 scale-[0.985] opacity-0 blur-[1px]"
+              : "translate-y-0 scale-100 opacity-100 blur-0";
 
     useEffect(() => {
-        setTransitioning(true);
-        const timeout = window.setTimeout(() => setTransitioning(false), 160);
+        const currentColumnCount = renderedColumnCountRef.current;
 
-        return () => window.clearTimeout(timeout);
+        if (columnCount === currentColumnCount) {
+            return;
+        }
+
+        if (exitTimeout.current) {
+            window.clearTimeout(exitTimeout.current);
+        }
+
+        if (enterFrame.current) {
+            window.cancelAnimationFrame(enterFrame.current);
+        }
+
+        const nextColumnCount = columnCount;
+
+        setAnimationDirection(
+            nextColumnCount > currentColumnCount ? "denser" : "roomier",
+        );
+        setAnimationPhase("exiting");
+
+        exitTimeout.current = window.setTimeout(() => {
+            renderedColumnCountRef.current = nextColumnCount;
+            setRenderedColumnCount(nextColumnCount);
+            setAnimationPhase("entering");
+            enterFrame.current = window.requestAnimationFrame(() => {
+                enterFrame.current = window.requestAnimationFrame(() => {
+                    setAnimationPhase("idle");
+                });
+            });
+        }, 140);
+
+        return () => {
+            if (exitTimeout.current) {
+                window.clearTimeout(exitTimeout.current);
+            }
+
+            if (enterFrame.current) {
+                window.cancelAnimationFrame(enterFrame.current);
+            }
+        };
     }, [columnCount]);
 
     if (loadingSlots) {
         return (
             <div
                 className={cn(
-                    "grid gap-0.5 px-0.5 transition-[opacity,transform] duration-200 ease-out",
-                    transitioning && "scale-[0.995] opacity-80",
+                    "grid gap-0.5 px-0.5 transition-[opacity,transform,filter] duration-300 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
+                    gridAnimationClass,
                 )}
                 style={gridStyle}
             >
-                {Array.from({ length: columnCount * 2 }).map((_, index) => (
-                    <div
-                        key={index}
-                        className={cn(
-                            "relative bg-muted/60",
-                            index % 3 === 0
-                                ? "aspect-[3/4]"
-                                : index % 3 === 1
-                                  ? "aspect-[4/3]"
-                                  : "aspect-square",
-                        )}
-                    >
-                        <span className="absolute left-3 top-3 h-8 w-8 rounded-full border-2 border-white/80 bg-white/60" />
-                    </div>
-                ))}
+                {Array.from({ length: renderedColumnCount * 2 }).map(
+                    (_, index) => (
+                        <div
+                            key={index}
+                            className={cn(
+                                "relative bg-muted/60",
+                                index % 3 === 0
+                                    ? "aspect-[3/4]"
+                                    : index % 3 === 1
+                                      ? "aspect-[4/3]"
+                                      : "aspect-square",
+                            )}
+                        >
+                            <span className="absolute left-3 top-3 h-8 w-8 rounded-full border-2 border-white/80 bg-white/60" />
+                        </div>
+                    ),
+                )}
             </div>
         );
     }
@@ -357,13 +415,19 @@ export function MasonryGrid({
     return (
         <div
             className={cn(
-                "grid gap-0.5 px-0.5 transition-[opacity,transform] duration-200 ease-out",
-                transitioning && "scale-[0.995] opacity-80",
+                "grid gap-0.5 px-0.5 transition-[opacity,transform,filter] duration-300 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
+                gridAnimationClass,
             )}
             style={gridStyle}
         >
             {columns.map((column, columnIndex) => (
-                <div key={columnIndex} className="flex flex-col gap-0.5">
+                <div
+                    key={columnIndex}
+                    className="flex flex-col gap-0.5 transition-[opacity,transform,filter] duration-300 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]"
+                    style={{
+                        transitionDelay: `${Math.min(columnIndex * 24, 96)}ms`,
+                    }}
+                >
                     {column.map((image) => {
                         const imageId = image.id;
                         const isSelected = selectedIds?.some(
