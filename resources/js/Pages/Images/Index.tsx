@@ -1539,19 +1539,20 @@ function TagAnalysisPanel({
                                 <Square className="mr-2 h-4 w-4" />
                                 Stopper
                             </Button>
-                        ) : (
+                        ) : canAnalyzeMissing ? (
                             <Button
                                 onClick={onAnalyzeMissing}
-                                disabled={loading || !canAnalyzeMissing}
-                                title={
-                                    canAnalyzeMissing
-                                        ? "Analyser les images sans tags"
-                                        : "Toutes les images prêtes ont déjà des tags"
-                                }
+                                disabled={loading}
+                                title="Analyser les images sans tags"
                             >
                                 <Sparkles className="mr-2 h-4 w-4" />
                                 Générer les tags
                             </Button>
+                        ) : (
+                            <div className="inline-flex min-h-10 items-center rounded-md border border-dashed px-3 text-sm font-medium text-muted-foreground">
+                                <Sparkles className="mr-2 h-4 w-4" />
+                                Toutes les images sont analysées
+                            </div>
                         )}
                     </div>
                 </div>
