@@ -84,7 +84,7 @@ class AssetTransferManagementTest extends TestCase
             'status' => 'pending',
             'total_folders' => 2,
         ]);
-        Queue::assertPushed(RunAssetTransferJob::class);
+        Queue::assertPushedOn('sync', RunAssetTransferJob::class);
     }
 
     public function test_selected_transfer_rejects_folders_without_project_mapping(): void
@@ -170,7 +170,7 @@ class AssetTransferManagementTest extends TestCase
         $job = AssetTransferJob::query()->firstOrFail();
 
         $this->assertSame(['MISSING_ONE'], $job->folders);
-        Queue::assertPushed(RunAssetTransferJob::class);
+        Queue::assertPushedOn('sync', RunAssetTransferJob::class);
     }
 
     public function test_limited_transfer_skips_missing_ftp_folders_without_project_mapping(): void
@@ -437,5 +437,40 @@ class AssetTransferManagementTest extends TestCase
             ->assertJsonPath('folders.0.webVariantReadyCount', 1)
             ->assertJsonPath('webVariantAudits.0.projectId', $project->id)
             ->assertJsonPath('webVariantAudits.0.missingWebVariantCount', 2);
+    }
+
+    public function test_stale_cancelling_transfer_is_reconciled_as_cancelled(): void
+    {
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $job = AssetTransferJob::create([
+            'started_by' => $admin->id,
+            'status' => 'cancelling',
+            'mode' => 'batch-copy',
+            'total_folders' => 1,
+            'processed_folders' => 0,
+            'failed_folders' => 0,
+            'current_folder' => 'DOSSIER_BLOQUE',
+            'process_id' => 1234,
+            'cancel_requested_at' => now()->subMinutes(2),
+            'folders' => ['DOSSIER_BLOQUE'],
+            'completed_folders' => [],
+            'failed_folder_details' => [],
+        ]);
+
+        $this->actingAs($admin)
+            ->getJson(route('asset-transfers.show', $job))
+            ->assertOk()
+            ->assertJsonPath('job.status', 'cancelled')
+            ->assertJsonPath('job.currentFolder', null);
+
+        $job->refresh();
+
+        $this->assertSame('cancelled', $job->status);
+        $this->assertNull($job->current_folder);
+        $this->assertNull($job->process_id);
+        $this->assertNotNull($job->finished_at);
     }
 }

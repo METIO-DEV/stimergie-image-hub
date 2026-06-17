@@ -126,7 +126,7 @@ class AssetTransferController extends Controller
             ],
         ]);
 
-        RunAssetTransferJob::dispatch($job->id);
+        RunAssetTransferJob::dispatch($job->id)->onQueue('sync');
 
         return response()->json([
             'job' => $this->jobSummary($job->fresh()),
@@ -300,8 +300,10 @@ class AssetTransferController extends Controller
     {
         $this->authorizeSuperAdmin($request);
 
+        $assetTransferJob = $this->reconcileStaleCancellation($assetTransferJob->fresh());
+
         return response()->json([
-            'job' => $this->jobSummary($assetTransferJob->fresh()),
+            'job' => $this->jobSummary($assetTransferJob),
         ]);
     }
 
@@ -321,11 +323,13 @@ class AssetTransferController extends Controller
 
             if ($assetTransferJob->process_id) {
                 $this->signalProcess((int) $assetTransferJob->process_id);
+            } else {
+                $this->cancelStaleJob($assetTransferJob, 'Arrêt demandé avant démarrage du process.');
             }
         }
 
         return response()->json([
-            'job' => $this->jobSummary($assetTransferJob->fresh()),
+            'job' => $this->jobSummary($this->reconcileStaleCancellation($assetTransferJob->fresh())),
         ]);
     }
 
@@ -592,8 +596,37 @@ class AssetTransferController extends Controller
             ->latest()
             ->limit(10)
             ->get()
-            ->map(fn (AssetTransferJob $job) => $this->jobSummary($job))
+            ->map(fn (AssetTransferJob $job) => $this->jobSummary($this->reconcileStaleCancellation($job)))
             ->all();
+    }
+
+    private function reconcileStaleCancellation(AssetTransferJob $job): AssetTransferJob
+    {
+        if (
+            $job->status !== 'cancelling' ||
+            ! $job->cancel_requested_at ||
+            $job->cancel_requested_at->gt(now()->subMinute())
+        ) {
+            return $job;
+        }
+
+        return $this->cancelStaleJob($job, 'État corrigé après arrêt du process de transfert.');
+    }
+
+    private function cancelStaleJob(AssetTransferJob $job, string $reason): AssetTransferJob
+    {
+        $job->forceFill([
+            'status' => 'cancelled',
+            'current_folder' => null,
+            'process_id' => null,
+            'finished_at' => now(),
+        ])->save();
+
+        if ($job->log_file) {
+            File::append($job->log_file, PHP_EOL."Annulé: {$reason}".PHP_EOL);
+        }
+
+        return $job->fresh();
     }
 
     /**
