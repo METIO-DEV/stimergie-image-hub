@@ -173,7 +173,7 @@ class AssetTransferManagementTest extends TestCase
             'status' => 'pending',
             'mode' => 'web-variant-generation',
         ]);
-        Queue::assertPushed(RunMissingWebVariantGenerationJob::class);
+        Queue::assertPushedOn('sync', RunMissingWebVariantGenerationJob::class);
     }
 
     public function test_super_admin_can_map_and_ignore_asset_folders(): void

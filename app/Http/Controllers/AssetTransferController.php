@@ -171,7 +171,7 @@ class AssetTransferController extends Controller
             ],
         ]);
 
-        RunMissingWebVariantGenerationJob::dispatch($job->id);
+        RunMissingWebVariantGenerationJob::dispatch($job->id)->onQueue('sync');
 
         return response()->json([
             'job' => $this->jobSummary($job->fresh()),
