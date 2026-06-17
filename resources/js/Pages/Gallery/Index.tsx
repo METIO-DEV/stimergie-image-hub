@@ -32,6 +32,7 @@ import {
     Images,
     Infinity,
     Info,
+    ListFilter,
     Plus,
     Share2,
     ShoppingBasket,
@@ -233,6 +234,7 @@ export default function GalleryIndex({
     const [tag, setTag] = useState(activeFilters.tag);
     const [dateFrom, setDateFrom] = useState(activeFilters.dateFrom);
     const [dateTo, setDateTo] = useState(activeFilters.dateTo);
+    const [filtersOpen, setFiltersOpen] = useState(false);
     const [currentPage, setCurrentPage] = useState(pagination.currentPage);
     const [searchFocused, setSearchFocused] = useState(false);
     const [infiniteScroll, setInfiniteScroll] = useState(false);
@@ -336,6 +338,14 @@ export default function GalleryIndex({
         tag.trim() !== "" ||
         dateFrom !== "" ||
         dateTo !== "";
+    const activeAdvancedFilterCount = [
+        orientation,
+        clientId,
+        projectId,
+        tag.trim(),
+        dateFrom,
+        dateTo,
+    ].filter(Boolean).length;
     const searchSuggestions = useMemo(
         () =>
             [
@@ -1152,109 +1162,150 @@ export default function GalleryIndex({
 
                         <div className="rounded-2xl bg-background/55 p-1.5 ring-1 ring-border/45 backdrop-blur-sm sm:p-2">
                             <div className="grid gap-1.5 lg:grid-cols-[minmax(16rem,1fr)_minmax(0,2fr)_auto] lg:items-center">
-                                <LegacySearch
-                                    value={search}
-                                    onChange={setSearch}
-                                    suggestions={searchSuggestions}
-                                    className="min-w-0"
-                                    onFocusChange={setSearchFocused}
-                                    onSubmit={submitSearch}
-                                />
-                                <div className="grid min-w-0 grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-5">
-                                    <LegacySelect
-                                        value={orientation}
-                                        onChange={(value) => {
-                                            setOrientation(value);
-                                            setCurrentPage(1);
-                                        }}
-                                        allLabel="Toutes les orientations"
-                                        options={[
-                                            {
-                                                id: "landscape",
-                                                name: "Paysage",
-                                            },
-                                            {
-                                                id: "portrait",
-                                                name: "Portrait",
-                                            },
-                                            { id: "square", name: "Carré" },
-                                        ]}
+                                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-1.5 lg:block">
+                                    <LegacySearch
+                                        value={search}
+                                        onChange={setSearch}
+                                        suggestions={searchSuggestions}
                                         className="min-w-0"
+                                        onFocusChange={setSearchFocused}
+                                        onSubmit={submitSearch}
                                     />
-                                    <LegacySelect
-                                        value={clientId}
-                                        onChange={(value) => {
-                                            setClientId(value);
-                                            setProjectId("");
-                                            setCurrentPage(1);
-                                        }}
-                                        allLabel="Toutes les entreprises"
-                                        options={filters.clients}
-                                        className="min-w-0"
-                                    />
-                                    <LegacySelect
-                                        value={projectId}
-                                        onChange={(value) => {
-                                            setProjectId(value);
-                                            setCurrentPage(1);
-                                        }}
-                                        allLabel="Tous les projets"
-                                        options={projects}
-                                        className="min-w-0 sm:col-span-2 lg:col-span-1"
-                                    />
-                                    <div className="grid min-w-0 grid-cols-1 gap-1.5 sm:col-span-2 sm:grid-cols-2 lg:col-span-2">
-                                        <div className="min-w-0">
-                                            <label
-                                                htmlFor="gallery-date-from"
-                                                className="sr-only"
-                                            >
-                                                Depuis
-                                            </label>
-                                            <div className="relative">
-                                                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setFiltersOpen(
+                                                (isOpen) => !isOpen,
+                                            )
+                                        }
+                                        className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-border/60 bg-background text-foreground shadow-sm transition hover:bg-muted lg:hidden"
+                                        aria-expanded={filtersOpen}
+                                        aria-controls="gallery-advanced-filters"
+                                        aria-label={
+                                            filtersOpen
+                                                ? "Replier les filtres"
+                                                : "Afficher les filtres"
+                                        }
+                                        title={
+                                            filtersOpen
+                                                ? "Replier les filtres"
+                                                : "Afficher les filtres"
+                                        }
+                                    >
+                                        <ListFilter className="h-4 w-4" />
+                                        {activeAdvancedFilterCount > 0 && (
+                                            <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[0.65rem] font-semibold text-primary-foreground">
+                                                {activeAdvancedFilterCount}
+                                            </span>
+                                        )}
+                                    </button>
+                                </div>
+                                <div
+                                    id="gallery-advanced-filters"
+                                    className={`min-w-0 overflow-hidden transition-[max-height,opacity] duration-300 lg:max-h-none lg:overflow-visible lg:opacity-100 ${
+                                        filtersOpen
+                                            ? "max-h-[24rem] opacity-100"
+                                            : "max-h-0 opacity-0 lg:opacity-100"
+                                    }`}
+                                >
+                                    <div className="grid min-w-0 grid-cols-1 gap-1.5 pt-1.5 sm:grid-cols-2 lg:grid-cols-5 lg:pt-0">
+                                        <LegacySelect
+                                            value={orientation}
+                                            onChange={(value) => {
+                                                setOrientation(value);
+                                                setCurrentPage(1);
+                                            }}
+                                            allLabel="Toutes les orientations"
+                                            options={[
+                                                {
+                                                    id: "landscape",
+                                                    name: "Paysage",
+                                                },
+                                                {
+                                                    id: "portrait",
+                                                    name: "Portrait",
+                                                },
+                                                { id: "square", name: "Carré" },
+                                            ]}
+                                            className="min-w-0"
+                                        />
+                                        <LegacySelect
+                                            value={clientId}
+                                            onChange={(value) => {
+                                                setClientId(value);
+                                                setProjectId("");
+                                                setCurrentPage(1);
+                                            }}
+                                            allLabel="Toutes les entreprises"
+                                            options={filters.clients}
+                                            className="min-w-0"
+                                        />
+                                        <LegacySelect
+                                            value={projectId}
+                                            onChange={(value) => {
+                                                setProjectId(value);
+                                                setCurrentPage(1);
+                                            }}
+                                            allLabel="Tous les projets"
+                                            options={projects}
+                                            className="min-w-0 sm:col-span-2 lg:col-span-1"
+                                        />
+                                        <div className="grid min-w-0 grid-cols-1 gap-1.5 sm:col-span-2 sm:grid-cols-2 lg:col-span-2">
+                                            <div className="min-w-0">
+                                                <label
+                                                    htmlFor="gallery-date-from"
+                                                    className="sr-only"
+                                                >
                                                     Depuis
-                                                </span>
-                                                <input
-                                                    id="gallery-date-from"
-                                                    type="date"
-                                                    aria-label="Date de début"
-                                                    title="Date de début"
-                                                    value={dateFrom}
-                                                    onChange={(event) => {
-                                                        setDateFrom(
-                                                            event.target.value,
-                                                        );
-                                                        setCurrentPage(1);
-                                                    }}
-                                                    className="h-10 w-full rounded-full border border-border/60 bg-background px-4 pl-20 text-base outline-none transition focus:border-primary/40 focus:bg-background focus:ring-2 focus:ring-primary/20 sm:text-sm"
-                                                />
+                                                </label>
+                                                <div className="relative">
+                                                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                                                        Depuis
+                                                    </span>
+                                                    <input
+                                                        id="gallery-date-from"
+                                                        type="date"
+                                                        aria-label="Date de début"
+                                                        title="Date de début"
+                                                        value={dateFrom}
+                                                        onChange={(event) => {
+                                                            setDateFrom(
+                                                                event.target
+                                                                    .value,
+                                                            );
+                                                            setCurrentPage(1);
+                                                        }}
+                                                        className="h-10 w-full rounded-full border border-border/60 bg-background px-4 pl-20 text-base outline-none transition focus:border-primary/40 focus:bg-background focus:ring-2 focus:ring-primary/20 sm:text-sm"
+                                                    />
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div className="min-w-0">
-                                            <label
-                                                htmlFor="gallery-date-to"
-                                                className="sr-only"
-                                            >
-                                                Jusqu'au
-                                            </label>
-                                            <div className="relative">
-                                                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                                            <div className="min-w-0">
+                                                <label
+                                                    htmlFor="gallery-date-to"
+                                                    className="sr-only"
+                                                >
                                                     Jusqu'au
-                                                </span>
-                                                <input
-                                                    id="gallery-date-to"
-                                                    type="date"
-                                                    aria-label="Date de fin"
-                                                    title="Date de fin"
-                                                    value={dateTo}
-                                                    onChange={(event) => {
-                                                        setDateTo(
-                                                            event.target.value,
-                                                        );
-                                                        setCurrentPage(1);
-                                                    }}
-                                                    className="h-10 w-full rounded-full border border-border/60 bg-background px-4 pl-24 text-base outline-none transition focus:border-primary/40 focus:bg-background focus:ring-2 focus:ring-primary/20 sm:text-sm"
-                                                />
+                                                </label>
+                                                <div className="relative">
+                                                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                                                        Jusqu'au
+                                                    </span>
+                                                    <input
+                                                        id="gallery-date-to"
+                                                        type="date"
+                                                        aria-label="Date de fin"
+                                                        title="Date de fin"
+                                                        value={dateTo}
+                                                        onChange={(event) => {
+                                                            setDateTo(
+                                                                event.target
+                                                                    .value,
+                                                            );
+                                                            setCurrentPage(1);
+                                                        }}
+                                                        className="h-10 w-full rounded-full border border-border/60 bg-background px-4 pl-24 text-base outline-none transition focus:border-primary/40 focus:bg-background focus:ring-2 focus:ring-primary/20 sm:text-sm"
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
