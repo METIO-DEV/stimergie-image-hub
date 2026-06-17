@@ -12,6 +12,7 @@ use App\Support\O2SwitchAssetBrowser;
 use App\Support\ProjectFolderMatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -52,8 +53,11 @@ class AssetTransferController extends Controller
         ]);
     }
 
-    public function store(Request $request, O2SwitchAssetBrowser $browser): JsonResponse
-    {
+    public function store(
+        Request $request,
+        O2SwitchAssetBrowser $browser,
+        ProjectFolderMatcher $folderMatcher,
+    ): JsonResponse {
         $this->authorizeSuperAdmin($request);
 
         abort_if($this->activeJob(), 409, 'Un transfert est déjà en cours.');
@@ -70,11 +74,26 @@ class AssetTransferController extends Controller
             ->unique()
             ->values();
 
-        if ($folders->contains(fn (string $folder): bool => ! $this->isTransferableFolder($folder))) {
+        if ($folders->contains(fn (string $folder): bool => ! $this->isTransferableFolderName($folder))) {
             return response()->json([
                 'message' => 'La sélection contient un dossier non transférable.',
                 'errors' => [
                     'folders' => ['La sélection contient un dossier non transférable.'],
+                ],
+            ], 422);
+        }
+
+        $projects = Project::query()->get();
+
+        $foldersWithoutProject = $folders
+            ->filter(fn (string $folder): bool => $this->projectForTransferFolder($folder, $folderMatcher, $projects) === null)
+            ->values();
+
+        if ($foldersWithoutProject->isNotEmpty()) {
+            return response()->json([
+                'message' => 'La sélection contient un dossier sans projet associé.',
+                'errors' => [
+                    'folders' => ['Associez ces dossiers à un projet avant de lancer le transfert.'],
                 ],
             ], 422);
         }
@@ -86,11 +105,13 @@ class AssetTransferController extends Controller
             $bucketFolders = $browser->bucketFolders();
             $folders = collect($browser->ftpFolders())
                 ->reject(fn (string $folder) => array_key_exists($folder, $bucketFolders))
+                ->filter(fn (string $folder): bool => $this->isTransferableFolderName($folder))
+                ->filter(fn (string $folder): bool => $this->projectForTransferFolder($folder, $folderMatcher, $projects) !== null)
                 ->take($limit)
                 ->values();
         }
 
-        abort_if($folders->isEmpty(), 422, 'Aucun dossier à transférer.');
+        abort_if($folders->isEmpty(), 422, 'Aucun dossier FTP manquant ne correspond à un projet associé.');
 
         $job = AssetTransferJob::create([
             'started_by' => $request->user()->id,
@@ -357,18 +378,13 @@ class AssetTransferController extends Controller
             ->sort(SORT_NATURAL | SORT_FLAG_CASE)
             ->values()
             ->map(function (string $folder) use ($bucketFolders, $folderMatcher, $ftpFolders, $projects, $projectsById): array {
-                $mappedProject = $folderMatcher->mappedProject($folder);
-                $project = ($mappedProject ? $projectsById->get($mappedProject->id) : null)
-                    ?? $folderMatcher->exactProject($folder, $projects);
-                $best = $project ? null : $folderMatcher->bestProject($folder, $projects);
-
-                if (! $project && ($best['score'] ?? 0) >= ProjectFolderMatcher::AUTO_MATCH_SCORE) {
-                    $project = $best['project'];
-                }
+                $project = $this->projectForTransferFolder($folder, $folderMatcher, $projects);
+                $project = $project ? $projectsById->get($project->id, $project) : null;
+                $onFtp = in_array($folder, $ftpFolders, true);
 
                 return [
                     'name' => $folder,
-                    'onFtp' => in_array($folder, $ftpFolders, true),
+                    'onFtp' => $onFtp,
                     'onBucket' => array_key_exists($folder, $bucketFolders),
                     'bucketFileCount' => $bucketFolders[$folder] ?? 0,
                     'projectId' => $project?->id,
@@ -377,6 +393,8 @@ class AssetTransferController extends Controller
                     'imagesWithOriginalCount' => $project?->images_with_original_count ?? 0,
                     'webVariantReadyCount' => max(0, ($project?->images_with_original_count ?? 0) - ($project?->missing_web_variant_count ?? 0)),
                     'missingWebVariantCount' => $project?->missing_web_variant_count ?? 0,
+                    'transferable' => $onFtp && $this->isTransferableFolderName($folder) && $project !== null,
+                    'transferBlockedReason' => $this->transferBlockedReason($folder, $project),
                 ];
             })
             ->all();
@@ -446,7 +464,7 @@ class AssetTransferController extends Controller
             || str_contains($folder, ':');
     }
 
-    private function isTransferableFolder(string $folder): bool
+    private function isTransferableFolderName(string $folder): bool
     {
         $folder = trim($folder);
 
@@ -454,6 +472,40 @@ class AssetTransferController extends Controller
             && mb_strlen($folder) <= 255
             && ! $this->isSystemFolder($folder)
             && preg_match('/[\x00-\x1F\x7F]/', $folder) !== 1;
+    }
+
+    /**
+     * @param  Collection<int, Project>|null  $projects
+     */
+    private function projectForTransferFolder(
+        string $folder,
+        ProjectFolderMatcher $folderMatcher,
+        ?Collection $projects = null,
+    ): ?Project {
+        if ($folderMatcher->ignored($folder)) {
+            return null;
+        }
+
+        $mapped = $folderMatcher->mappedProject($folder);
+
+        if ($mapped) {
+            return $mapped;
+        }
+
+        return $folderMatcher->exactProject($folder, $projects);
+    }
+
+    private function transferBlockedReason(string $folder, ?Project $project): ?string
+    {
+        if (! $this->isTransferableFolderName($folder)) {
+            return 'Dossier non transférable';
+        }
+
+        if (! $project) {
+            return 'Projet à associer';
+        }
+
+        return null;
     }
 
     /**

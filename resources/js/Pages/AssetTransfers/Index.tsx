@@ -35,6 +35,8 @@ type SourceFolder = {
     imagesWithOriginalCount: number;
     webVariantReadyCount: number;
     missingWebVariantCount: number;
+    transferable: boolean;
+    transferBlockedReason?: string | null;
 };
 
 type ProjectOption = {
@@ -152,9 +154,22 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
         (job) => job.mode === "web-variant-generation",
     );
     const missingFolders = useMemo(
-        () => folders.filter((folder) => folder.onFtp && !folder.onBucket),
+        () =>
+            folders.filter(
+                (folder) =>
+                    folder.onFtp && !folder.onBucket && isTransferableFolder(folder),
+            ),
         [folders],
     );
+    const selectedTransferableFolders = useMemo(() => {
+        const transferableNames = new Set(
+            folders.filter(isTransferableFolder).map((folder) => folder.name),
+        );
+
+        return selectedFolders.filter((folderName) =>
+            transferableNames.has(folderName),
+        );
+    }, [folders, selectedFolders]);
     const unresolvedFolderMatches = useMemo(
         () =>
             folderMatches.filter((match) =>
@@ -344,16 +359,19 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
         return () => window.clearInterval(interval);
     }, [activeJobIdsKey, loadJob]);
 
-    const toggleFolder = (folderName: string) => {
-        if (!isTransferableFolderName(folderName)) {
-            setError("Ce dossier ne peut pas être transféré.");
+    const toggleFolder = (folder: SourceFolder) => {
+        if (!isTransferableFolder(folder)) {
+            setError(
+                folder.transferBlockedReason ||
+                    "Ce dossier doit être associé à un projet avant transfert.",
+            );
             return;
         }
 
         setSelectedFolders((current) =>
-            current.includes(folderName)
-                ? current.filter((name) => name !== folderName)
-                : [...current, folderName],
+            current.includes(folder.name)
+                ? current.filter((name) => name !== folder.name)
+                : [...current, folder.name],
         );
     };
 
@@ -361,20 +379,16 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
         setSubmitting(true);
         setError(null);
 
-        const transferableSelectedFolders = selectedFolders.filter(
-            isTransferableFolderName,
-        );
-
-        if (mode === "selected" && transferableSelectedFolders.length === 0) {
+        if (mode === "selected" && selectedTransferableFolders.length === 0) {
             setSubmitting(false);
             setSelectedFolders([]);
-            setError("Sélectionnez au moins un dossier FTP transférable.");
+            setError("Sélectionnez au moins un dossier FTP associé à un projet.");
             return;
         }
 
         const body =
             mode === "selected"
-                ? { folders: transferableSelectedFolders }
+                ? { folders: selectedTransferableFolders }
                 : { limit: Number(limit) || 1 };
 
         try {
@@ -781,7 +795,6 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                                     setSelectedFolders(
                                         missingFolders
                                             .map((folder) => folder.name)
-                                            .filter(isTransferableFolderName),
                                     )
                                 }
                                 disabled={Boolean(activeTransferJob)}
@@ -794,7 +807,7 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                                 disabled={
                                     Boolean(activeTransferJob) ||
                                     submitting ||
-                                    selectedFolders.length === 0
+                                    selectedTransferableFolders.length === 0
                                 }
                             >
                                 <Play className="mr-2 h-4 w-4" />
@@ -1142,13 +1155,11 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                                                         )}
                                                         disabled={
                                                             !folder.onFtp ||
-                                                            !isTransferableFolderName(
-                                                                folder.name,
-                                                            ) ||
+                                                            !isTransferableFolder(folder) ||
                                                             Boolean(activeTransferJob)
                                                         }
                                                         onChange={() =>
-                                                            toggleFolder(folder.name)
+                                                            toggleFolder(folder)
                                                         }
                                                         aria-label={`Sélectionner ${folder.name}`}
                                                     />
@@ -1160,6 +1171,13 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                                                     {folder.projectName && (
                                                         <div className="mt-1 text-xs text-muted-foreground">
                                                             {folder.projectName}
+                                                        </div>
+                                                    )}
+                                                    {folder.transferBlockedReason && (
+                                                        <div className="mt-1 text-xs text-destructive">
+                                                            {
+                                                                folder.transferBlockedReason
+                                                            }
                                                         </div>
                                                     )}
                                                 </TableCell>
@@ -1583,6 +1601,14 @@ function mergeJob(jobs: TransferJob[], job: TransferJob): TransferJob[] {
         : [job, ...jobs];
 
     return merged.sort((a, b) => b.id - a.id).slice(0, 10);
+}
+
+function isTransferableFolder(folder: SourceFolder): boolean {
+    return (
+        folder.onFtp &&
+        folder.transferable &&
+        isTransferableFolderName(folder.name)
+    );
 }
 
 function isTransferableFolderName(folderName: string): boolean {

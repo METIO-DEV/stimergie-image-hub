@@ -97,6 +97,12 @@ class RunAssetTransferJob implements ShouldQueue
 
         $this->appendLog($transfer, "\n--- {$folder} ---\n");
 
+        if (! $this->projectForFolder($folder, $folderMatcher)) {
+            $this->markFolderFailed($transfer, $folder, 'Aucun projet associé au dossier FTP.');
+
+            return;
+        }
+
         $batchFile = storage_path("app/asset-transfers/transfer-{$transfer->id}-batch.txt");
         File::put($batchFile, $folder.PHP_EOL);
 
@@ -206,6 +212,10 @@ class RunAssetTransferJob implements ShouldQueue
 
     private function projectForFolder(string $folder, ProjectFolderMatcher $folderMatcher): ?Project
     {
+        if ($folderMatcher->ignored($folder)) {
+            return null;
+        }
+
         $mapped = $folderMatcher->mappedProject($folder);
 
         if ($mapped) {
@@ -219,9 +229,7 @@ class RunAssetTransferJob implements ShouldQueue
             return $exact;
         }
 
-        $best = $folderMatcher->bestProject($folder, $projects);
-
-        return $best['score'] >= ProjectFolderMatcher::AUTO_MATCH_SCORE ? $best['project'] : null;
+        return null;
     }
 
     private function markFolderCompleted(AssetTransferJob $transfer, string $folder): void

@@ -51,6 +51,25 @@ class AssetTransferManagementTest extends TestCase
             'platform_role' => 'super_admin',
             'status' => 'active',
         ]);
+        $client = Client::create([
+            'name' => 'Adamance',
+            'slug' => 'adamance',
+            'status' => 'active',
+        ]);
+        Project::create([
+            'client_id' => $client->id,
+            'name' => 'ADAMANCE ESSENTIELS',
+            'slug' => 'adamance-essentiels',
+            'source_folder' => 'ADAMANCE_ESSENTIELS',
+            'status' => 'active',
+        ]);
+        Project::create([
+            'client_id' => $client->id,
+            'name' => 'IMPRONONCABLE',
+            'slug' => 'imprononcable',
+            'source_folder' => 'IMPRONONCABLE',
+            'status' => 'active',
+        ]);
 
         $this->actingAs($admin)
             ->postJson(route('asset-transfers.store'), [
@@ -66,6 +85,25 @@ class AssetTransferManagementTest extends TestCase
             'total_folders' => 2,
         ]);
         Queue::assertPushed(RunAssetTransferJob::class);
+    }
+
+    public function test_selected_transfer_rejects_folders_without_project_mapping(): void
+    {
+        Queue::fake();
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson(route('asset-transfers.store'), [
+                'folders' => ['DOSSIER_SANS_PROJET'],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'La sélection contient un dossier sans projet associé.');
+
+        Queue::assertNotPushed(RunAssetTransferJob::class);
     }
 
     public function test_selected_transfer_rejects_non_transferable_folders(): void
@@ -108,6 +146,18 @@ class AssetTransferManagementTest extends TestCase
             'platform_role' => 'super_admin',
             'status' => 'active',
         ]);
+        $client = Client::create([
+            'name' => 'Client Missing',
+            'slug' => 'client-missing',
+            'status' => 'active',
+        ]);
+        Project::create([
+            'client_id' => $client->id,
+            'name' => 'Missing One',
+            'slug' => 'missing-one',
+            'source_folder' => 'MISSING_ONE',
+            'status' => 'active',
+        ]);
 
         $this->actingAs($admin)
             ->postJson(route('asset-transfers.store'), [
@@ -121,6 +171,38 @@ class AssetTransferManagementTest extends TestCase
 
         $this->assertSame(['MISSING_ONE'], $job->folders);
         Queue::assertPushed(RunAssetTransferJob::class);
+    }
+
+    public function test_limited_transfer_skips_missing_ftp_folders_without_project_mapping(): void
+    {
+        Queue::fake();
+
+        $this->instance(O2SwitchAssetBrowser::class, new class extends O2SwitchAssetBrowser
+        {
+            public function ftpFolders(int $limit = 1000): array
+            {
+                return ['MISSING_WITHOUT_PROJECT'];
+            }
+
+            public function bucketFolders(string $prefix = 'photos'): array
+            {
+                return [];
+            }
+        });
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson(route('asset-transfers.store'), [
+                'limit' => 1,
+            ])
+            ->assertUnprocessable()
+            ->assertSee('Aucun dossier FTP manquant ne correspond à un projet associé.');
+
+        Queue::assertNotPushed(RunAssetTransferJob::class);
     }
 
     public function test_super_admin_can_start_bucket_database_sync_while_transfer_is_running(): void
