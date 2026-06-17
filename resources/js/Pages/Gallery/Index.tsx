@@ -1049,11 +1049,11 @@ export default function GalleryIndex({
                                     size="sm"
                                     disabled={paginatedImages.length === 0}
                                     onClick={addCurrentPageToSelection}
-                                    className="min-h-9 h-auto flex-[1_1_13rem] gap-2 whitespace-normal px-3 text-center leading-tight sm:h-9 sm:flex-none sm:whitespace-nowrap"
+                                    className="h-9 flex-1 gap-2 px-3 sm:flex-none"
                                     title="Ajouter la page à la sélection"
                                 >
                                     <SquareCheck className="h-4 w-4" />
-                                    Sélectionner les {paginatedImages.length}{" "}
+                                    Sélectionner {paginatedImages.length}{" "}
                                     image{paginatedImages.length > 1 ? "s" : ""}
                                 </Button>
                                 {canAddImages && (
@@ -1232,49 +1232,48 @@ export default function GalleryIndex({
                     </div>
                 </section>
 
-                {!infiniteScroll && (
-                    <LegacyPagination
-                        totalCount={pagination.total}
-                        currentPage={currentPage}
-                        onPageChange={handlePageChange}
-                        pageSize={PAGE_SIZE}
-                    />
-                )}
+                <div className="flex flex-col items-center gap-4 px-4 py-6">
+                    {!infiniteScroll && (
+                        <LegacyPagination
+                            totalCount={pagination.total}
+                            currentPage={currentPage}
+                            onPageChange={handlePageChange}
+                            pageSize={PAGE_SIZE}
+                            className="py-0"
+                        />
+                    )}
+                    <div className="inline-flex rounded-full border border-border bg-background p-1 shadow-sm">
+                        {GALLERY_COLUMN_OPTIONS.map((columnCount) => {
+                            const active = galleryColumns === columnCount;
+
+                            return (
+                                <button
+                                    key={columnCount}
+                                    type="button"
+                                    onClick={() =>
+                                        setGalleryColumns(columnCount)
+                                    }
+                                    className={`flex h-9 w-10 items-center justify-center rounded-full transition ${
+                                        active
+                                            ? "bg-primary text-primary-foreground"
+                                            : "text-muted-foreground hover:bg-muted"
+                                    }`}
+                                    title={`${columnCount} colonnes`}
+                                    aria-label={`Afficher ${columnCount} colonnes`}
+                                    aria-pressed={active}
+                                >
+                                    <ColumnDensityIcon columns={columnCount} />
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
 
                 <div
                     className={`mb-4 px-0 ${
                         selectionDockVisible ? "pb-28 md:pb-24" : ""
                     }`}
                 >
-                    <div className="flex justify-end px-2 py-2">
-                        <div className="inline-flex rounded-full border border-border bg-background p-1 shadow-sm">
-                            {GALLERY_COLUMN_OPTIONS.map((columnCount) => {
-                                const active = galleryColumns === columnCount;
-
-                                return (
-                                    <button
-                                        key={columnCount}
-                                        type="button"
-                                        onClick={() =>
-                                            setGalleryColumns(columnCount)
-                                        }
-                                        className={`flex h-8 w-9 items-center justify-center rounded-full transition ${
-                                            active
-                                                ? "bg-primary text-primary-foreground"
-                                                : "text-muted-foreground hover:bg-muted"
-                                        }`}
-                                        title={`${columnCount} colonnes`}
-                                        aria-label={`Afficher ${columnCount} colonnes`}
-                                        aria-pressed={active}
-                                    >
-                                        <ColumnDensityIcon
-                                            columns={columnCount}
-                                        />
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
                     <div
                         onTouchStart={handleGridTouchStart}
                         onTouchMove={handleGridTouchMove}
@@ -2180,13 +2179,27 @@ function ColumnDensityIcon({ columns }: { columns: GalleryColumnCount }) {
     return (
         <span
             aria-hidden="true"
-            className="flex h-4 w-5 items-stretch justify-center gap-0.5"
+            className="grid h-5 w-6 gap-[2px]"
+            style={{
+                gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+            }}
         >
             {Array.from({ length: columns }).map((_, index) => (
                 <span
                     key={index}
-                    className="h-full flex-1 rounded-[2px] bg-current"
-                />
+                    className="flex min-w-0 flex-col gap-[2px]"
+                >
+                    <span
+                        className={`block rounded-[2px] bg-current ${
+                            index % 2 === 0 ? "h-3" : "h-2"
+                        }`}
+                    />
+                    <span
+                        className={`block flex-1 rounded-[2px] bg-current opacity-70 ${
+                            index % 2 === 0 ? "min-h-1.5" : "min-h-2.5"
+                        }`}
+                    />
+                </span>
             ))}
         </span>
     );

@@ -288,6 +288,7 @@ export function MasonryGrid({
     columnCount?: 2 | 3 | 4 | 5;
 }) {
     const [hoveredId, setHoveredId] = useState<string | number | null>(null);
+    const [transitioning, setTransitioning] = useState(false);
     const columns = useMemo(
         () => distributeImages(images, columnCount),
         [columnCount, images],
@@ -296,9 +297,22 @@ export function MasonryGrid({
         gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
     };
 
+    useEffect(() => {
+        setTransitioning(true);
+        const timeout = window.setTimeout(() => setTransitioning(false), 160);
+
+        return () => window.clearTimeout(timeout);
+    }, [columnCount]);
+
     if (loadingSlots) {
         return (
-            <div className="grid gap-0.5 px-0.5" style={gridStyle}>
+            <div
+                className={cn(
+                    "grid gap-0.5 px-0.5 transition-[opacity,transform] duration-200 ease-out",
+                    transitioning && "scale-[0.995] opacity-80",
+                )}
+                style={gridStyle}
+            >
                 {Array.from({ length: columnCount * 2 }).map((_, index) => (
                     <div
                         key={index}
@@ -319,7 +333,13 @@ export function MasonryGrid({
     }
 
     return (
-        <div className="grid gap-0.5 px-0.5" style={gridStyle}>
+        <div
+            className={cn(
+                "grid gap-0.5 px-0.5 transition-[opacity,transform] duration-200 ease-out",
+                transitioning && "scale-[0.995] opacity-80",
+            )}
+            style={gridStyle}
+        >
             {columns.map((column, columnIndex) => (
                 <div key={columnIndex} className="flex flex-col gap-0.5">
                     {column.map((image) => {
@@ -482,7 +502,7 @@ export function ImageInfoSheet({
         >
             <SheetContent
                 side="right"
-                className="h-screen w-full max-w-none overflow-y-auto p-0 sm:w-[85%] md:w-[75%] lg:w-[60%] xl:w-[50%]"
+                className="h-screen w-full max-w-none overflow-x-hidden overflow-y-auto p-0 sm:w-[85%] md:w-[75%] lg:w-[60%] xl:w-[50%]"
             >
                 <div className="p-6">
                     <SheetHeader className="text-left">
@@ -534,7 +554,7 @@ export function ImageInfoSheet({
                                             <ZoomIn className="h-4 w-4" />
                                         </Button>
                                     </div>
-                                    <div className="max-h-[70vh] overflow-auto rounded-md bg-muted">
+                                    <div className="rounded-md bg-muted">
                                         <img
                                             src={imageSrc}
                                             alt={image.title}
@@ -1006,11 +1026,13 @@ export function LegacyPagination({
     currentPage,
     onPageChange,
     pageSize = 100,
+    className,
 }: {
     totalCount: number;
     currentPage: number;
     onPageChange: (page: number) => void;
     pageSize?: number;
+    className?: string;
 }) {
     const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
     const start = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
@@ -1023,7 +1045,12 @@ export function LegacyPagination({
     const pages = visiblePages(currentPage, totalPages);
 
     return (
-        <div className="flex flex-col items-center gap-6 px-4 py-8">
+        <div
+            className={cn(
+                "flex flex-col items-center gap-6 px-4 py-8",
+                className,
+            )}
+        >
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span className="font-medium text-foreground">
                     {start} - {end}
