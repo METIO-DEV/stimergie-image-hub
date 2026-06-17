@@ -22,7 +22,7 @@ import {
     Wand2,
     XCircle,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type SourceFolder = {
     name: string;
@@ -108,9 +108,20 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
+    const mounted = useRef(false);
+    const sourcesAbortController = useRef<AbortController | null>(null);
+    const jobAbortControllers = useRef<Map<number, AbortController>>(new Map());
 
     const selectedJob = jobs.find((job) => job.id === selectedJobId) || jobs[0];
-    const activeJobs = jobs.filter((job) => isActive(job.status));
+    const activeJobs = useMemo(
+        () => jobs.filter((job) => isActive(job.status)),
+        [jobs],
+    );
+    const activeJobIds = useMemo(
+        () => activeJobs.map((job) => job.id),
+        [activeJobs],
+    );
+    const activeJobIdsKey = activeJobIds.join(",");
     const activeTransferJob = activeJobs.find((job) => job.mode === "batch-copy");
     const activeSyncJob = activeJobs.find((job) => job.mode === "bucket-db-sync");
     const missingFolders = useMemo(
@@ -126,17 +137,27 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
     );
 
     const loadSources = useCallback(async () => {
+        sourcesAbortController.current?.abort();
+
+        const controller = new AbortController();
+        sourcesAbortController.current = controller;
+
         setLoadingSources(true);
         setError(null);
 
         try {
             const response = await fetch(route("asset-transfers.sources"), {
                 headers: { Accept: "application/json" },
+                signal: controller.signal,
             });
             const payload = await response.json();
 
             if (!response.ok) {
                 throw new Error(payload.message || "Actualisation impossible.");
+            }
+
+            if (!mounted.current) {
+                return;
             }
 
             setFolders(payload.folders || []);
@@ -165,27 +186,85 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
             });
             setRefreshedAt(payload.refreshedAt || null);
         } catch (exception) {
+            if (exception instanceof DOMException && exception.name === "AbortError") {
+                return;
+            }
+
+            if (!mounted.current) {
+                return;
+            }
+
             setError(
                 exception instanceof Error
                     ? exception.message
                     : "Actualisation impossible.",
             );
         } finally {
-            setLoadingSources(false);
+            const isLatestSourceRequest =
+                sourcesAbortController.current === controller;
+
+            if (isLatestSourceRequest) {
+                sourcesAbortController.current = null;
+
+                if (mounted.current) {
+                    setLoadingSources(false);
+                }
+            }
         }
     }, []);
 
     const loadJob = useCallback(async (jobId: number) => {
-        const response = await fetch(route("asset-transfers.show", jobId), {
-            headers: { Accept: "application/json" },
-        });
-        const payload = await response.json();
+        jobAbortControllers.current.get(jobId)?.abort();
 
-        if (!response.ok) {
-            throw new Error(payload.message || "Suivi indisponible.");
+        const controller = new AbortController();
+        jobAbortControllers.current.set(jobId, controller);
+        try {
+            const response = await fetch(route("asset-transfers.show", jobId), {
+                headers: { Accept: "application/json" },
+                signal: controller.signal,
+            });
+            const payload = await response.json();
+
+            if (!response.ok) {
+                throw new Error(payload.message || "Suivi indisponible.");
+            }
+
+            if (!mounted.current) {
+                return;
+            }
+
+            let shouldRefreshSources = false;
+
+            setJobs((currentJobs) => {
+                const previousJob = currentJobs.find((job) => job.id === jobId);
+                shouldRefreshSources = Boolean(
+                    previousJob &&
+                        isActive(previousJob.status) &&
+                        !isActive(payload.job.status),
+                );
+
+                return mergeJob(currentJobs, payload.job);
+            });
+
+            if (shouldRefreshSources) {
+                void loadSources();
+            }
+        } finally {
+            if (jobAbortControllers.current.get(jobId) === controller) {
+                jobAbortControllers.current.delete(jobId);
+            }
         }
+    }, [loadSources]);
 
-        setJobs((currentJobs) => mergeJob(currentJobs, payload.job));
+    useEffect(() => {
+        mounted.current = true;
+
+        return () => {
+            mounted.current = false;
+            sourcesAbortController.current?.abort();
+            jobAbortControllers.current.forEach((controller) => controller.abort());
+            jobAbortControllers.current.clear();
+        };
     }, []);
 
     useEffect(() => {
@@ -193,21 +272,24 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
     }, [loadSources]);
 
     useEffect(() => {
-        const interval = window.setInterval(() => {
-            void loadSources();
-        }, 15000);
-
-        return () => window.clearInterval(interval);
-    }, [loadSources]);
-
-    useEffect(() => {
-        if (activeJobs.length === 0) {
+        if (activeJobIds.length === 0) {
             return;
         }
 
-        const interval = window.setInterval(() => {
-            activeJobs.forEach((job) => {
-                void loadJob(job.id).catch((exception) => {
+        const pollActiveJobs = () => {
+            activeJobIds.forEach((jobId) => {
+                void loadJob(jobId).catch((exception) => {
+                    if (
+                        exception instanceof DOMException &&
+                        exception.name === "AbortError"
+                    ) {
+                        return;
+                    }
+
+                    if (!mounted.current) {
+                        return;
+                    }
+
                     setError(
                         exception instanceof Error
                             ? exception.message
@@ -215,10 +297,16 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                     );
                 });
             });
-        }, 2000);
+        };
+
+        pollActiveJobs();
+
+        const interval = window.setInterval(() => {
+            pollActiveJobs();
+        }, 5000);
 
         return () => window.clearInterval(interval);
-    }, [activeJobs, loadJob]);
+    }, [activeJobIdsKey, loadJob]);
 
     const toggleFolder = (folderName: string) => {
         setSelectedFolders((current) =>
