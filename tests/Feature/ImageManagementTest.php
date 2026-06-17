@@ -51,13 +51,15 @@ class ImageManagementTest extends TestCase
         $image = Image::query()->where('title', 'Matcha Latte')->firstOrFail();
 
         Storage::disk('scaleway')->assertExists($image->object_key_original);
+        Storage::disk('scaleway')->assertExists($image->object_key_thumb);
         Storage::disk('scaleway')->assertExists($image->object_key_web);
         Storage::disk('scaleway')->assertExists($image->object_key_hd);
         $this->assertStringStartsWith('photos/projet-image/', $image->object_key_original);
+        $this->assertStringStartsWith('photos/projet-image/thumbs/', $image->object_key_thumb);
         $this->assertStringStartsWith('photos/projet-image/JPG/', $image->object_key_web);
-        $this->assertNull($image->object_key_thumb);
         $this->assertSame($image->object_key_original, $image->object_key_hd);
         $this->assertNotSame($image->object_key_original, $image->object_key_web);
+        $this->assertNotSame($image->object_key_original, $image->object_key_thumb);
         $this->assertSame('scaleway', $image->storage_provider);
         $this->assertSame('landscape', $image->orientation);
         $this->assertSame('2026-01-01', $image->rights_starts_at->toDateString());
@@ -68,6 +70,11 @@ class ImageManagementTest extends TestCase
             'image_id' => $image->id,
             'kind' => 'web',
             'object_key' => $image->object_key_web,
+        ]);
+        $this->assertDatabaseHas('image_variants', [
+            'image_id' => $image->id,
+            'kind' => 'thumb',
+            'object_key' => $image->object_key_thumb,
         ]);
         $this->assertDatabaseHas('image_variants', [
             'image_id' => $image->id,

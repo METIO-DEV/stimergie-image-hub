@@ -133,18 +133,15 @@ class ImageStorageReliabilityTest extends TestCase
         $image->refresh();
 
         $this->assertSame('images/JPG/'.$image->id.'.jpg', $image->object_key_web);
-        $this->assertNull($image->object_key_thumb);
+        $this->assertSame('images/thumbs/'.$image->id.'.jpg', $image->object_key_thumb);
         $this->assertSame('photos/client/source.jpg', $image->object_key_hd);
         $this->assertSame('ready', $image->status);
 
+        Storage::disk('scaleway')->assertExists($image->object_key_thumb);
         Storage::disk('scaleway')->assertExists($image->object_key_web);
-        $this->assertDatabaseMissing('image_variants', [
-            'image_id' => $image->id,
-            'kind' => 'thumb',
-        ]);
         Storage::disk('scaleway')->assertExists($image->object_key_hd);
 
-        foreach (['original', 'web', 'hd'] as $kind) {
+        foreach (['original', 'thumb', 'web', 'hd'] as $kind) {
             $this->assertDatabaseHas('image_variants', [
                 'image_id' => $image->id,
                 'kind' => $kind,

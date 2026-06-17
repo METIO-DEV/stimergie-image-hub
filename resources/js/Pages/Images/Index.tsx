@@ -1876,13 +1876,9 @@ function ImagesTable({
                                             onClick={() => onEdit(image)}
                                             disabled={!canManageImages}
                                         >
-                                            {image.thumbUrl || image.imageUrl ? (
+                                            {image.thumbUrl ? (
                                                 <img
-                                                    src={
-                                                        image.thumbUrl ||
-                                                        image.imageUrl ||
-                                                        ""
-                                                    }
+                                                    src={image.thumbUrl}
                                                     alt={image.title}
                                                     className="h-full w-full object-cover"
                                                     loading="lazy"

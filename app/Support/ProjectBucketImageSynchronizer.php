@@ -82,7 +82,7 @@ class ProjectBucketImageSynchronizer
                         'checksum' => $fileData['checksum'],
                         'storage_provider' => $diskName,
                         'object_key_original' => $pair['original'],
-                        'object_key_web' => $pair['web'] ?? $pair['original'],
+                        'object_key_web' => $pair['web'],
                         'object_key_thumb' => null,
                         'object_key_hd' => $pair['original'],
                         'legacy_url' => null,
@@ -391,20 +391,13 @@ class ProjectBucketImageSynchronizer
      */
     private function variants(array $fileData, array $pair): array
     {
-        return [
+        $variants = [
             'original' => [
                 'object_key' => $pair['original'],
                 'mime_type' => $fileData['mime_type'],
                 'width' => $fileData['width'],
                 'height' => $fileData['height'],
                 'size_bytes' => $fileData['size_bytes'],
-            ],
-            'web' => [
-                'object_key' => $pair['web'] ?? $pair['original'],
-                'mime_type' => $fileData['mime_type'],
-                'width' => $fileData['width'],
-                'height' => $fileData['height'],
-                'size_bytes' => null,
             ],
             'hd' => [
                 'object_key' => $pair['original'],
@@ -414,6 +407,18 @@ class ProjectBucketImageSynchronizer
                 'size_bytes' => $fileData['size_bytes'],
             ],
         ];
+
+        if ($pair['web']) {
+            $variants['web'] = [
+                'object_key' => $pair['web'],
+                'mime_type' => $fileData['mime_type'],
+                'width' => $fileData['width'],
+                'height' => $fileData['height'],
+                'size_bytes' => null,
+            ];
+        }
+
+        return $variants;
     }
 
     private function duplicateByChecksumData(Project $project, string $checksum): bool
@@ -453,6 +458,7 @@ class ProjectBucketImageSynchronizer
         $path = rawurldecode($path);
         $path = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $path) ?: $path;
         $path = strtoupper($path);
+        $path = preg_replace('/\b(\d{2})(\d{2})(\d{2})\b/', '${1}${2}20${3}', $path);
         $path = preg_replace('/[^A-Z0-9]+/', ' ', $path);
 
         return trim(preg_replace('/\s+/', ' ', (string) $path));

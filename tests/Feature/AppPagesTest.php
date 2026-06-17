@@ -495,6 +495,47 @@ class AppPagesTest extends TestCase
                 ->etc());
     }
 
+    public function test_gallery_does_not_use_original_object_as_thumbnail(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $client = Client::create([
+            'name' => 'Client Original Lourd',
+            'slug' => 'client-original-lourd',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Original Lourd',
+            'slug' => 'projet-original-lourd',
+            'status' => 'active',
+        ]);
+        $image = Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Image originale lourde',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/projet-original-lourd/source.jpg',
+            'object_key_web' => 'photos/projet-original-lourd/source.jpg',
+            'object_key_hd' => 'photos/projet-original-lourd/source.jpg',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('gallery.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Gallery/Index')
+                ->where('images.0.id', $image->id)
+                ->where('images.0.thumbUrl', null)
+                ->where('images.0.imageUrl', '/storage/photos/projet-original-lourd/source.jpg')
+                ->etc());
+    }
+
     public function test_gallery_applies_filters_on_server_before_pagination(): void
     {
         Storage::fake('scaleway');

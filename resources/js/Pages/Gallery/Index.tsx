@@ -90,7 +90,7 @@ type SelectionSnapshot = {
     canManage?: boolean;
 };
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 60;
 const FILTER_DEBOUNCE_MS = 350;
 
 const normalizeImageId = (id: string | number) => String(id);
@@ -1278,8 +1278,7 @@ export default function GalleryIndex({
                                     const image =
                                         currentImagesById.get(id) ||
                                         selectionSnapshots[id];
-                                    const imageSrc =
-                                        image?.thumbUrl || image?.imageUrl;
+                                    const imageSrc = image?.thumbUrl;
                                     const currentImage =
                                         currentImagesById.get(id);
                                     const rightsExpired =

@@ -10,18 +10,50 @@ class ImageUrlResolver
 {
     public function thumbnailUrl(Image $image): ?string
     {
-        return $this->url(
-            $image->storage_provider,
-            $image->object_key_thumb ?: $image->object_key_web ?: $image->object_key_original,
-        );
+        $thumbnailKey = $this->variantObjectKey($image, 'thumb') ?: $image->object_key_thumb;
+
+        if ($thumbnailKey) {
+            return $this->url($image->storage_provider, $thumbnailKey);
+        }
+
+        $webKey = $this->variantObjectKey($image, 'web') ?: $image->object_key_web;
+
+        if ($webKey && ! $this->isOriginalKey($image, $webKey)) {
+            return $this->url($image->storage_provider, $webKey);
+        }
+
+        return null;
     }
 
     public function displayUrl(Image $image): ?string
     {
+        $webKey = $this->variantObjectKey($image, 'web') ?: $image->object_key_web;
+
         return $this->url(
             $image->storage_provider,
-            $image->object_key_web ?: $image->object_key_original ?: $image->object_key_thumb,
+            $webKey ?: $image->object_key_original ?: $this->variantObjectKey($image, 'thumb') ?: $image->object_key_thumb,
         );
+    }
+
+    private function variantObjectKey(Image $image, string $kind): ?string
+    {
+        if (! $image->relationLoaded('variants')) {
+            return null;
+        }
+
+        $objectKey = $image->variants
+            ->firstWhere('kind', $kind)
+            ?->object_key;
+
+        return is_string($objectKey) && $objectKey !== '' ? $objectKey : null;
+    }
+
+    private function isOriginalKey(Image $image, string $objectKey): bool
+    {
+        return in_array($objectKey, array_filter([
+            $image->object_key_original,
+            $image->object_key_hd,
+        ]), true);
     }
 
     public function downloadUrl(Image $image): ?string

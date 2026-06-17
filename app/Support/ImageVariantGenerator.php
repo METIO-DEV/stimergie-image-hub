@@ -43,6 +43,7 @@ class ImageVariantGenerator
             ],
         ];
 
+        $variants['thumb'] = $this->putResizedVariant($disk, "{$targetPrefix}/thumbs/{$baseName}.{$extension}", $sourcePath, $mimeType, 480);
         $variants['web'] = $this->putResizedVariant($disk, "{$targetPrefix}/JPG/{$baseName}.{$extension}", $sourcePath, $mimeType, 1600);
         $variants['hd'] = $variants['original'];
 
@@ -50,7 +51,7 @@ class ImageVariantGenerator
             'disk' => $disk,
             'original' => $variants['original']['object_key'],
             'web' => $variants['web']['object_key'],
-            'thumb' => null,
+            'thumb' => $variants['thumb']['object_key'],
             'hd' => $variants['hd']['object_key'],
             'url' => Storage::disk($disk)->url($variants['web']['object_key']),
             'width' => $width,
@@ -127,6 +128,7 @@ class ImageVariantGenerator
                 ],
             ];
 
+            $variants['thumb'] = $this->putResizedVariant($disk, "{$targetPrefix}/thumbs/{$image->id}.{$extension}", $sourcePath, $mimeType, 480);
             $variants['web'] = $this->putResizedVariant($disk, "{$targetPrefix}/JPG/{$image->id}.{$extension}", $sourcePath, $mimeType, 1600);
             $variants['hd'] = $variants['original'];
 
@@ -134,7 +136,7 @@ class ImageVariantGenerator
                 'disk' => $disk,
                 'original' => $variants['original']['object_key'],
                 'web' => $variants['web']['object_key'],
-                'thumb' => null,
+                'thumb' => $variants['thumb']['object_key'],
                 'hd' => $variants['hd']['object_key'],
                 'width' => $width,
                 'height' => $height,

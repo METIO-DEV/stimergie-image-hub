@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 class ProjectFolderMatcher
 {
     public const AUTO_MATCH_SCORE = 92.0;
+
     public const SUGGESTION_SCORE = 70.0;
 
     /**
@@ -122,7 +123,7 @@ class ProjectFolderMatcher
     {
         $value = basename(str_replace('\\', '/', $value));
         $value = Str::ascii($value);
-        $value = preg_replace('/\b(\d{2})(\d{2})(\d{2})\b/', '$1$2 20$3', (string) $value);
+        $value = preg_replace('/\b(\d{2})(\d{2})(\d{2})\b/', '${1}${2}20${3}', (string) $value);
 
         return Str::slug(trim((string) $value));
     }

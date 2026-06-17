@@ -320,7 +320,7 @@ export function MasonryGrid({
                             (selectedId) =>
                                 String(selectedId) === String(imageId),
                         );
-                        const src = image.thumbUrl || image.imageUrl;
+                        const src = image.thumbUrl;
                         const rightsExpired =
                             image.rightsStatus === "expired";
                         const rightsWarning =

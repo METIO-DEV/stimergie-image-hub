@@ -76,7 +76,7 @@ class ScalabilitySmokeTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Gallery/Index')
                 ->where('pagination.currentPage', 1)
-                ->where('pagination.perPage', 100)
+                ->where('pagination.perPage', 60)
                 ->where('pagination.total', 30)
                 ->has('images', 30)
                 ->etc()));

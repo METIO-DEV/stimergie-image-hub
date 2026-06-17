@@ -34,7 +34,7 @@ class AppPageController extends Controller
         $manageableClientIds = $this->manageableClientIds($user);
         $galleryFilters = $this->galleryFilters($request);
         $page = max(1, (int) $request->integer('page', 1));
-        $perPage = 100;
+        $perPage = 60;
         $totalImages = Image::query()
             ->tap(fn ($query) => $this->applyPhotoBucketFilter($query))
             ->tap(fn ($query) => $this->projectAccess->applyImageVisibility($query, $request->user()))
@@ -49,6 +49,7 @@ class AppPageController extends Controller
                 'project:id,name,client_id',
                 'tags:id,name',
                 'sharedClients:id,name',
+                'variants:id,image_id,kind,object_key,mime_type,width,height,size_bytes',
             ])
             ->tap(fn ($query) => $this->applyPhotoBucketFilter($query))
             ->tap(fn ($query) => $this->projectAccess->applyImageVisibility($query, $request->user()))
@@ -190,6 +191,7 @@ class AppPageController extends Controller
                 'project:id,name,client_id',
                 'tags:id,name',
                 'sharedClients:id,name',
+                'variants:id,image_id,kind,object_key,mime_type,width,height,size_bytes',
             ])
             ->latest()
             ->forPage($page, $perPage)
