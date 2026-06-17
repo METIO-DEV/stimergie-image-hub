@@ -68,6 +68,25 @@ class AssetTransferManagementTest extends TestCase
         Queue::assertPushed(RunAssetTransferJob::class);
     }
 
+    public function test_selected_transfer_rejects_non_transferable_folders(): void
+    {
+        Queue::fake();
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson(route('asset-transfers.store'), [
+                'folders' => ['Destination: scaleway:stimergie/photos'],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'La sélection contient un dossier non transférable.');
+
+        Queue::assertNotPushed(RunAssetTransferJob::class);
+    }
+
     public function test_super_admin_can_start_transfer_from_first_missing_folders(): void
     {
         Queue::fake();

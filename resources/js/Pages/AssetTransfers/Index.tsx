@@ -345,6 +345,11 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
     }, [activeJobIdsKey, loadJob]);
 
     const toggleFolder = (folderName: string) => {
+        if (!isTransferableFolderName(folderName)) {
+            setError("Ce dossier ne peut pas être transféré.");
+            return;
+        }
+
         setSelectedFolders((current) =>
             current.includes(folderName)
                 ? current.filter((name) => name !== folderName)
@@ -356,9 +361,20 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
         setSubmitting(true);
         setError(null);
 
+        const transferableSelectedFolders = selectedFolders.filter(
+            isTransferableFolderName,
+        );
+
+        if (mode === "selected" && transferableSelectedFolders.length === 0) {
+            setSubmitting(false);
+            setSelectedFolders([]);
+            setError("Sélectionnez au moins un dossier FTP transférable.");
+            return;
+        }
+
         const body =
             mode === "selected"
-                ? { folders: selectedFolders }
+                ? { folders: transferableSelectedFolders }
                 : { limit: Number(limit) || 1 };
 
         try {
@@ -763,7 +779,9 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                                 variant="outline"
                                 onClick={() =>
                                     setSelectedFolders(
-                                        missingFolders.map((folder) => folder.name),
+                                        missingFolders
+                                            .map((folder) => folder.name)
+                                            .filter(isTransferableFolderName),
                                     )
                                 }
                                 disabled={Boolean(activeTransferJob)}
@@ -1124,6 +1142,9 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                                                         )}
                                                         disabled={
                                                             !folder.onFtp ||
+                                                            !isTransferableFolderName(
+                                                                folder.name,
+                                                            ) ||
                                                             Boolean(activeTransferJob)
                                                         }
                                                         onChange={() =>
@@ -1562,6 +1583,18 @@ function mergeJob(jobs: TransferJob[], job: TransferJob): TransferJob[] {
         : [job, ...jobs];
 
     return merged.sort((a, b) => b.id - a.id).slice(0, 10);
+}
+
+function isTransferableFolderName(folderName: string): boolean {
+    const value = folderName.trim();
+
+    return (
+        value.length > 0 &&
+        value.length <= 255 &&
+        !value.includes(":") &&
+        !/[\u0000-\u001f\u007f]/.test(value) &&
+        value.toLowerCase() !== "assets"
+    );
 }
 
 function formatDate(value?: string | null): string {

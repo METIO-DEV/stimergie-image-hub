@@ -70,6 +70,15 @@ class AssetTransferController extends Controller
             ->unique()
             ->values();
 
+        if ($folders->contains(fn (string $folder): bool => ! $this->isTransferableFolder($folder))) {
+            return response()->json([
+                'message' => 'La sélection contient un dossier non transférable.',
+                'errors' => [
+                    'folders' => ['La sélection contient un dossier non transférable.'],
+                ],
+            ], 422);
+        }
+
         if ($folders->isEmpty()) {
             $limit = (int) ($data['limit'] ?? 0);
             abort_if($limit < 1, 422, 'Sélectionnez des dossiers ou indiquez un nombre de dossiers à transférer.');
@@ -435,6 +444,16 @@ class AssetTransferController extends Controller
     {
         return in_array(Str::lower(trim($folder)), ['assets'], true)
             || str_contains($folder, ':');
+    }
+
+    private function isTransferableFolder(string $folder): bool
+    {
+        $folder = trim($folder);
+
+        return $folder !== ''
+            && mb_strlen($folder) <= 255
+            && ! $this->isSystemFolder($folder)
+            && preg_match('/[\x00-\x1F\x7F]/', $folder) !== 1;
     }
 
     /**
