@@ -7,7 +7,6 @@ use App\Models\Project;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use RuntimeException;
 
 class ProjectBucketImageSynchronizer
 {
@@ -15,6 +14,11 @@ class ProjectBucketImageSynchronizer
      * @var array<int, string>|null
      */
     private ?array $cachedBucketPrefixes = null;
+
+    /**
+     * @var array<int, string>|null
+     */
+    private ?array $cachedBucketFiles = null;
 
     public function __construct(
         private readonly ProjectImageStoragePath $storagePath,
@@ -36,7 +40,7 @@ class ProjectBucketImageSynchronizer
         $skipped = 0;
 
         foreach ($prefixes as $prefix) {
-            $pairs = $this->bucketPairs($disk->allFiles($prefix), $prefix);
+            $pairs = $this->bucketPairs($this->filesForPrefix($disk, $prefix), $prefix);
             $total += count($pairs);
 
             foreach ($pairs as $pair) {
@@ -121,7 +125,7 @@ class ProjectBucketImageSynchronizer
         foreach ($this->folderMatcher->mappedFoldersForProject($project) as $folder) {
             $prefix = 'photos/'.trim($folder, '/');
 
-            if ($disk->allFiles($prefix) !== []) {
+            if ($this->filesForPrefix($disk, $prefix) !== []) {
                 $prefixes[] = $prefix;
             }
         }
@@ -135,11 +139,11 @@ class ProjectBucketImageSynchronizer
 
     private function resolveExistingPrefix($disk, string $expectedPrefix): ?string
     {
-        if ($disk->allFiles($expectedPrefix) !== []) {
+        if ($this->filesForPrefix($disk, $expectedPrefix) !== []) {
             return $expectedPrefix;
         }
 
-        $candidates = $this->cachedBucketPrefixes ??= $this->candidatePrefixes($disk->allFiles('photos'));
+        $candidates = $this->cachedBucketPrefixes ??= $this->candidatePrefixes($this->allPhotoFiles($disk));
 
         if ($candidates === []) {
             return null;
@@ -159,6 +163,35 @@ class ProjectBucketImageSynchronizer
         }
 
         return $bestScore >= ProjectFolderMatcher::AUTO_MATCH_SCORE ? $best : null;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function filesForPrefix($disk, string $prefix): array
+    {
+        $prefix = trim($prefix, '/');
+
+        if ($prefix === 'photos') {
+            return $this->allPhotoFiles($disk);
+        }
+
+        if ($this->cachedBucketFiles !== null && Str::startsWith($prefix, 'photos/')) {
+            return array_values(array_filter(
+                $this->cachedBucketFiles,
+                fn (string $file): bool => Str::startsWith($file, "{$prefix}/"),
+            ));
+        }
+
+        return $disk->allFiles($prefix);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function allPhotoFiles($disk): array
+    {
+        return $this->cachedBucketFiles ??= $disk->allFiles('photos');
     }
 
     /**
@@ -328,64 +361,53 @@ class ProjectBucketImageSynchronizer
     }
 
     /**
-     * @return array{width: int|null, height: int|null, mime_type: string|null, size_bytes: int|null, checksum: string}
+     * @return array{width: int|null, height: int|null, mime_type: string|null, size_bytes: int|null, checksum: string|null}
      */
     private function inspectObject(string $diskName, string $objectKey): array
     {
-        $stream = Storage::disk($diskName)->readStream($objectKey);
-
-        if ($stream === false) {
-            throw new RuntimeException("Impossible de lire {$objectKey}.");
-        }
-
-        $tempPath = tempnam(sys_get_temp_dir(), 'stimergie-sync-');
-
-        if ($tempPath === false) {
-            if (is_resource($stream)) {
-                fclose($stream);
-            }
-
-            throw new RuntimeException('Impossible de créer un fichier temporaire.');
-        }
-
-        $target = fopen($tempPath, 'w');
-
-        if ($target === false) {
-            if (is_resource($stream)) {
-                fclose($stream);
-            }
-
-            @unlink($tempPath);
-
-            throw new RuntimeException('Impossible de copier l image en local.');
-        }
-
-        stream_copy_to_stream($stream, $target);
-
-        if (is_resource($stream)) {
-            fclose($stream);
-        }
-
-        fclose($target);
+        $dimensions = $this->localImageDimensions($diskName, $objectKey);
+        $sizeBytes = null;
 
         try {
-            $size = @getimagesize($tempPath);
-            $mimeType = $size['mime'] ?? (function_exists('mime_content_type') ? mime_content_type($tempPath) : null);
-
-            return [
-                'width' => $size ? $size[0] : null,
-                'height' => $size ? $size[1] : null,
-                'mime_type' => is_string($mimeType) ? $mimeType : null,
-                'size_bytes' => filesize($tempPath) ?: null,
-                'checksum' => hash_file('sha256', $tempPath),
-            ];
-        } finally {
-            @unlink($tempPath);
+            $sizeBytes = Storage::disk($diskName)->size($objectKey);
+        } catch (\Throwable) {
+            $sizeBytes = null;
         }
+
+        return [
+            'width' => $dimensions['width'],
+            'height' => $dimensions['height'],
+            'mime_type' => $this->mimeTypeFromObjectKey($objectKey),
+            'size_bytes' => $sizeBytes,
+            'checksum' => null,
+        ];
     }
 
     /**
-     * @param  array{width: int|null, height: int|null, mime_type: string|null, size_bytes: int|null, checksum: string}  $fileData
+     * @return array{width: int|null, height: int|null}
+     */
+    private function localImageDimensions(string $diskName, string $objectKey): array
+    {
+        try {
+            $path = Storage::disk($diskName)->path($objectKey);
+        } catch (\Throwable) {
+            return ['width' => null, 'height' => null];
+        }
+
+        if (! is_file($path)) {
+            return ['width' => null, 'height' => null];
+        }
+
+        $size = @getimagesize($path);
+
+        return [
+            'width' => is_array($size) ? ($size[0] ?? null) : null,
+            'height' => is_array($size) ? ($size[1] ?? null) : null,
+        ];
+    }
+
+    /**
+     * @param  array{width: int|null, height: int|null, mime_type: string|null, size_bytes: int|null, checksum: string|null}  $fileData
      * @param  array{original: string, web: string|null}  $pair
      * @return array<string, array{object_key: string, mime_type: string|null, width: int|null, height: int|null, size_bytes: int|null}>
      */
@@ -421,12 +443,26 @@ class ProjectBucketImageSynchronizer
         return $variants;
     }
 
-    private function duplicateByChecksumData(Project $project, string $checksum): bool
+    private function duplicateByChecksumData(Project $project, ?string $checksum): bool
     {
+        if (! $checksum) {
+            return false;
+        }
+
         return Image::query()
             ->where('project_id', $project->id)
             ->where('checksum', $checksum)
             ->exists();
+    }
+
+    private function mimeTypeFromObjectKey(string $objectKey): ?string
+    {
+        return match (Str::lower(pathinfo($objectKey, PATHINFO_EXTENSION))) {
+            'jpg', 'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'webp' => 'image/webp',
+            default => null,
+        };
     }
 
     private function titleFromObjectKey(string $objectKey): string
