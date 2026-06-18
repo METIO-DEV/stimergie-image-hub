@@ -56,14 +56,14 @@ class PhotoBucketIndex
         }
 
         $requestedFolder = $this->normalizeFolder($key);
-        $requestedHasJpgFolder = str_contains($this->folderPath($key), '/JPG/');
+        $requestedHasWebFolder = $this->hasWebVariantFolder($key);
         $best = null;
         $bestScore = 0;
 
         foreach ($candidates as $candidate) {
             $score = $this->folderScore($requestedFolder, $this->normalizeFolder($candidate));
 
-            if ($requestedHasJpgFolder === str_contains($this->folderPath($candidate), '/JPG/')) {
+            if ($requestedHasWebFolder === $this->hasWebVariantFolder($candidate)) {
                 $score += 30;
             }
 
@@ -90,9 +90,9 @@ class PhotoBucketIndex
         $bestScore = 0;
 
         foreach ($candidates as $candidate) {
-            $candidateHasJpgFolder = str_contains($this->folderPath($candidate), '/JPG/');
+            $candidateHasWebFolder = $this->hasWebVariantFolder($candidate);
             $score = $this->folderScore($requestedFolder, $this->normalizeFolder($candidate));
-            $score += $candidateHasJpgFolder === $preferJpgFolder ? 40 : 0;
+            $score += $candidateHasWebFolder === $preferJpgFolder ? 40 : 0;
 
             if ($score > $bestScore) {
                 $best = $candidate;
@@ -116,6 +116,14 @@ class PhotoBucketIndex
     private function folderPath(string $key): string
     {
         return '/'.trim(dirname($key), '/').'/';
+    }
+
+    private function hasWebVariantFolder(string $key): bool
+    {
+        $folderPath = strtolower($this->folderPath($key));
+
+        return str_contains($folderPath, '/jpg/')
+            || str_contains($folderPath, '/'.ImageVariantGenerator::WEB_VARIANT_DIRECTORY.'/');
     }
 
     private function normalize(string $value): string

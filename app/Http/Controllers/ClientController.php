@@ -6,6 +6,7 @@ use App\Http\Requests\StoreClientRequest;
 use App\Http\Requests\UpdateClientRequest;
 use App\Models\Client;
 use App\Support\ClientLogoUrlResolver;
+use App\Support\ObjectStoragePolicy;
 use App\Support\StoredImageObjectCleaner;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,6 +22,7 @@ class ClientController extends Controller
     public function __construct(
         private readonly ClientLogoUrlResolver $clientLogos,
         private readonly StoredImageObjectCleaner $objectCleaner,
+        private readonly ObjectStoragePolicy $storagePolicy,
     ) {}
 
     public function index(Request $request): Response|RedirectResponse
@@ -28,7 +30,7 @@ class ClientController extends Controller
         if (! Gate::allows('viewAny', Client::class)) {
             return redirect()
                 ->route('gallery.index')
-                ->with('warning', "La gestion des entreprises est réservée aux Admin Client owner/manager.");
+                ->with('warning', 'La gestion des entreprises est réservée aux Admin Client owner/manager.');
         }
 
         $user = $request->user();
@@ -291,10 +293,14 @@ class ClientController extends Controller
     {
         $extension = $file->extension() ?: $file->guessExtension() ?: 'bin';
         $filename = 'logo-'.now()->format('YmdHis').'-'.Str::random(8).'.'.Str::lower($extension);
+        $objectKey = "clients/{$client->id}/{$filename}";
 
         return $file->storeAs("clients/{$client->id}", $filename, [
             'disk' => $this->imageDisk(),
-            'visibility' => 'public',
+            ...$this->storagePolicy->putOptions(
+                $objectKey,
+                method_exists($file, 'getMimeType') ? $file->getMimeType() : null,
+            ),
         ]);
     }
 

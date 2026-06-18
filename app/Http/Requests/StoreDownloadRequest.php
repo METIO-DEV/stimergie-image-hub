@@ -23,17 +23,27 @@ class StoreDownloadRequest extends FormRequest
         $user = $this->user();
         $imageIds = $this->input('image_ids', []);
 
-        if (! $user || ! is_array($imageIds) || $imageIds === []) {
+        if (! $user || $user->status !== 'active' || ! is_array($imageIds) || $imageIds === []) {
+            return false;
+        }
+
+        $uniqueImageIds = collect($imageIds)
+            ->map(fn ($imageId) => (int) $imageId)
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($uniqueImageIds->isEmpty()) {
             return false;
         }
 
         $projectAccess = app(ProjectAccess::class);
         $images = Image::query()
             ->with(['client', 'project.accessPeriods'])
-            ->whereIn('id', $imageIds)
+            ->whereIn('id', $uniqueImageIds)
             ->get();
 
-        if ($images->count() !== count(array_unique($imageIds))) {
+        if ($images->count() !== $uniqueImageIds->count()) {
             return false;
         }
 
@@ -56,7 +66,7 @@ class StoreDownloadRequest extends FormRequest
         return [
             'variant' => ['required', 'string', Rule::in(['web', 'hd', 'crop'])],
             'image_ids' => ['required', 'array', 'min:1', 'max:'.self::MAX_IMAGE_COUNT],
-            'image_ids.*' => ['integer', Rule::exists('images', 'id')],
+            'image_ids.*' => ['integer', 'distinct', Rule::exists('images', 'id')],
             'crop_preset' => ['nullable', 'required_if:variant,crop', 'string', Rule::in(array_keys(ImageExportPresets::all()))],
             'crop_source' => ['nullable', 'required_if:variant,crop', 'string', Rule::in(['web', 'hd'])],
             'crops' => ['nullable', 'required_if:variant,crop', 'array'],

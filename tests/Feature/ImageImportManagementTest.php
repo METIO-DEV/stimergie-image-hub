@@ -203,8 +203,8 @@ class ImageImportManagementTest extends TestCase
 
         $this->assertSame('ready', $image->status);
         $this->assertSame($objectKey, $image->object_key_original);
-        $this->assertStringStartsWith('photos/projet-import/JPG/', $image->object_key_web);
-        $this->assertStringStartsWith('photos/projet-import/thumbs/', $image->object_key_thumb);
+        $this->assertStringStartsWith('photos/projet-import/web/', $image->object_key_web);
+        $this->assertStringStartsWith('photos/projet-import/miniatures/', $image->object_key_thumb);
         $this->assertSame($image->object_key_original, $image->object_key_hd);
         $this->assertSame('landscape', $image->orientation);
         $this->assertSame($image->id, $item->image_id);
@@ -293,7 +293,7 @@ class ImageImportManagementTest extends TestCase
             file_get_contents($original->getRealPath()),
         );
         Storage::disk('scaleway')->put(
-            'photos/projet-import/JPG/source.jpg',
+            'photos/projet-import/web/source.jpg',
             file_get_contents($web->getRealPath()),
         );
 
@@ -312,14 +312,14 @@ class ImageImportManagementTest extends TestCase
         $this->assertSame('Source', $image->title);
         $this->assertSame('ready', $image->status);
         $this->assertSame('photos/projet-import/source.jpg', $image->object_key_original);
-        $this->assertSame('photos/projet-import/JPG/source.jpg', $image->object_key_web);
+        $this->assertSame('photos/projet-import/web/source.jpg', $image->object_key_web);
         $this->assertSame('photos/projet-import/source.jpg', $image->object_key_hd);
         $this->assertNull($image->object_key_thumb);
         $this->assertSame('landscape', $image->orientation);
         $this->assertDatabaseHas('image_variants', [
             'image_id' => $image->id,
             'kind' => 'web',
-            'object_key' => 'photos/projet-import/JPG/source.jpg',
+            'object_key' => 'photos/projet-import/web/source.jpg',
         ]);
     }
 
@@ -336,7 +336,7 @@ class ImageImportManagementTest extends TestCase
             file_get_contents($original->getRealPath()),
         );
         Storage::disk('scaleway')->put(
-            'photos/projet-import/JPG/command-source.jpg',
+            'photos/projet-import/web/command-source.jpg',
             file_get_contents($web->getRealPath()),
         );
 
@@ -346,7 +346,7 @@ class ImageImportManagementTest extends TestCase
         $this->assertDatabaseHas('images', [
             'project_id' => $project->id,
             'object_key_original' => 'photos/projet-import/command-source.jpg',
-            'object_key_web' => 'photos/projet-import/JPG/command-source.jpg',
+            'object_key_web' => 'photos/projet-import/web/command-source.jpg',
             'status' => 'ready',
         ]);
     }

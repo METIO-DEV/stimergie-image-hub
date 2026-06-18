@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreSharedAlbumRequest;
 use App\Models\Image;
 use App\Models\SharedAlbum;
+use App\Support\DownloadArchiveWriter;
 use App\Support\ImageUrlResolver;
 use App\Support\ProjectAccess;
 use App\Support\SharedAlbumInvitationMailer;
@@ -15,7 +16,6 @@ use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Throwable;
-use ZipArchive;
 
 class SharedAlbumController extends Controller
 {
@@ -96,8 +96,8 @@ class SharedAlbumController extends Controller
                     'description' => $image->description,
                     'clientName' => $image->client?->name,
                     'projectName' => $image->project?->name,
-                    'thumbUrl' => $this->imageUrls->thumbnailUrl($image),
-                    'imageUrl' => $this->imageUrls->displayUrl($image),
+                    'thumbUrl' => $this->imageUrls->temporarySharedAlbumThumbnailUrl($album->share_key, $image),
+                    'imageUrl' => $this->imageUrls->temporarySharedAlbumDisplayUrl($album->share_key, $image),
                     'tags' => $image->tags->pluck('name')->values(),
                 ]),
             ],
@@ -107,50 +107,50 @@ class SharedAlbumController extends Controller
     public function download(string $shareKey): BinaryFileResponse
     {
         $album = $this->activeAlbum($shareKey);
-        $zipPath = storage_path('app/shared-albums/'.$album->share_key.'.zip');
-
-        if (! is_dir(dirname($zipPath))) {
-            mkdir(dirname($zipPath), 0755, true);
-        }
-
-        $zip = new ZipArchive;
-        abort_unless($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true, 500);
+        $archive = DownloadArchiveWriter::create('stimergie-shared-album-');
 
         $added = 0;
 
-        $album->images->each(function (Image $image, int $index) use ($zip, &$added): void {
-            if ($image->rightsAreExpired()) {
-                return;
-            }
+        try {
+            $album->images->each(function (Image $image, int $index) use ($archive, &$added): void {
+                if ($image->rightsAreExpired()) {
+                    return;
+                }
 
-            $source = $this->imageUrls->downloadSource($image, 'web');
-            $objectKey = $source['objectKey'];
+                $source = $this->imageUrls->downloadSource($image, 'web');
+                $objectKey = $source['objectKey'];
 
-            if (! $objectKey || str_contains($objectKey, 'legacy/')) {
-                return;
-            }
+                if (! $objectKey || str_contains($objectKey, 'legacy/')) {
+                    return;
+                }
 
-            $disk = Storage::disk($source['disk']);
+                $disk = Storage::disk($source['disk']);
 
-            if (! $disk->exists($objectKey)) {
-                return;
-            }
+                if (! $disk->exists($objectKey)) {
+                    return;
+                }
 
-            $extension = pathinfo($objectKey, PATHINFO_EXTENSION) ?: 'jpg';
-            $filename = str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT)
-                .'-'.(Str::slug($image->title) ?: "image-{$image->id}")
-                .'.'.$extension;
+                $extension = pathinfo($objectKey, PATHINFO_EXTENSION) ?: 'jpg';
+                $filename = str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT)
+                    .'-'.(Str::slug($image->title) ?: "image-{$image->id}")
+                    .'.'.$extension;
 
-            $zip->addFromString($filename, $disk->get($objectKey));
-            $added++;
-        });
+                $archive->addDiskFile($source['disk'], $objectKey, $filename);
+                $added++;
+            });
 
-        $zip->close();
-        abort_if($added === 0, 404);
+            abort_if($added === 0, 404);
 
-        return response()
-            ->download($zipPath, (Str::slug($album->name) ?: 'album-partage').'.zip')
-            ->deleteFileAfterSend();
+            $zipPath = $archive->finish();
+
+            return response()
+                ->download($zipPath, (Str::slug($album->name) ?: 'album-partage').'.zip')
+                ->deleteFileAfterSend();
+        } catch (Throwable $exception) {
+            $archive->cleanup();
+
+            throw $exception;
+        }
     }
 
     private function activeAlbum(string $shareKey): SharedAlbum

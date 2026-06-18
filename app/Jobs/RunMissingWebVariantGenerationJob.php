@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\AssetTransferJob;
 use App\Models\Image;
 use App\Support\ImageVariantGenerator;
+use App\Support\ProjectImageStoragePath;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\File;
@@ -21,7 +22,7 @@ class RunMissingWebVariantGenerationJob implements ShouldQueue
 
     public function __construct(public readonly int $variantJobId) {}
 
-    public function handle(ImageVariantGenerator $variants): void
+    public function handle(ImageVariantGenerator $variants, ProjectImageStoragePath $storagePath): void
     {
         $job = AssetTransferJob::find($this->variantJobId);
 
@@ -30,7 +31,7 @@ class RunMissingWebVariantGenerationJob implements ShouldQueue
         }
 
         $sourcePrefix = trim((string) data_get($job->metadata, 'web_variant_generation.source_prefix', 'photos'), '/') ?: 'photos';
-        $targetPrefix = trim((string) data_get($job->metadata, 'web_variant_generation.target_prefix', 'images'), '/') ?: 'images';
+        $targetPrefix = trim((string) data_get($job->metadata, 'web_variant_generation.target_prefix', ''), '/');
         $projectId = data_get($job->metadata, 'web_variant_generation.project_id');
         $folder = trim((string) data_get($job->metadata, 'web_variant_generation.folder', ''));
         $scopeLabel = (string) data_get($job->metadata, 'web_variant_generation.scope_label', 'Tous les projets');
@@ -48,6 +49,7 @@ class RunMissingWebVariantGenerationJob implements ShouldQueue
             ->each(function (Image $image) use (
                 $job,
                 $variants,
+                $storagePath,
                 $targetPrefix,
                 &$checked,
                 &$generated,
@@ -83,7 +85,10 @@ class RunMissingWebVariantGenerationJob implements ShouldQueue
                 }
 
                 try {
-                    $fileData = $variants->generateFromOriginal($image, $targetPrefix);
+                    $fileData = $variants->generateFromOriginal(
+                        $image,
+                        $this->targetPrefixForImage($image, $storagePath, $targetPrefix),
+                    );
 
                     $image->update([
                         'storage_provider' => $fileData['disk'],
@@ -169,6 +174,7 @@ class RunMissingWebVariantGenerationJob implements ShouldQueue
     private function candidateQuery(string $sourcePrefix, ?int $projectId, string $folder)
     {
         return Image::query()
+            ->with('project')
             ->whereNotNull('object_key_original')
             ->where('object_key_original', 'like', "{$sourcePrefix}/%")
             ->when($projectId, fn ($query) => $query->where('project_id', $projectId))
@@ -195,6 +201,19 @@ class RunMissingWebVariantGenerationJob implements ShouldQueue
                         ->orWhere('name', $folder);
                 });
         });
+    }
+
+    private function targetPrefixForImage(Image $image, ProjectImageStoragePath $storagePath, string $targetPrefix): string
+    {
+        if ($targetPrefix !== '') {
+            return $targetPrefix;
+        }
+
+        if ($image->project) {
+            return $storagePath->prefix($image->project);
+        }
+
+        return trim((string) dirname((string) $image->object_key_original), '/');
     }
 
     private function storeTotals(AssetTransferJob $job, int $checked, int $generated, int $missingOriginals, int $failed): void

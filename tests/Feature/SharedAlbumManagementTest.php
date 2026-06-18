@@ -11,9 +11,12 @@ use App\Models\User;
 use Closure;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Inertia\Testing\AssertableInertia as Assert;
 use Mockery;
 use Tests\TestCase;
+use ZipArchive;
 
 class SharedAlbumManagementTest extends TestCase
 {
@@ -125,11 +128,140 @@ class SharedAlbumManagementTest extends TestCase
                 ->component('SharedAlbums/Show')
                 ->where('album.name', 'Album visible')
                 ->where('album.images.0.id', $image->id)
+                ->where('album.images.0.imageUrl', fn (string $url) => str_contains($url, "/shared-albums/{$album->share_key}/images/{$image->id}/asset")
+                    && str_contains($url, 'variant=display')
+                    && str_contains($url, 'signature='))
                 ->etc());
 
         $album->update(['expires_at' => now()->subDay()]);
 
         $this->get(route('shared-albums.show', $album->share_key))
             ->assertNotFound();
+    }
+
+    public function test_shared_album_image_asset_requires_signature_and_active_album(): void
+    {
+        Storage::fake('scaleway');
+
+        $client = Client::create([
+            'name' => 'Client Asset Album',
+            'slug' => 'client-asset-album',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Asset Album',
+            'slug' => 'projet-asset-album',
+            'status' => 'active',
+        ]);
+        $image = Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Image album signee',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_web' => 'images/web/album-signee.jpg',
+        ]);
+        $album = SharedAlbum::create([
+            'client_id' => $client->id,
+            'name' => 'Album asset',
+            'share_key' => 'share-asset',
+            'is_active' => true,
+            'expires_at' => now()->addDay(),
+        ]);
+        $album->images()->attach($image->id, ['position' => 1]);
+        Storage::disk('scaleway')->put('images/web/album-signee.jpg', 'album-signed-content');
+        Storage::disk('scaleway')->assertExists('images/web/album-signee.jpg');
+
+        $this->get(route('shared-albums.images.asset', [
+            'shareKey' => $album->share_key,
+            'image' => $image,
+            'variant' => 'display',
+        ]))->assertForbidden();
+
+        $signedUrl = URL::temporarySignedRoute(
+            'shared-albums.images.asset',
+            now()->addMinutes(10),
+            ['shareKey' => $album->share_key, 'image' => $image, 'variant' => 'display'],
+        );
+
+        $response = $this->get($signedUrl)->assertRedirect();
+
+        $this->assertStringContainsString('images/web/album-signee.jpg', $response->headers->get('Location'));
+
+        $album->update(['expires_at' => now()->subMinute()]);
+
+        $this->get($signedUrl)->assertNotFound();
+    }
+
+    public function test_shared_album_download_contains_available_web_images(): void
+    {
+        Storage::fake('scaleway');
+
+        $client = Client::create([
+            'name' => 'Client Album ZIP',
+            'slug' => 'client-album-zip',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Album ZIP',
+            'slug' => 'projet-album-zip',
+            'status' => 'active',
+        ]);
+        $firstImage = Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Premiere image',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_web' => 'images/web/premiere.jpg',
+        ]);
+        $missingImage = Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Image manquante',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_web' => 'images/web/manquante.jpg',
+        ]);
+        $secondImage = Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Deuxieme image',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_web' => 'images/web/deuxieme.jpg',
+        ]);
+        $album = SharedAlbum::create([
+            'client_id' => $client->id,
+            'name' => 'Album ZIP',
+            'share_key' => 'share-zip',
+            'is_active' => true,
+            'expires_at' => now()->addDay(),
+        ]);
+        $album->images()->attach($firstImage->id, ['position' => 1]);
+        $album->images()->attach($missingImage->id, ['position' => 2]);
+        $album->images()->attach($secondImage->id, ['position' => 3]);
+
+        Storage::disk('scaleway')->put('images/web/premiere.jpg', 'premiere-content');
+        Storage::disk('scaleway')->put('images/web/deuxieme.jpg', 'deuxieme-content');
+
+        $response = $this->get(route('shared-albums.download', $album->share_key))
+            ->assertOk();
+        $zipPath = $response->baseResponse->getFile()->getPathname();
+
+        $zip = new ZipArchive;
+
+        try {
+            $this->assertTrue($zip->open($zipPath));
+            $this->assertSame(2, $zip->numFiles);
+            $this->assertSame('001-premiere-image.jpg', $zip->getNameIndex(0));
+            $this->assertSame('premiere-content', $zip->getFromIndex(0));
+            $this->assertSame('003-deuxieme-image.jpg', $zip->getNameIndex(1));
+            $this->assertSame('deuxieme-content', $zip->getFromIndex(1));
+        } finally {
+            $zip->close();
+        }
     }
 }

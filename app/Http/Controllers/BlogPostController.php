@@ -336,7 +336,7 @@ class BlogPostController extends Controller
                 'title' => $image->title,
                 'clientName' => $image->client?->name,
                 'projectName' => $image->project?->name,
-                'thumbUrl' => $this->imageUrls->thumbnailUrl($image),
+                'thumbUrl' => $this->imageUrls->temporaryThumbnailUrl($image),
                 'objectKey' => $image->object_key_web ?: $image->object_key_original,
             ]);
     }

@@ -211,7 +211,7 @@ class ProjectBucketImageSynchronizer
 
             $prefixes[$directory] = true;
 
-            if (Str::lower(basename($directory)) === 'jpg') {
+            if (in_array(Str::lower(basename($directory)), ['jpg', ImageVariantGenerator::WEB_VARIANT_DIRECTORY], true)) {
                 $parent = trim(dirname($directory), '/');
 
                 if ($parent !== '.' && $parent !== '') {
@@ -289,7 +289,7 @@ class ProjectBucketImageSynchronizer
         $filename = array_pop($segments) ?: '';
         $segments = array_values(array_filter(
             $segments,
-            fn (string $segment) => Str::lower($segment) !== 'jpg',
+            fn (string $segment) => ! in_array(Str::lower($segment), ['jpg', ImageVariantGenerator::WEB_VARIANT_DIRECTORY], true),
         ));
         $path = trim(implode('/', [...$segments, pathinfo($filename, PATHINFO_FILENAME)]), '/');
 
@@ -299,7 +299,7 @@ class ProjectBucketImageSynchronizer
     private function isWebVariantObject(string $key, string $prefix): bool
     {
         foreach (explode('/', $this->relativePath($key, $prefix)) as $segment) {
-            if (Str::lower($segment) === 'jpg') {
+            if (in_array(Str::lower($segment), ['jpg', ImageVariantGenerator::WEB_VARIANT_DIRECTORY], true)) {
                 return true;
             }
         }

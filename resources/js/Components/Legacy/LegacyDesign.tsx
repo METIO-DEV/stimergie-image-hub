@@ -414,6 +414,7 @@ export function MasonryGrid({
                                 {src ? (
                                     <LazyImage
                                         src={src}
+                                        fallbackSrc={image.imageUrl}
                                         alt={image.title}
                                         aspectRatio={
                                             image.width && image.height
@@ -829,6 +830,7 @@ export function ImageInfoSheet({
 
 export const LazyImage = memo(function LazyImage({
     src,
+    fallbackSrc,
     alt,
     className,
     aspectRatio,
@@ -836,6 +838,7 @@ export const LazyImage = memo(function LazyImage({
     onError,
 }: {
     src: string;
+    fallbackSrc?: string | null;
     alt: string;
     className?: string;
     aspectRatio?: number;
@@ -845,8 +848,15 @@ export const LazyImage = memo(function LazyImage({
     const [isLoaded, setIsLoaded] = useState(false);
     const [isInView, setIsInView] = useState(false);
     const [hasError, setHasError] = useState(false);
+    const [activeSrc, setActiveSrc] = useState(src);
     const imgRef = useRef<HTMLDivElement>(null);
     const observerRef = useRef<IntersectionObserver | null>(null);
+
+    useEffect(() => {
+        setActiveSrc(src);
+        setIsLoaded(false);
+        setHasError(false);
+    }, [src]);
 
     useEffect(() => {
         if (!imgRef.current) {
@@ -863,7 +873,7 @@ export const LazyImage = memo(function LazyImage({
                 });
             },
             {
-                rootMargin: "50px",
+                rootMargin: "600px",
                 threshold: 0.01,
             },
         );
@@ -872,6 +882,20 @@ export const LazyImage = memo(function LazyImage({
 
         return () => observerRef.current?.disconnect();
     }, []);
+
+    useEffect(() => {
+        if (!isInView || isLoaded || hasError || !fallbackSrc || activeSrc === fallbackSrc) {
+            return;
+        }
+
+        const timeout = window.setTimeout(() => {
+            setActiveSrc(fallbackSrc);
+            setIsLoaded(false);
+            setHasError(false);
+        }, 2500);
+
+        return () => window.clearTimeout(timeout);
+    }, [activeSrc, fallbackSrc, hasError, isInView, isLoaded]);
 
     return (
         <div
@@ -885,18 +909,26 @@ export const LazyImage = memo(function LazyImage({
 
             {isInView && !hasError && (
                 <img
-                    src={src}
+                    src={activeSrc}
                     alt={alt}
                     className={cn(
                         "absolute inset-0 h-full w-full object-cover transition-opacity duration-500",
                         isLoaded ? "opacity-100" : "opacity-0",
                     )}
-                    loading="lazy"
+                    loading="eager"
+                    decoding="async"
                     onLoad={() => {
                         setIsLoaded(true);
                         onLoad?.();
                     }}
                     onError={() => {
+                        if (fallbackSrc && activeSrc !== fallbackSrc) {
+                            setActiveSrc(fallbackSrc);
+                            setIsLoaded(false);
+
+                            return;
+                        }
+
                         setHasError(true);
                         onError?.();
                     }}

@@ -55,8 +55,8 @@ class ImageManagementTest extends TestCase
         Storage::disk('scaleway')->assertExists($image->object_key_web);
         Storage::disk('scaleway')->assertExists($image->object_key_hd);
         $this->assertStringStartsWith('photos/projet-image/', $image->object_key_original);
-        $this->assertStringStartsWith('photos/projet-image/thumbs/', $image->object_key_thumb);
-        $this->assertStringStartsWith('photos/projet-image/JPG/', $image->object_key_web);
+        $this->assertStringStartsWith('photos/projet-image/miniatures/', $image->object_key_thumb);
+        $this->assertStringStartsWith('photos/projet-image/web/', $image->object_key_web);
         $this->assertSame($image->object_key_original, $image->object_key_hd);
         $this->assertNotSame($image->object_key_original, $image->object_key_web);
         $this->assertNotSame($image->object_key_original, $image->object_key_thumb);

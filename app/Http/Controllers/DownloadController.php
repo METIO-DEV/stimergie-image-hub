@@ -8,6 +8,7 @@ use App\Models\DownloadJob;
 use App\Models\Image;
 use App\Support\ImageExportPresets;
 use App\Support\ImageUrlResolver;
+use App\Support\ObjectStoragePolicy;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -16,16 +17,25 @@ use Throwable;
 
 class DownloadController extends Controller
 {
-    public function __construct(private readonly ImageUrlResolver $imageUrls) {}
+    public function __construct(
+        private readonly ImageUrlResolver $imageUrls,
+        private readonly ObjectStoragePolicy $storagePolicy,
+    ) {}
 
     public function store(StoreDownloadRequest $request): RedirectResponse
     {
         $data = $request->validated();
         $variant = $data['variant'];
+        $requestedImageIds = collect($data['image_ids'])
+            ->map(fn ($imageId) => (int) $imageId)
+            ->unique()
+            ->values();
         $images = Image::query()
             ->with(['client:id,name', 'project:id,name'])
-            ->whereIn('id', $data['image_ids'])
-            ->get();
+            ->whereIn('id', $requestedImageIds)
+            ->get()
+            ->sortBy(fn (Image $image) => $requestedImageIds->search($image->id))
+            ->values();
 
         $job = DownloadJob::create([
             'user_id' => $request->user()->id,
@@ -37,7 +47,7 @@ class DownloadController extends Controller
             'storage_provider' => config('filesystems.image_disk', 'scaleway'),
             'payload' => [
                 'variant' => $variant,
-                'requested_image_ids' => $images->pluck('id')->values(),
+                'requested_image_ids' => $requestedImageIds->all(),
                 ...($variant === 'crop' ? [
                     'crop_preset' => $data['crop_preset'],
                     'crop_source' => $data['crop_source'],
@@ -83,10 +93,7 @@ class DownloadController extends Controller
             return;
         }
 
-        abort_unless(
-            $downloadJob->client && $user->hasActiveClientMembership($downloadJob->client),
-            403,
-        );
+        abort(403);
     }
 
     /**
@@ -123,7 +130,7 @@ class DownloadController extends Controller
             return Storage::disk($disk)->temporaryUrl(
                 $downloadJob->object_key,
                 $downloadJob->download_url_expires_at ?? now()->addMinutes(10),
-                ['ResponseContentType' => 'application/zip'],
+                $this->storagePolicy->temporaryResponseOptions('application/zip'),
             );
         } catch (Throwable) {
             return Storage::disk($disk)->url($downloadJob->object_key);

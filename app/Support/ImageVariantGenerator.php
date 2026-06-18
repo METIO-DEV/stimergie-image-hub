@@ -10,6 +10,12 @@ use RuntimeException;
 
 class ImageVariantGenerator
 {
+    public const WEB_VARIANT_DIRECTORY = 'web';
+
+    public const THUMBNAIL_VARIANT_DIRECTORY = 'miniatures';
+
+    public function __construct(private readonly ObjectStoragePolicy $storagePolicy) {}
+
     /**
      * @return array{disk: string, original: string, web: string, thumb: string|null, hd: string, url: string, width: int|null, height: int|null, orientation: string|null, mime_type: string|null, size_bytes: int|null, checksum: string, variants: array<string, array{object_key: string, mime_type: string|null, width: int|null, height: int|null, size_bytes: int|null}>}
      */
@@ -43,8 +49,8 @@ class ImageVariantGenerator
             ],
         ];
 
-        $variants['thumb'] = $this->putResizedVariant($disk, "{$targetPrefix}/thumbs/{$baseName}.{$extension}", $sourcePath, $mimeType, 480);
-        $variants['web'] = $this->putResizedVariant($disk, "{$targetPrefix}/JPG/{$baseName}.{$extension}", $sourcePath, $mimeType, 1600);
+        $variants['thumb'] = $this->putResizedVariant($disk, "{$targetPrefix}/".self::THUMBNAIL_VARIANT_DIRECTORY."/{$baseName}.{$extension}", $sourcePath, $mimeType, 480);
+        $variants['web'] = $this->putResizedVariant($disk, "{$targetPrefix}/".self::WEB_VARIANT_DIRECTORY."/{$baseName}.{$extension}", $sourcePath, $mimeType, 1600);
         $variants['hd'] = $variants['original'];
 
         return [
@@ -128,8 +134,8 @@ class ImageVariantGenerator
                 ],
             ];
 
-            $variants['thumb'] = $this->putResizedVariant($disk, "{$targetPrefix}/thumbs/{$image->id}.{$extension}", $sourcePath, $mimeType, 480);
-            $variants['web'] = $this->putResizedVariant($disk, "{$targetPrefix}/JPG/{$image->id}.{$extension}", $sourcePath, $mimeType, 1600);
+            $variants['thumb'] = $this->putResizedVariant($disk, "{$targetPrefix}/".self::THUMBNAIL_VARIANT_DIRECTORY."/{$image->id}.{$extension}", $sourcePath, $mimeType, 480);
+            $variants['web'] = $this->putResizedVariant($disk, "{$targetPrefix}/".self::WEB_VARIANT_DIRECTORY."/{$image->id}.{$extension}", $sourcePath, $mimeType, 1600);
             $variants['hd'] = $variants['original'];
 
             return [
@@ -234,11 +240,7 @@ class ImageVariantGenerator
             throw new RuntimeException('Impossible de lire le fichier image.');
         }
 
-        Storage::disk($disk)->put($key, $stream, [
-            'visibility' => 'public',
-            'ContentType' => $mimeType ?: 'application/octet-stream',
-            'CacheControl' => 'public, max-age=31536000, immutable',
-        ]);
+        Storage::disk($disk)->put($key, $stream, $this->storagePolicy->putOptions($key, $mimeType));
 
         if (is_resource($stream)) {
             fclose($stream);

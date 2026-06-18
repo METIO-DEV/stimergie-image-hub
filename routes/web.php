@@ -7,6 +7,7 @@ use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ClientMemberController;
 use App\Http\Controllers\DownloadController;
 use App\Http\Controllers\ImageAnalysisController;
+use App\Http\Controllers\ImageAssetController;
 use App\Http\Controllers\ImageClientShareController;
 use App\Http\Controllers\ImageController;
 use App\Http\Controllers\ImageImportController;
@@ -39,7 +40,9 @@ Route::get('/licenses', [LegalPageController::class, 'licenses'])->name('license
 Route::get('/resources', [BlogPostController::class, 'resources'])->name('blog.resources');
 Route::get('/ressources', [BlogPostController::class, 'resources'])->name('blog.resources.fr');
 Route::get('/ensemble', [BlogPostController::class, 'ensemble'])->name('blog.ensemble');
+Route::get('/image-assets/{image}', [ImageAssetController::class, 'show'])->name('images.asset');
 Route::get('/shared-albums/{shareKey}', [SharedAlbumController::class, 'show'])->name('shared-albums.show');
+Route::get('/shared-albums/{shareKey}/images/{image}/asset', [ImageAssetController::class, 'sharedAlbum'])->name('shared-albums.images.asset');
 Route::get('/shared-albums/{shareKey}/download', [SharedAlbumController::class, 'download'])->name('shared-albums.download');
 
 Route::get('/dashboard', function (Request $request) {

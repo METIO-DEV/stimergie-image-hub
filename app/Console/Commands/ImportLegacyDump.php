@@ -12,6 +12,7 @@ use App\Models\ProjectAccessPeriod;
 use App\Models\SharedAlbum;
 use App\Models\Tag;
 use App\Models\User;
+use App\Support\ObjectStoragePolicy;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -541,11 +542,10 @@ class ImportLegacyDump extends Command
 
                 $response->throw();
 
-                $disk->put($key, $response->body(), [
-                    'visibility' => 'public',
-                    'ContentType' => $response->header('Content-Type') ?: null,
-                    'CacheControl' => 'public, max-age=31536000, immutable',
-                ]);
+                $disk->put($key, $response->body(), app(ObjectStoragePolicy::class)->putOptions(
+                    $key,
+                    $response->header('Content-Type'),
+                ));
 
                 $asset['model']::query()->whereKey($asset['id'])->update([$asset['column'] => $key]);
 

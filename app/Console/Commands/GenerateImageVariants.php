@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Image;
 use App\Support\ImageVariantGenerator;
+use App\Support\ProjectImageStoragePath;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -12,7 +13,7 @@ use Throwable;
 
 #[Signature('images:generate-variants
     {--source-prefix=photos : Prefixe des originaux legacy a traiter}
-    {--target-prefix=images : Prefixe de destination des variantes}
+    {--target-prefix= : Prefixe de destination force. Par defaut, utilise le dossier du projet}
     {--project= : ID du projet a traiter}
     {--folder= : Dossier source a traiter}
     {--limit= : Limite le nombre d images traitees}
@@ -22,10 +23,10 @@ use Throwable;
 #[Description('Genere les variantes web/thumb/hd depuis les originaux deja presents dans le bucket')]
 class GenerateImageVariants extends Command
 {
-    public function handle(ImageVariantGenerator $variants): int
+    public function handle(ImageVariantGenerator $variants, ProjectImageStoragePath $storagePath): int
     {
         $sourcePrefix = trim((string) $this->option('source-prefix'), '/');
-        $targetPrefix = trim((string) $this->option('target-prefix'), '/') ?: 'images';
+        $targetPrefix = trim((string) $this->option('target-prefix'), '/');
         $projectId = $this->option('project') ? (int) $this->option('project') : null;
         $folder = trim((string) $this->option('folder'));
         $limit = $this->option('limit') ? (int) $this->option('limit') : null;
@@ -34,6 +35,7 @@ class GenerateImageVariants extends Command
         $force = (bool) $this->option('force');
 
         $query = Image::query()
+            ->with('project')
             ->whereNotNull('object_key_original')
             ->where('object_key_original', 'like', "{$sourcePrefix}/%")
             ->when($projectId, fn ($query) => $query->where('project_id', $projectId))
@@ -58,6 +60,7 @@ class GenerateImageVariants extends Command
 
         $query->lazyById()->each(function (Image $image) use (
             $variants,
+            $storagePath,
             $targetPrefix,
             $dryRun,
             &$checked,
@@ -81,13 +84,16 @@ class GenerateImageVariants extends Command
 
             if ($dryRun) {
                 $generated++;
-                $this->line("[dry-run] {$image->id} -> {$image->object_key_original}");
+                $this->line("[dry-run] {$image->id} -> {$image->object_key_original} => ".$this->targetPrefixForImage($image, $storagePath, $targetPrefix));
 
                 return;
             }
 
             try {
-                $fileData = $variants->generateFromOriginal($image, $targetPrefix);
+                $fileData = $variants->generateFromOriginal(
+                    $image,
+                    $this->targetPrefixForImage($image, $storagePath, $targetPrefix),
+                );
 
                 $image->update([
                     'storage_provider' => $fileData['disk'],
@@ -150,5 +156,18 @@ class GenerateImageVariants extends Command
                 ->orWhereColumn('object_key_web', 'object_key_original')
                 ->orWhereColumn('object_key_web', 'object_key_hd');
         });
+    }
+
+    private function targetPrefixForImage(Image $image, ProjectImageStoragePath $storagePath, string $targetPrefix): string
+    {
+        if ($targetPrefix !== '') {
+            return $targetPrefix;
+        }
+
+        if ($image->project) {
+            return $storagePath->prefix($image->project);
+        }
+
+        return trim((string) dirname((string) $image->object_key_original), '/');
     }
 }

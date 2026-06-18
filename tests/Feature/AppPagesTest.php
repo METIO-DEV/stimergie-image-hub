@@ -12,6 +12,7 @@ use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -487,8 +488,12 @@ class AppPagesTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Gallery/Index')
-                ->where('images.0.thumbUrl', '/storage/images/thumbs/source.jpg')
-                ->where('images.0.imageUrl', '/storage/images/web/source.jpg')
+                ->where('images.0.thumbUrl', fn (string $url) => str_contains($url, "/image-assets/{$image->id}")
+                    && str_contains($url, 'variant=thumb')
+                    && str_contains($url, 'signature='))
+                ->where('images.0.imageUrl', fn (string $url) => str_contains($url, "/image-assets/{$image->id}")
+                    && str_contains($url, 'variant=display')
+                    && str_contains($url, 'signature='))
                 ->where('images.0.downloadUrl', route('images.download', ['image' => $image, 'variant' => 'hd']))
                 ->where('images.0.webDownloadUrl', route('images.download', ['image' => $image, 'variant' => 'web']))
                 ->where('images.0.hdDownloadUrl', route('images.download', ['image' => $image, 'variant' => 'hd']))
@@ -532,8 +537,55 @@ class AppPagesTest extends TestCase
                 ->component('Gallery/Index')
                 ->where('images.0.id', $image->id)
                 ->where('images.0.thumbUrl', null)
-                ->where('images.0.imageUrl', '/storage/photos/projet-original-lourd/source.jpg')
+                ->where('images.0.imageUrl', fn (string $url) => str_contains($url, "/image-assets/{$image->id}")
+                    && str_contains($url, 'variant=display')
+                    && str_contains($url, 'signature='))
                 ->etc());
+    }
+
+    public function test_image_asset_route_requires_valid_temporary_signature(): void
+    {
+        Storage::fake('scaleway');
+
+        $client = Client::create([
+            'name' => 'Client Asset Signe',
+            'slug' => 'client-asset-signe',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Asset Signe',
+            'slug' => 'projet-asset-signe',
+            'status' => 'active',
+        ]);
+        $image = Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Image signee',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_web' => 'images/web/signee.jpg',
+        ]);
+        Storage::disk('scaleway')->put('images/web/signee.jpg', 'signed-content');
+        Storage::disk('scaleway')->assertExists('images/web/signee.jpg');
+
+        $this->get(route('images.asset', ['image' => $image, 'variant' => 'display']))
+            ->assertForbidden();
+
+        $response = $this->get(URL::temporarySignedRoute(
+            'images.asset',
+            now()->addMinutes(10),
+            ['image' => $image, 'variant' => 'display'],
+        ))->assertRedirect();
+
+        $this->assertStringContainsString('images/web/signee.jpg', $response->headers->get('Location'));
+        $this->assertStringContainsString('expiration=', $response->headers->get('Location'));
+
+        $this->get(URL::temporarySignedRoute(
+            'images.asset',
+            now()->subMinute(),
+            ['image' => $image, 'variant' => 'display'],
+        ))->assertForbidden();
     }
 
     public function test_gallery_applies_filters_on_server_before_pagination(): void
@@ -948,10 +1000,12 @@ class AppPagesTest extends TestCase
 
         Storage::disk('scaleway')->put('photos/client-download/source.jpg', 'image-content');
 
-        $this->actingAs($admin)
+        $response = $this->actingAs($admin)
             ->get(route('images.download', ['image' => $image, 'variant' => 'hd']))
-            ->assertOk()
-            ->assertHeader('Content-Disposition', 'attachment; filename=image-telechargeable-hd.jpg');
+            ->assertRedirect();
+
+        $this->assertStringContainsString('photos/client-download/source.jpg', $response->headers->get('Location'));
+        $this->assertStringContainsString('expiration=', $response->headers->get('Location'));
     }
 
     public function test_image_download_route_serves_requested_web_variant(): void
@@ -989,10 +1043,10 @@ class AppPagesTest extends TestCase
 
         $response = $this->actingAs($admin)
             ->get(route('images.download', ['image' => $image, 'variant' => 'web']))
-            ->assertOk()
-            ->assertHeader('Content-Disposition', 'attachment; filename=image-web-web.jpg');
+            ->assertRedirect();
 
-        $this->assertSame('web-content', $response->streamedContent());
+        $this->assertStringContainsString('images/web/source.jpg', $response->headers->get('Location'));
+        $this->assertStringContainsString('expiration=', $response->headers->get('Location'));
     }
 
     public function test_image_download_route_applies_expired_access_periods(): void

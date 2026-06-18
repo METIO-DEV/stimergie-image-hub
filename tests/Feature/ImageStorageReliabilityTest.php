@@ -9,6 +9,7 @@ use App\Models\Image;
 use App\Models\Project;
 use App\Support\ImageUrlResolver;
 use App\Support\ImageVariantGenerator;
+use App\Support\ProjectImageStoragePath;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
@@ -68,7 +69,7 @@ class ImageStorageReliabilityTest extends TestCase
         $this->assertSame('photos/ADAMANCE_GAMME FRAICHE 141124/ADAMANCE_010824_GAMME FRAICHE1050.jpg', $image->object_key_original);
         $this->assertSame('photos/ADAMANCE_GAMME FRAICHE 141124/ADAMANCE_010824_GAMME FRAICHE1050.jpg', $image->object_key_hd);
         $this->assertSame('photos/ADAMANCE_GAMME FRAICHE 141124/JPG/ADAMANCE_010824_GAMME FRAICHE1050.jpg', $image->object_key_web);
-        $this->assertSame('photos/ADAMANCE_GAMME FRAICHE 141124/JPG/ADAMANCE_010824_GAMME FRAICHE1050.jpg', $image->object_key_thumb);
+        $this->assertNull($image->object_key_thumb);
         $this->assertSame('/storage/photos/ADAMANCE_GAMME FRAICHE 141124/ADAMANCE_010824_GAMME FRAICHE1050.jpg', $image->legacy_url);
         $this->assertSame('/storage/photos/ADAMANCE_GAMME FRAICHE 141124/JPG/ADAMANCE_010824_GAMME FRAICHE1050.jpg', $image->legacy_thumbnail_url);
     }
@@ -94,7 +95,7 @@ class ImageStorageReliabilityTest extends TestCase
 
         $this->assertSame('photos/180°C_N°30_CHOCOLATIER LILLE/JPG/1J0A2106.jpg', $image->object_key_original);
         $this->assertSame('photos/180°C_N°30_CHOCOLATIER LILLE/JPG/1J0A2106.jpg', $image->object_key_web);
-        $this->assertSame('photos/180°C_N°30_CHOCOLATIER LILLE/JPG/1J0A2106.jpg', $image->object_key_thumb);
+        $this->assertNull($image->object_key_thumb);
         $this->assertSame('photos/180°C_N°30_CHOCOLATIER LILLE/JPG/1J0A2106.jpg', $image->object_key_hd);
     }
 
@@ -135,8 +136,8 @@ class ImageStorageReliabilityTest extends TestCase
 
         $image->refresh();
 
-        $this->assertSame('images/JPG/'.$image->id.'.jpg', $image->object_key_web);
-        $this->assertSame('images/thumbs/'.$image->id.'.jpg', $image->object_key_thumb);
+        $this->assertSame('photos/projet-storage/web/'.$image->id.'.jpg', $image->object_key_web);
+        $this->assertSame('photos/projet-storage/miniatures/'.$image->id.'.jpg', $image->object_key_thumb);
         $this->assertSame('photos/client/source.jpg', $image->object_key_hd);
         $this->assertSame('ready', $image->status);
 
@@ -192,12 +193,12 @@ class ImageStorageReliabilityTest extends TestCase
         $image->refresh();
         $otherImage->refresh();
 
-        $this->assertSame('images/JPG/'.$image->id.'.jpg', $image->object_key_web);
-        $this->assertSame('images/thumbs/'.$image->id.'.jpg', $image->object_key_thumb);
+        $this->assertSame('photos/projet-storage/web/'.$image->id.'.jpg', $image->object_key_web);
+        $this->assertSame('photos/projet-storage/miniatures/'.$image->id.'.jpg', $image->object_key_thumb);
         $this->assertNull($otherImage->object_key_web);
 
         Storage::disk('scaleway')->assertExists($image->object_key_web);
-        Storage::disk('scaleway')->assertMissing('images/JPG/'.$otherImage->id.'.jpg');
+        Storage::disk('scaleway')->assertMissing('photos/autre-projet/web/'.$otherImage->id.'.jpg');
     }
 
     public function test_web_variant_generation_job_processes_missing_project_variants(): void
@@ -227,18 +228,20 @@ class ImageStorageReliabilityTest extends TestCase
                 'web_variant_generation' => [
                     'project_id' => $project->id,
                     'source_prefix' => 'photos',
-                    'target_prefix' => 'images',
                     'scope_label' => $project->name,
                 ],
             ],
         ]);
 
-        (new RunMissingWebVariantGenerationJob($job->id))->handle(app(ImageVariantGenerator::class));
+        (new RunMissingWebVariantGenerationJob($job->id))->handle(
+            app(ImageVariantGenerator::class),
+            app(ProjectImageStoragePath::class),
+        );
 
         $image->refresh();
         $job->refresh();
 
-        $this->assertSame('images/JPG/'.$image->id.'.jpg', $image->object_key_web);
+        $this->assertSame('photos/projet-storage/web/'.$image->id.'.jpg', $image->object_key_web);
         $this->assertSame('completed', $job->status);
         $this->assertSame(1, $job->total_folders);
         $this->assertSame(1, $job->metadata['web_variant_generation']['totals']['generated']);

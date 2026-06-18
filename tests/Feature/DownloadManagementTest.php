@@ -11,6 +11,7 @@ use App\Models\Project;
 use App\Models\ProjectAccessPeriod;
 use App\Models\User;
 use App\Support\ImageUrlResolver;
+use App\Support\ObjectStoragePolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
@@ -139,6 +140,41 @@ class DownloadManagementTest extends TestCase
         $this->assertSame(2, $job->payload['archive_progress']['processed']);
         $this->assertSame(2, $job->payload['archive_progress']['added']);
         $this->assertSame(0, $job->payload['archive_progress']['skipped']);
+    }
+
+    public function test_grouped_download_archive_preserves_requested_image_order(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        [$client, $project] = $this->clientAndProject('ordered-downloads');
+        $firstImage = $this->image($client, $project, [
+            'title' => 'First Selected',
+            'object_key_web' => 'images/web/first-selected.jpg',
+        ]);
+        $secondImage = $this->image($client, $project, [
+            'title' => 'Second Selected',
+            'object_key_web' => 'images/web/second-selected.jpg',
+        ]);
+
+        Storage::disk('scaleway')->put('images/web/first-selected.jpg', 'first-selected');
+        Storage::disk('scaleway')->put('images/web/second-selected.jpg', 'second-selected');
+
+        $this->actingAs($admin)->post(route('downloads.store'), [
+            'variant' => 'web',
+            'image_ids' => [$secondImage->id, $firstImage->id],
+        ])->assertRedirect(route('downloads.index'));
+
+        $job = DownloadJob::query()->firstOrFail();
+
+        $this->assertSame([$secondImage->id, $firstImage->id], $job->payload['requested_image_ids']);
+        $this->assertSame([
+            '001-second-selected.jpg' => 'second-selected',
+            '002-first-selected.jpg' => 'first-selected',
+        ], $this->zipEntries($job));
     }
 
     public function test_cropped_download_archive_applies_selected_preset(): void
@@ -518,7 +554,7 @@ class DownloadManagementTest extends TestCase
         ]);
 
         try {
-            (new PrepareDownloadArchive($job->id))->handle(app(ImageUrlResolver::class));
+            (new PrepareDownloadArchive($job->id))->handle(app(ImageUrlResolver::class), app(ObjectStoragePolicy::class));
             $this->fail('The download archive job should fail when every source is missing.');
         } catch (RuntimeException $exception) {
             $this->assertSame('Aucune image telechargeable trouvee.', $exception->getMessage());
@@ -755,6 +791,40 @@ class DownloadManagementTest extends TestCase
             'object_key' => null,
             'download_url' => null,
         ]);
+    }
+
+    public function test_client_member_cannot_download_another_users_ready_archive_by_id(): void
+    {
+        Storage::fake('scaleway');
+
+        [$client] = $this->clientAndProject('private-downloads');
+        $owner = User::factory()->create(['status' => 'active']);
+        $otherUser = User::factory()->create(['status' => 'active']);
+
+        ClientMembership::create([
+            'client_id' => $client->id,
+            'user_id' => $otherUser->id,
+            'role' => 'viewer',
+            'status' => 'active',
+        ]);
+
+        $job = DownloadJob::create([
+            'user_id' => $owner->id,
+            'client_id' => $client->id,
+            'title' => 'Archive privee',
+            'status' => 'ready',
+            'is_hd' => false,
+            'image_count' => 1,
+            'storage_provider' => 'scaleway',
+            'object_key' => 'downloads/'.$owner->id.'/archive-privee.zip',
+            'download_url_expires_at' => now()->addDay(),
+        ]);
+
+        Storage::disk('scaleway')->put($job->object_key, 'zip-content');
+
+        $this->actingAs($otherUser)
+            ->get(route('downloads.show', $job))
+            ->assertForbidden();
     }
 
     public function test_failed_download_archive_can_be_retried_from_command(): void

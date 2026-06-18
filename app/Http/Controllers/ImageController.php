@@ -11,6 +11,7 @@ use App\Models\Project;
 use App\Support\ImageTagSyncer;
 use App\Support\ImageUrlResolver;
 use App\Support\ImageVariantGenerator;
+use App\Support\ObjectStoragePolicy;
 use App\Support\ProjectAccess;
 use App\Support\ProjectImageStoragePath;
 use Illuminate\Http\RedirectResponse;
@@ -18,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Throwable;
 
 class ImageController extends Controller
 {
@@ -27,6 +29,7 @@ class ImageController extends Controller
         private readonly ProjectImageStoragePath $storagePath,
         private readonly ProjectAccess $projectAccess,
         private readonly ImageTagSyncer $tagSyncer,
+        private readonly ObjectStoragePolicy $storagePolicy,
     ) {}
 
     public function bulkProject(BulkAssignImagesProjectRequest $request): RedirectResponse
@@ -164,10 +167,19 @@ class ImageController extends Controller
         abort_if(str_contains($source['objectKey'], 'legacy/'), 404);
         abort_unless(Storage::disk($source['disk'])->exists($source['objectKey']), 404);
 
-        return Storage::disk($source['disk'])->download(
-            $source['objectKey'],
-            $this->downloadFilename($image, $source['objectKey'], $variant),
-        );
+        $filename = $this->downloadFilename($image, $source['objectKey'], $variant);
+
+        try {
+            return redirect()->away(Storage::disk($source['disk'])->temporaryUrl(
+                $source['objectKey'],
+                now()->addMinutes(10),
+                $this->storagePolicy->temporaryResponseOptions(
+                    contentDisposition: 'attachment; filename="'.$filename.'"',
+                ),
+            ));
+        } catch (Throwable) {
+            return Storage::disk($source['disk'])->download($source['objectKey'], $filename);
+        }
     }
 
     private function downloadFilename(Image $image, string $objectKey, string $variant): string

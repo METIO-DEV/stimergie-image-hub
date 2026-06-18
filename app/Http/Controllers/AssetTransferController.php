@@ -195,7 +195,6 @@ class AssetTransferController extends Controller
                     'project_id' => $data['project_id'] ?? null,
                     'folder' => $data['folder'] ?? null,
                     'source_prefix' => 'photos',
-                    'target_prefix' => 'images',
                     'scope_label' => $scopeLabel,
                 ],
             ],

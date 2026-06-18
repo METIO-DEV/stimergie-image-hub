@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Client;
+use App\Support\ObjectStoragePolicy;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -16,6 +17,11 @@ class ReconcileClientLogos extends Command
         {--limit= : Nombre maximal de logos a traiter}';
 
     protected $description = 'Recupere les logos clients legacy/Supabase et les stocke dans le bucket Scaleway.';
+
+    public function __construct(private readonly ObjectStoragePolicy $storagePolicy)
+    {
+        parent::__construct();
+    }
 
     public function handle(): int
     {
@@ -53,7 +59,10 @@ class ReconcileClientLogos extends Command
                     return null;
                 }
 
-                $disk->put($objectKey, $response->body(), ['visibility' => 'public']);
+                $disk->put($objectKey, $response->body(), $this->storagePolicy->putOptions(
+                    $objectKey,
+                    $response->header('Content-Type'),
+                ));
                 $client->forceFill(['logo_object_key' => $objectKey])->save();
                 $processed++;
                 $this->line("Logo migre: {$client->id} {$client->name} -> {$objectKey}");

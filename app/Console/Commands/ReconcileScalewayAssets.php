@@ -111,7 +111,7 @@ class ReconcileScalewayAssets extends Command
                 'storage_provider' => 'scaleway',
                 'object_key_original' => $hdObjectKey,
                 'object_key_web' => $webObjectKey,
-                'object_key_thumb' => $webObjectKey,
+                'object_key_thumb' => null,
                 'object_key_hd' => $hdObjectKey,
                 'legacy_url' => $publicUrl,
                 'legacy_thumbnail_url' => $thumbnailUrl,

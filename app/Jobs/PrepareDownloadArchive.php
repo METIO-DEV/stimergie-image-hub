@@ -4,8 +4,10 @@ namespace App\Jobs;
 
 use App\Models\DownloadJob;
 use App\Models\Image;
+use App\Support\DownloadArchiveWriter;
 use App\Support\ImageExportPresets;
 use App\Support\ImageUrlResolver;
+use App\Support\ObjectStoragePolicy;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Collection;
@@ -13,7 +15,6 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
-use ZipArchive;
 
 class PrepareDownloadArchive implements ShouldQueue
 {
@@ -23,7 +24,7 @@ class PrepareDownloadArchive implements ShouldQueue
 
     public function __construct(private readonly int $downloadJobId) {}
 
-    public function handle(ImageUrlResolver $imageUrls): void
+    public function handle(ImageUrlResolver $imageUrls, ObjectStoragePolicy $storagePolicy): void
     {
         $job = DownloadJob::query()->findOrFail($this->downloadJobId);
         $variant = (string) data_get($job->payload, 'variant', 'web');
@@ -63,7 +64,7 @@ class PrepareDownloadArchive implements ShouldQueue
                 ->sortBy(fn (Image $image) => $imageIds->search($image->id))
                 ->values();
 
-            $result = $this->buildArchive($job, $images, $variant, $imageUrls, $cropPreset, $cropSource, $cropSettings);
+            $result = $this->buildArchive($job, $images, $variant, $imageUrls, $storagePolicy, $cropPreset, $cropSource, $cropSettings);
 
             $job->update([
                 'status' => 'ready',
@@ -116,23 +117,16 @@ class PrepareDownloadArchive implements ShouldQueue
         Collection $images,
         string $variant,
         ImageUrlResolver $imageUrls,
+        ObjectStoragePolicy $storagePolicy,
         string $cropPreset,
         string $cropSource,
         array $cropSettings,
     ): array {
-        $tempPath = tempnam(sys_get_temp_dir(), 'stimergie-download-');
-        $zip = new ZipArchive;
-        $zipIsOpen = false;
+        $archive = DownloadArchiveWriter::create('stimergie-download-');
         $processed = 0;
         $added = 0;
         $skipped = [];
         $cropSourceFallbacks = [];
-
-        if ($tempPath === false || $zip->open($tempPath, ZipArchive::OVERWRITE) !== true) {
-            throw new RuntimeException('Impossible de creer l archive ZIP.');
-        }
-
-        $zipIsOpen = true;
 
         try {
             foreach ($images as $image) {
@@ -161,13 +155,13 @@ class PrepareDownloadArchive implements ShouldQueue
                 $temporaryImagePaths = [];
 
                 try {
-                    $temporaryImagePath = $this->copyObjectToTemporaryFile(
-                        $source['disk'],
-                        $source['objectKey'],
-                    );
-                    $temporaryImagePaths[] = $temporaryImagePath;
-
                     if ($variant === 'crop') {
+                        $temporaryImagePath = $this->copyObjectToTemporaryFile(
+                            $source['disk'],
+                            $source['objectKey'],
+                        );
+                        $temporaryImagePaths[] = $temporaryImagePath;
+
                         $temporaryImagePath = $this->cropImage(
                             $temporaryImagePath,
                             ImageExportPresets::get($cropPreset),
@@ -178,27 +172,14 @@ class PrepareDownloadArchive implements ShouldQueue
 
                     $entryName = $this->archiveFilename($image, $variant, $added + 1, $source['objectKey'], $cropPreset);
 
-                    $addedToArchive = $zip->addFile($temporaryImagePath, $entryName);
-
-                    if (! $addedToArchive) {
-                        throw new RuntimeException("Impossible d ajouter l image {$image->id} a l archive ZIP.");
+                    if ($variant === 'crop') {
+                        $archive->addLocalFile($temporaryImagePath, $entryName);
+                    } else {
+                        $archive->addDiskFile($source['disk'], $source['objectKey'], $entryName);
                     }
 
-                    $this->storeEntryWithoutCompression($zip, $entryName);
-
-                    if (! $zip->close()) {
-                        throw new RuntimeException('Impossible de finaliser une entree de l archive ZIP.');
-                    }
-
-                    $zipIsOpen = false;
                     $added++;
                     $this->updateProgress($job, $processed, $added, $skipped, $image);
-
-                    if ($zip->open($tempPath, ZipArchive::CREATE) !== true) {
-                        throw new RuntimeException('Impossible de rouvrir l archive ZIP.');
-                    }
-
-                    $zipIsOpen = true;
                 } finally {
                     foreach ($temporaryImagePaths as $temporaryImagePath) {
                         @unlink($temporaryImagePath);
@@ -210,8 +191,7 @@ class PrepareDownloadArchive implements ShouldQueue
                 throw new RuntimeException('Aucune image telechargeable trouvee.');
             }
 
-            $this->closeArchive($zip, $zipIsOpen);
-            $zipIsOpen = false;
+            $archivePath = $archive->finish();
 
             $disk = (string) config('filesystems.image_disk', 'scaleway');
             $objectKey = sprintf(
@@ -221,21 +201,17 @@ class PrepareDownloadArchive implements ShouldQueue
                 Str::uuid(),
             );
 
-            $this->putArchive($disk, $objectKey, $tempPath);
+            $this->putArchive($disk, $objectKey, $archivePath);
 
             return [
                 'objectKey' => $objectKey,
-                'downloadUrl' => $this->temporaryDownloadUrl($disk, $objectKey, now()->addDays(7)),
+                'downloadUrl' => $this->temporaryDownloadUrl($disk, $objectKey, now()->addDays(7), $storagePolicy),
                 'imageCount' => $added,
                 'skippedImages' => $skipped,
                 'cropSourceFallbacks' => $cropSourceFallbacks,
             ];
         } finally {
-            if ($zipIsOpen) {
-                $zip->close();
-            }
-
-            @unlink($tempPath);
+            $archive->cleanup();
         }
     }
 
@@ -441,24 +417,6 @@ class PrepareDownloadArchive implements ShouldQueue
     }
 
     /**
-     * JPEG, PNG and WebP files are already compressed. Storing them as-is avoids
-     * wasting CPU on ZIP deflate and keeps large HD archives predictable.
-     */
-    private function storeEntryWithoutCompression(ZipArchive $zip, string $entryName): void
-    {
-        if (method_exists($zip, 'setCompressionName')) {
-            $zip->setCompressionName($entryName, ZipArchive::CM_STORE);
-        }
-    }
-
-    private function closeArchive(ZipArchive $zip, bool $zipIsOpen): void
-    {
-        if ($zipIsOpen && ! $zip->close()) {
-            throw new RuntimeException('Impossible de finaliser l archive ZIP.');
-        }
-    }
-
-    /**
      * @param  array<int, array{id: int, title: string}>  $skipped
      */
     private function updateProgress(DownloadJob $job, int $processed, int $added, array $skipped, Image $image): void
@@ -507,12 +465,18 @@ class PrepareDownloadArchive implements ShouldQueue
         return $settings;
     }
 
-    private function temporaryDownloadUrl(string $disk, string $objectKey, \DateTimeInterface $expiresAt): string
-    {
+    private function temporaryDownloadUrl(
+        string $disk,
+        string $objectKey,
+        \DateTimeInterface $expiresAt,
+        ObjectStoragePolicy $storagePolicy,
+    ): string {
         try {
-            return Storage::disk($disk)->temporaryUrl($objectKey, $expiresAt, [
-                'ResponseContentType' => 'application/zip',
-            ]);
+            return Storage::disk($disk)->temporaryUrl(
+                $objectKey,
+                $expiresAt,
+                $storagePolicy->temporaryResponseOptions('application/zip'),
+            );
         } catch (Throwable) {
             return Storage::disk($disk)->url($objectKey);
         }

@@ -7,6 +7,7 @@ use App\Models\Client;
 use App\Models\Import;
 use App\Models\ImportItem;
 use App\Models\Project;
+use App\Support\ObjectStoragePolicy;
 use App\Support\ProjectImageStoragePath;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,6 +20,7 @@ class ImageImportController extends Controller
 {
     public function __construct(
         private readonly ProjectImageStoragePath $storagePath,
+        private readonly ObjectStoragePolicy $storagePolicy,
     ) {}
 
     public function store(Request $request): JsonResponse
@@ -93,11 +95,7 @@ class ImageImportController extends Controller
         abort_unless($stream !== false, 422);
 
         try {
-            Storage::disk($disk)->put($objectKey, $stream, [
-                'visibility' => 'public',
-                'ContentType' => $file->getMimeType() ?: 'application/octet-stream',
-                'CacheControl' => 'public, max-age=31536000, immutable',
-            ]);
+            Storage::disk($disk)->put($objectKey, $stream, $this->storagePolicy->putOptions($objectKey, $file->getMimeType()));
         } finally {
             if (is_resource($stream)) {
                 fclose($stream);
