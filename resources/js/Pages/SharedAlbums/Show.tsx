@@ -71,9 +71,9 @@ export default function SharedAlbumShow({
                     {album.images.map((image) => (
                         <Card key={image.id} className="overflow-hidden">
                             <div className="aspect-square bg-muted">
-                                {image.thumbUrl || image.imageUrl ? (
+                                {image.imageUrl || image.thumbUrl ? (
                                     <img
-                                        src={image.thumbUrl || image.imageUrl || ""}
+                                        src={image.imageUrl || image.thumbUrl || ""}
                                         alt={image.title}
                                         className="h-full w-full object-cover"
                                     />

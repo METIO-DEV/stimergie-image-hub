@@ -364,7 +364,7 @@ export function MasonryGrid({
                             (selectedId) =>
                                 String(selectedId) === String(imageId),
                         );
-                        const src = image.thumbUrl || image.imageUrl;
+                        const src = image.imageUrl || image.thumbUrl;
                         const rightsExpired =
                             image.rightsStatus === "expired";
                         const rightsWarning =
@@ -414,7 +414,7 @@ export function MasonryGrid({
                                 {src ? (
                                     <LazyImage
                                         src={src}
-                                        fallbackSrc={image.imageUrl}
+                                        fallbackSrc={image.thumbUrl}
                                         alt={image.title}
                                         aspectRatio={
                                             image.width && image.height
@@ -845,12 +845,12 @@ export const LazyImage = memo(function LazyImage({
     onLoad?: () => void;
     onError?: () => void;
 }) {
-    const [isLoaded, setIsLoaded] = useState(false);
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const imageRef = useRef<HTMLImageElement | null>(null);
     const [isInView, setIsInView] = useState(false);
+    const [isLoaded, setIsLoaded] = useState(false);
     const [hasError, setHasError] = useState(false);
     const [activeSrc, setActiveSrc] = useState(src);
-    const imgRef = useRef<HTMLDivElement>(null);
-    const observerRef = useRef<IntersectionObserver | null>(null);
 
     useEffect(() => {
         setActiveSrc(src);
@@ -859,47 +859,81 @@ export const LazyImage = memo(function LazyImage({
     }, [src]);
 
     useEffect(() => {
-        if (!imgRef.current) {
+        const container = containerRef.current;
+
+        if (!container) {
             return;
         }
 
-        observerRef.current = new IntersectionObserver(
-            (entries) => {
-                entries.forEach((entry) => {
-                    if (entry.isIntersecting) {
+        if (!("IntersectionObserver" in window)) {
+            setIsInView(true);
+
+            return;
+        }
+
+        let timeout: number | undefined;
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry?.isIntersecting) {
+                    const top = entry.boundingClientRect.top;
+                    const immediateZone = window.innerHeight * 0.45;
+                    const delay = Math.min(
+                        900,
+                        Math.max(0, top - immediateZone),
+                    );
+
+                    timeout = window.setTimeout(() => {
                         setIsInView(true);
-                        observerRef.current?.disconnect();
-                    }
-                });
+                    }, delay);
+                    observer.disconnect();
+                }
             },
             {
-                rootMargin: "600px",
+                rootMargin: "250px",
                 threshold: 0.01,
             },
         );
 
-        observerRef.current.observe(imgRef.current);
+        observer.observe(container);
 
-        return () => observerRef.current?.disconnect();
+        return () => {
+            observer.disconnect();
+            window.clearTimeout(timeout);
+        };
     }, []);
 
     useEffect(() => {
-        if (!isInView || isLoaded || hasError || !fallbackSrc || activeSrc === fallbackSrc) {
+        if (!isInView) {
             return;
         }
 
-        const timeout = window.setTimeout(() => {
+        const image = imageRef.current;
+
+        if (!image || isLoaded || hasError || !image.complete) {
+            return;
+        }
+
+        if (image.naturalWidth > 0) {
+            setIsLoaded(true);
+            onLoad?.();
+
+            return;
+        }
+
+        if (fallbackSrc && activeSrc !== fallbackSrc) {
             setActiveSrc(fallbackSrc);
             setIsLoaded(false);
-            setHasError(false);
-        }, 2500);
 
-        return () => window.clearTimeout(timeout);
-    }, [activeSrc, fallbackSrc, hasError, isInView, isLoaded]);
+            return;
+        }
+
+        setHasError(true);
+        onError?.();
+    }, [activeSrc, fallbackSrc, hasError, isInView, isLoaded, onError, onLoad]);
 
     return (
         <div
-            ref={imgRef}
+            ref={containerRef}
             className={cn("relative overflow-hidden bg-muted", className)}
             style={aspectRatio ? { aspectRatio } : undefined}
         >
@@ -909,12 +943,10 @@ export const LazyImage = memo(function LazyImage({
 
             {isInView && !hasError && (
                 <img
+                    ref={imageRef}
                     src={activeSrc}
                     alt={alt}
-                    className={cn(
-                        "absolute inset-0 h-full w-full object-cover transition-opacity duration-500",
-                        isLoaded ? "opacity-100" : "opacity-0",
-                    )}
+                    className="absolute inset-0 h-full w-full object-cover"
                     loading="eager"
                     decoding="async"
                     onLoad={() => {
@@ -939,8 +971,8 @@ export const LazyImage = memo(function LazyImage({
                 <div className="absolute inset-0 bg-muted" aria-label={alt} />
             )}
 
-            {!isLoaded && !hasError && isInView && (
-                <div className="absolute inset-0 flex items-center justify-center">
+            {isInView && !isLoaded && !hasError && (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                     <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                 </div>
             )}

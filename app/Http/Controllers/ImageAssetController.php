@@ -48,7 +48,6 @@ class ImageAssetController extends Controller
         $source = $this->imageUrls->assetSource($image, $variant);
         abort_unless($source['objectKey'], 404);
         abort_if(str_contains($source['objectKey'], 'legacy/'), 404);
-        abort_unless(Storage::disk($source['disk'])->exists($source['objectKey']), 404);
 
         try {
             return redirect()->away(Storage::disk($source['disk'])->temporaryUrl(
