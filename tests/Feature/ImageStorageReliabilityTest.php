@@ -10,6 +10,7 @@ use App\Models\Project;
 use App\Support\ImageUrlResolver;
 use App\Support\ImageVariantGenerator;
 use App\Support\ProjectImageStoragePath;
+use App\Support\ProjectImageVariantConvention;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
@@ -138,12 +139,23 @@ class ImageStorageReliabilityTest extends TestCase
 
         $this->assertSame('photos/projet-storage/web/'.$image->id.'.jpg', $image->object_key_web);
         $this->assertSame('photos/projet-storage/miniatures/'.$image->id.'.jpg', $image->object_key_thumb);
-        $this->assertSame('photos/client/source.jpg', $image->object_key_hd);
+        $this->assertSame('photos/projet-storage/hd/'.$image->id.'.jpg', $image->object_key_original);
+        $this->assertSame('photos/projet-storage/hd/'.$image->id.'.jpg', $image->object_key_hd);
         $this->assertSame('ready', $image->status);
 
         Storage::disk('scaleway')->assertExists($image->object_key_thumb);
         Storage::disk('scaleway')->assertExists($image->object_key_web);
         Storage::disk('scaleway')->assertExists($image->object_key_hd);
+
+        $thumbSize = getimagesize(Storage::disk('scaleway')->path($image->object_key_thumb));
+        $webSize = getimagesize(Storage::disk('scaleway')->path($image->object_key_web));
+
+        $this->assertSame([640, 480], [$thumbSize[0], $thumbSize[1]]);
+        $this->assertSame([800, 600], [$webSize[0], $webSize[1]]);
+        $this->assertLessThan(
+            Storage::disk('scaleway')->size($image->object_key_web),
+            Storage::disk('scaleway')->size($image->object_key_thumb),
+        );
 
         foreach (['original', 'thumb', 'web', 'hd'] as $kind) {
             $this->assertDatabaseHas('image_variants', [
@@ -241,11 +253,305 @@ class ImageStorageReliabilityTest extends TestCase
         $image->refresh();
         $job->refresh();
 
-        $this->assertSame('photos/projet-storage/web/'.$image->id.'.jpg', $image->object_key_web);
+        $this->assertSame('photos/projet-storage/JPG/source.jpg', $image->object_key_web);
+        $this->assertSame('photos/client/source.jpg', $image->object_key_original);
+        $this->assertSame('photos/client/source.jpg', $image->object_key_hd);
         $this->assertSame('completed', $job->status);
         $this->assertSame(1, $job->total_folders);
         $this->assertSame(1, $job->metadata['web_variant_generation']['totals']['generated']);
         Storage::disk('scaleway')->assertExists($image->object_key_web);
+    }
+
+    public function test_project_photo_folder_audit_reports_risks_without_modifying_objects_or_database(): void
+    {
+        Storage::fake('scaleway');
+
+        [$client, $project] = $this->clientAndProject();
+        $image = $this->image($client, $project, [
+            'object_key_original' => 'photos/projet-storage/source.jpg',
+            'object_key_web' => 'images/JPG/source.jpg',
+            'object_key_thumb' => 'images/JPG/source.jpg',
+            'object_key_hd' => 'photos/projet-storage/source.jpg',
+        ]);
+
+        Storage::disk('scaleway')->put('photos/projet-storage/source.jpg', 'original-content');
+        Storage::disk('scaleway')->put('images/JPG/source.jpg', 'legacy-web-content');
+
+        $exitCode = Artisan::call('images:audit-project-photo-folders', ['--project' => $project->id]);
+        $output = Artisan::output();
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('Dry-run', $output);
+        $this->assertStringContainsString('web_not_conforming', $output);
+        $this->assertStringContainsString('thumb_not_conforming', $output);
+        $this->assertStringContainsString('hd_not_conforming', $output);
+        $this->assertStringContainsString('thumb_points_to_web', $output);
+        $this->assertSame('images/JPG/source.jpg', $image->fresh()->object_key_web);
+        Storage::disk('scaleway')->assertExists('images/JPG/source.jpg');
+    }
+
+    public function test_project_variant_migration_dry_run_does_not_copy_or_update_database(): void
+    {
+        Storage::fake('scaleway');
+
+        [$client, $project] = $this->clientAndProject();
+        $image = $this->legacyVariantImage($client, $project);
+
+        $exitCode = Artisan::call('images:migrate-project-variants', ['--project' => $project->id]);
+        $output = Artisan::output();
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('Dry-run', $output);
+        Storage::disk('scaleway')->assertMissing("photos/projet-storage/web/{$image->id}.jpg");
+        Storage::disk('scaleway')->assertMissing("photos/projet-storage/miniatures/{$image->id}.jpg");
+        Storage::disk('scaleway')->assertMissing("photos/projet-storage/hd/{$image->id}.jpg");
+        $this->assertSame('images/JPG/source.jpg', $image->fresh()->object_key_web);
+        $this->assertSame('images/thumbs/source.jpg', $image->fresh()->object_key_thumb);
+    }
+
+    public function test_project_variant_migration_moves_legacy_web_and_hd_without_generating_thumbnail(): void
+    {
+        Storage::fake('scaleway');
+
+        [$client, $project] = $this->clientAndProject();
+        $image = $this->legacyVariantImage($client, $project);
+
+        $this->artisan('images:migrate-project-variants', [
+            '--project' => $project->id,
+            '--execute' => true,
+        ])->assertExitCode(0);
+
+        $image->refresh();
+        $webTarget = "photos/projet-storage/web/{$image->id}.jpg";
+        $hdTarget = "photos/projet-storage/hd/{$image->id}.jpg";
+
+        $this->assertSame($webTarget, $image->object_key_web);
+        $this->assertSame('images/thumbs/source.jpg', $image->object_key_thumb);
+        $this->assertSame($hdTarget, $image->object_key_original);
+        $this->assertSame($hdTarget, $image->object_key_hd);
+        Storage::disk('scaleway')->assertExists($webTarget);
+        Storage::disk('scaleway')->assertExists($hdTarget);
+        Storage::disk('scaleway')->assertExists('photos/projet-storage/web/.keep');
+        Storage::disk('scaleway')->assertExists('photos/projet-storage/hd/.keep');
+        Storage::disk('scaleway')->assertExists('photos/projet-storage/miniatures/.keep');
+        Storage::disk('scaleway')->assertMissing('images/JPG/source.jpg');
+        Storage::disk('scaleway')->assertMissing('photos/projet-storage/source.jpg');
+        Storage::disk('scaleway')->assertExists('images/thumbs/source.jpg');
+        $this->assertDatabaseHas('image_variants', [
+            'image_id' => $image->id,
+            'kind' => 'web',
+            'object_key' => $webTarget,
+        ]);
+        $this->assertDatabaseHas('image_variants', [
+            'image_id' => $image->id,
+            'kind' => 'hd',
+            'object_key' => $hdTarget,
+        ]);
+        $this->assertDatabaseHas('image_variants', [
+            'image_id' => $image->id,
+            'kind' => 'original',
+            'object_key' => $hdTarget,
+        ]);
+
+        $this->artisan('images:migrate-project-variants', [
+            '--project' => $project->id,
+            '--execute' => true,
+        ])->assertExitCode(0);
+
+        $this->assertDatabaseCount('image_variants', 3);
+    }
+
+    public function test_project_thumbnail_generation_creates_thumbnail_without_touching_web_or_hd(): void
+    {
+        Storage::fake('scaleway');
+
+        [$client, $project] = $this->clientAndProject();
+        $file = UploadedFile::fake()->image('source.jpg', 900, 600);
+        $image = $this->image($client, $project, [
+            'object_key_original' => 'photos/projet-storage/hd/source.jpg',
+            'object_key_web' => 'photos/projet-storage/web/source.jpg',
+            'object_key_thumb' => null,
+            'object_key_hd' => 'photos/projet-storage/hd/source.jpg',
+        ]);
+        Storage::disk('scaleway')->put('photos/projet-storage/hd/source.jpg', file_get_contents($file->getRealPath()));
+        Storage::disk('scaleway')->put('photos/projet-storage/web/source.jpg', 'web-content');
+
+        $this->artisan('images:generate-project-thumbnails', [
+            '--project' => $project->id,
+        ])->assertExitCode(0);
+
+        $image->refresh();
+        $thumbTarget = "photos/projet-storage/miniatures/{$image->id}.jpg";
+
+        $this->assertSame($thumbTarget, $image->object_key_thumb);
+        $this->assertSame('photos/projet-storage/web/source.jpg', $image->object_key_web);
+        $this->assertSame('photos/projet-storage/hd/source.jpg', $image->object_key_hd);
+        Storage::disk('scaleway')->assertExists($thumbTarget);
+        $thumbSize = getimagesize(Storage::disk('scaleway')->path($thumbTarget));
+        $this->assertSame([640, 427], [$thumbSize[0], $thumbSize[1]]);
+    }
+
+    public function test_project_thumbnail_generation_regenerates_oversized_existing_thumbnail(): void
+    {
+        Storage::fake('scaleway');
+
+        [$client, $project] = $this->clientAndProject();
+        $file = UploadedFile::fake()->image('source.jpg', 900, 600);
+        $thumbTarget = 'photos/projet-storage/miniatures/source.jpg';
+        $image = $this->image($client, $project, [
+            'object_key_original' => 'photos/projet-storage/hd/source.jpg',
+            'object_key_web' => 'photos/projet-storage/web/source.jpg',
+            'object_key_thumb' => $thumbTarget,
+            'object_key_hd' => 'photos/projet-storage/hd/source.jpg',
+        ]);
+
+        Storage::disk('scaleway')->put('photos/projet-storage/hd/source.jpg', file_get_contents($file->getRealPath()));
+        Storage::disk('scaleway')->put('photos/projet-storage/web/source.jpg', 'web-content');
+        Storage::disk('scaleway')->put($thumbTarget, file_get_contents($file->getRealPath()));
+
+        $this->artisan('images:generate-project-thumbnails', [
+            '--project' => $project->id,
+        ])->assertExitCode(0);
+
+        $image->refresh();
+        $generatedThumbTarget = "photos/projet-storage/miniatures/{$image->id}.jpg";
+
+        $this->assertSame($generatedThumbTarget, $image->object_key_thumb);
+        $this->assertSame('photos/projet-storage/web/source.jpg', $image->object_key_web);
+        Storage::disk('scaleway')->assertExists($generatedThumbTarget);
+        $thumbSize = getimagesize(Storage::disk('scaleway')->path($generatedThumbTarget));
+        $this->assertSame([640, 427], [$thumbSize[0], $thumbSize[1]]);
+    }
+
+    public function test_project_variant_migration_does_not_copy_legacy_web_as_thumbnail(): void
+    {
+        Storage::fake('scaleway');
+
+        [$client, $project] = $this->clientAndProject();
+        $image = $this->image($client, $project, [
+            'object_key_original' => 'photos/projet-storage/source.jpg',
+            'object_key_web' => 'images/JPG/source.jpg',
+            'object_key_thumb' => 'images/JPG/source.jpg',
+            'object_key_hd' => 'photos/projet-storage/source.jpg',
+        ]);
+        Storage::disk('scaleway')->put('photos/projet-storage/source.jpg', 'original-content');
+        Storage::disk('scaleway')->put('images/JPG/source.jpg', 'legacy-web-content');
+
+        $this->artisan('images:migrate-project-variants', [
+            '--project' => $project->id,
+            '--execute' => true,
+        ])->assertExitCode(0);
+
+        $image->refresh();
+
+        $this->assertNull($image->object_key_thumb);
+        Storage::disk('scaleway')->assertMissing("photos/projet-storage/miniatures/{$image->id}.jpg");
+        Storage::disk('scaleway')->assertMissing('images/JPG/source.jpg');
+    }
+
+    public function test_project_variant_migration_blocks_target_referenced_by_another_image(): void
+    {
+        Storage::fake('scaleway');
+
+        [$client, $project] = $this->clientAndProject();
+        $image = $this->legacyVariantImage($client, $project);
+        $conflictingTarget = "photos/projet-storage/web/{$image->id}.jpg";
+        $this->image($client, $project, [
+            'title' => 'Image conflit',
+            'object_key_original' => 'photos/projet-storage/other.jpg',
+            'object_key_web' => $conflictingTarget,
+            'object_key_hd' => 'photos/projet-storage/other.jpg',
+        ]);
+
+        $exitCode = Artisan::call('images:migrate-project-variants', [
+            '--project' => $project->id,
+            '--execute' => true,
+        ]);
+        $output = Artisan::output();
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('[conflict]', $output);
+        $this->assertSame('images/JPG/source.jpg', $image->fresh()->object_key_web);
+    }
+
+    public function test_project_variant_migration_reports_missing_legacy_source_without_updating_database(): void
+    {
+        Storage::fake('scaleway');
+
+        [$client, $project] = $this->clientAndProject();
+        $image = $this->image($client, $project, [
+            'object_key_original' => 'photos/projet-storage/source.jpg',
+            'object_key_web' => 'images/JPG/missing.jpg',
+            'object_key_hd' => 'photos/projet-storage/source.jpg',
+        ]);
+        Storage::disk('scaleway')->put('photos/projet-storage/source.jpg', 'original-content');
+
+        $exitCode = Artisan::call('images:migrate-project-variants', [
+            '--project' => $project->id,
+            '--execute' => true,
+        ]);
+        $output = Artisan::output();
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('[missing]', $output);
+        $this->assertSame('images/JPG/missing.jpg', $image->fresh()->object_key_web);
+    }
+
+    public function test_variant_generation_creates_only_missing_project_variant_when_web_is_already_conforming(): void
+    {
+        Storage::fake('scaleway');
+
+        [$client, $project] = $this->clientAndProject();
+        $file = UploadedFile::fake()->image('source.jpg', 1000, 700);
+        Storage::disk('scaleway')->put('photos/projet-storage/source.jpg', file_get_contents($file->getRealPath()));
+
+        $image = $this->image($client, $project, [
+            'object_key_original' => 'photos/projet-storage/source.jpg',
+            'object_key_hd' => 'photos/projet-storage/source.jpg',
+        ]);
+        $webTarget = "photos/projet-storage/web/{$image->id}.jpg";
+        Storage::disk('scaleway')->put($webTarget, 'existing-web-content');
+        $image->update(['object_key_web' => $webTarget]);
+
+        $this->artisan('images:generate-variants', ['--project' => $project->id])
+            ->assertExitCode(0);
+
+        $image->refresh();
+
+        $this->assertSame($webTarget, $image->object_key_web);
+        $this->assertSame('existing-web-content', Storage::disk('scaleway')->get($webTarget));
+        $this->assertSame("photos/projet-storage/miniatures/{$image->id}.jpg", $image->object_key_thumb);
+        $this->assertSame("photos/projet-storage/hd/{$image->id}.jpg", $image->object_key_original);
+        $this->assertSame("photos/projet-storage/hd/{$image->id}.jpg", $image->object_key_hd);
+        Storage::disk('scaleway')->assertExists($image->object_key_thumb);
+        Storage::disk('scaleway')->assertExists($image->object_key_hd);
+    }
+
+    public function test_global_images_prefix_decommission_is_blocked_until_database_references_are_removed(): void
+    {
+        Storage::fake('scaleway');
+
+        [$client, $project] = $this->clientAndProject();
+        $image = $this->image($client, $project, [
+            'object_key_original' => 'photos/projet-storage/source.jpg',
+            'object_key_web' => 'images/web/source.jpg',
+            'object_key_hd' => 'photos/projet-storage/source.jpg',
+        ]);
+        Storage::disk('scaleway')->put('images/web/source.jpg', 'legacy-web-content');
+
+        $blockedExitCode = Artisan::call('images:decommission-global-prefix', ['--execute' => true]);
+        $blockedOutput = Artisan::output();
+
+        $this->assertSame(1, $blockedExitCode);
+        $this->assertStringContainsString('Suppression bloquee', $blockedOutput);
+        Storage::disk('scaleway')->assertExists('images/web/source.jpg');
+
+        $image->update(['object_key_web' => 'photos/projet-storage/web/source.jpg']);
+
+        $this->artisan('images:decommission-global-prefix', ['--execute' => true])
+            ->assertExitCode(0);
+
+        Storage::disk('scaleway')->assertMissing('images/web/source.jpg');
     }
 
     public function test_image_url_resolver_never_uses_legacy_fallback(): void
@@ -296,5 +602,21 @@ class ImageStorageReliabilityTest extends TestCase
             'object_key_thumb' => $overrides['object_key_thumb'] ?? null,
             'object_key_hd' => $overrides['object_key_hd'] ?? null,
         ]);
+    }
+
+    private function legacyVariantImage(Client $client, Project $project): Image
+    {
+        $image = $this->image($client, $project, [
+            'object_key_original' => 'photos/projet-storage/source.jpg',
+            'object_key_web' => 'images/JPG/source.jpg',
+            'object_key_thumb' => 'images/thumbs/source.jpg',
+            'object_key_hd' => 'photos/projet-storage/source.jpg',
+        ]);
+
+        Storage::disk('scaleway')->put('photos/projet-storage/source.jpg', 'original-content');
+        Storage::disk('scaleway')->put('images/JPG/source.jpg', 'legacy-web-content');
+        Storage::disk('scaleway')->put('images/thumbs/source.jpg', 'legacy-thumb-content');
+
+        return $image;
     }
 }

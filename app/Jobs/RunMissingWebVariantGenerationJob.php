@@ -10,6 +10,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Throwable;
 
 class RunMissingWebVariantGenerationJob implements ShouldQueue
@@ -22,8 +23,10 @@ class RunMissingWebVariantGenerationJob implements ShouldQueue
 
     public function __construct(public readonly int $variantJobId) {}
 
-    public function handle(ImageVariantGenerator $variants, ProjectImageStoragePath $storagePath): void
-    {
+    public function handle(
+        ImageVariantGenerator $variants,
+        ProjectImageStoragePath $storagePath,
+    ): void {
         $job = AssetTransferJob::find($this->variantJobId);
 
         if (! $job || ! $job->isActive()) {
@@ -76,6 +79,12 @@ class RunMissingWebVariantGenerationJob implements ShouldQueue
                     default => 'scaleway',
                 };
 
+                if (! $this->needsWebVariant($image, $disk)) {
+                    $this->storeTotals($job, $checked, $generated, $missingOriginals, $failed);
+
+                    return true;
+                }
+
                 if (! $image->object_key_original || ! Storage::disk($disk)->exists($image->object_key_original)) {
                     $missingOriginals++;
                     $this->appendLog($job, "Original absent: {$image->object_key_original} ({$image->title})".PHP_EOL);
@@ -88,13 +97,15 @@ class RunMissingWebVariantGenerationJob implements ShouldQueue
                     $fileData = $variants->generateFromOriginal(
                         $image,
                         $this->targetPrefixForImage($image, $storagePath, $targetPrefix),
+                        generateWeb: true,
+                        generateThumb: false,
+                        generateHd: false,
+                        webTargetKey: $this->webTargetKey($image, $storagePath, $targetPrefix),
                     );
 
                     $image->update([
                         'storage_provider' => $fileData['disk'],
                         'object_key_web' => $fileData['web'],
-                        'object_key_thumb' => $fileData['thumb'] ?? null,
-                        'object_key_hd' => $fileData['hd'],
                         'width' => $image->width ?: $fileData['width'],
                         'height' => $image->height ?: $fileData['height'],
                         'orientation' => $image->orientation ?: $fileData['orientation'],
@@ -106,10 +117,12 @@ class RunMissingWebVariantGenerationJob implements ShouldQueue
                         'processing_error' => null,
                     ]);
 
-                    $variants->syncImageVariants($image, $fileData['variants']);
+                    if (isset($fileData['variants']['web'])) {
+                        $variants->syncImageVariants($image, ['web' => $fileData['variants']['web']]);
+                    }
                     $generated++;
 
-                    $this->appendLog($job, "Variante web générée: #{$image->id} {$image->title}".PHP_EOL);
+                    $this->appendLog($job, "JPG web généré: #{$image->id} {$image->title} -> {$fileData['web']}".PHP_EOL);
                 } catch (Throwable $exception) {
                     $failed++;
                     $failedDetails = $job->failed_folder_details ?? [];
@@ -177,14 +190,9 @@ class RunMissingWebVariantGenerationJob implements ShouldQueue
             ->with('project')
             ->whereNotNull('object_key_original')
             ->where('object_key_original', 'like', "{$sourcePrefix}/%")
+            ->where('object_key_original', 'not like', '%/JPG/%')
             ->when($projectId, fn ($query) => $query->where('project_id', $projectId))
             ->when($folder !== '', fn ($query) => $this->constrainFolder($query, $sourcePrefix, $folder))
-            ->where(function ($query): void {
-                $query
-                    ->whereNull('object_key_web')
-                    ->orWhereColumn('object_key_web', 'object_key_original')
-                    ->orWhereColumn('object_key_web', 'object_key_hd');
-            })
             ->orderBy('id');
     }
 
@@ -214,6 +222,49 @@ class RunMissingWebVariantGenerationJob implements ShouldQueue
         }
 
         return trim((string) dirname((string) $image->object_key_original), '/');
+    }
+
+    private function needsWebVariant(Image $image, string $disk): bool
+    {
+        if (is_string($image->object_key_original) && str_contains($image->object_key_original, '/JPG/')) {
+            return false;
+        }
+
+        if (! is_string($image->object_key_web) || trim($image->object_key_web) === '') {
+            return true;
+        }
+
+        if ($image->object_key_web === $image->object_key_original || $image->object_key_web === $image->object_key_hd) {
+            return true;
+        }
+
+        if (! Str::startsWith($image->object_key_web, 'photos/') || ! str_contains($image->object_key_web, '/JPG/')) {
+            return true;
+        }
+
+        return ! Storage::disk($disk)->exists($image->object_key_web);
+    }
+
+    private function webTargetKey(Image $image, ProjectImageStoragePath $storagePath, string $targetPrefix): string
+    {
+        $prefix = $this->targetPrefixForImage($image, $storagePath, $targetPrefix);
+        $sourceKey = trim((string) $image->object_key_original, '/');
+        $relative = Str::startsWith($sourceKey, rtrim($prefix, '/').'/')
+            ? Str::after($sourceKey, rtrim($prefix, '/').'/')
+            : basename($sourceKey);
+        $relative = $this->stripVariantDirectory($relative);
+
+        return rtrim($prefix, '/').'/JPG/'.ltrim($relative, '/');
+    }
+
+    private function stripVariantDirectory(string $relative): string
+    {
+        $segments = collect(explode('/', trim($relative, '/')))
+            ->reject(fn (string $segment): bool => in_array(Str::lower($segment), ['jpg', 'web', 'miniatures', 'hd'], true))
+            ->values()
+            ->all();
+
+        return implode('/', $segments) ?: basename($relative);
     }
 
     private function storeTotals(AssetTransferJob $job, int $checked, int $generated, int $missingOriginals, int $failed): void

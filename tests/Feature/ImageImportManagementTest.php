@@ -202,7 +202,7 @@ class ImageImportManagementTest extends TestCase
         $import->refresh();
 
         $this->assertSame('ready', $image->status);
-        $this->assertSame($objectKey, $image->object_key_original);
+        $this->assertStringStartsWith('photos/projet-import/hd/', $image->object_key_original);
         $this->assertStringStartsWith('photos/projet-import/web/', $image->object_key_web);
         $this->assertStringStartsWith('photos/projet-import/miniatures/', $image->object_key_thumb);
         $this->assertSame($image->object_key_original, $image->object_key_hd);

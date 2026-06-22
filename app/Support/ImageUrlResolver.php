@@ -15,14 +15,8 @@ class ImageUrlResolver
     {
         $thumbnailKey = $this->variantObjectKey($image, 'thumb') ?: $image->object_key_thumb;
 
-        if ($thumbnailKey) {
+        if ($thumbnailKey && $this->isStandaloneThumbnailKey($image, $thumbnailKey)) {
             return $this->url($image->storage_provider, $thumbnailKey);
-        }
-
-        $webKey = $this->variantObjectKey($image, 'web') ?: $image->object_key_web;
-
-        if ($webKey && ! $this->isOriginalKey($image, $webKey)) {
-            return $this->url($image->storage_provider, $webKey);
         }
 
         return null;
@@ -127,13 +121,24 @@ class ImageUrlResolver
     {
         $thumbnailKey = $this->variantObjectKey($image, 'thumb') ?: $image->object_key_thumb;
 
-        if ($thumbnailKey) {
+        if ($thumbnailKey && $this->isStandaloneThumbnailKey($image, $thumbnailKey)) {
             return $thumbnailKey;
         }
 
-        $webKey = $this->variantObjectKey($image, 'web') ?: $image->object_key_web;
+        return null;
+    }
 
-        return $webKey && ! $this->isOriginalKey($image, $webKey) ? $webKey : null;
+    private function isStandaloneThumbnailKey(Image $image, string $objectKey): bool
+    {
+        if ($this->isOriginalKey($image, $objectKey) || $objectKey === $image->object_key_web) {
+            return false;
+        }
+
+        $directory = '/'.strtolower(trim(dirname($objectKey), '/')).'/';
+
+        return str_contains($directory, '/miniatures/')
+            || str_contains($directory, '/thumbs/')
+            || str_contains($directory, '/images/thumbs/');
     }
 
     private function displayObjectKey(Image $image): ?string

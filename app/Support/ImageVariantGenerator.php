@@ -14,6 +14,16 @@ class ImageVariantGenerator
 
     public const THUMBNAIL_VARIANT_DIRECTORY = 'miniatures';
 
+    public const HD_VARIANT_DIRECTORY = 'hd';
+
+    private const WEB_MAX_SIZE = 1600;
+
+    private const WEB_QUALITY = 82;
+
+    public const THUMBNAIL_MAX_SIZE = 640;
+
+    private const THUMBNAIL_QUALITY = 76;
+
     public function __construct(private readonly ObjectStoragePolicy $storagePolicy) {}
 
     /**
@@ -35,7 +45,7 @@ class ImageVariantGenerator
         $width = $size ? $size[0] : null;
         $height = $size ? $size[1] : null;
         $targetPrefix = trim($targetPrefix, '/') ?: 'images';
-        $originalKey = "{$targetPrefix}/{$baseName}.{$extension}";
+        $originalKey = "{$targetPrefix}/".self::HD_VARIANT_DIRECTORY."/{$baseName}.{$extension}";
 
         $this->putFile($disk, $originalKey, $sourcePath, $mimeType);
 
@@ -49,8 +59,8 @@ class ImageVariantGenerator
             ],
         ];
 
-        $variants['thumb'] = $this->putResizedVariant($disk, "{$targetPrefix}/".self::THUMBNAIL_VARIANT_DIRECTORY."/{$baseName}.{$extension}", $sourcePath, $mimeType, 480);
-        $variants['web'] = $this->putResizedVariant($disk, "{$targetPrefix}/".self::WEB_VARIANT_DIRECTORY."/{$baseName}.{$extension}", $sourcePath, $mimeType, 1600);
+        $variants['thumb'] = $this->putResizedVariant($disk, "{$targetPrefix}/".self::THUMBNAIL_VARIANT_DIRECTORY."/{$baseName}.{$extension}", $sourcePath, $mimeType, self::THUMBNAIL_MAX_SIZE, self::THUMBNAIL_QUALITY);
+        $variants['web'] = $this->putResizedVariant($disk, "{$targetPrefix}/".self::WEB_VARIANT_DIRECTORY."/{$baseName}.{$extension}", $sourcePath, $mimeType, self::WEB_MAX_SIZE, self::WEB_QUALITY);
         $variants['hd'] = $variants['original'];
 
         return [
@@ -73,8 +83,16 @@ class ImageVariantGenerator
     /**
      * @return array{disk: string, original: string, web: string, thumb: string|null, hd: string, width: int|null, height: int|null, orientation: string|null, mime_type: string|null, size_bytes: int|null, checksum: string, variants: array<string, array{object_key: string, mime_type: string|null, width: int|null, height: int|null, size_bytes: int|null}>}
      */
-    public function generateFromOriginal(Image $image, string $targetPrefix = 'images'): array
-    {
+    public function generateFromOriginal(
+        Image $image,
+        string $targetPrefix = 'images',
+        bool $generateWeb = true,
+        bool $generateThumb = true,
+        bool $generateHd = true,
+        ?string $webTargetKey = null,
+        ?string $thumbTargetKey = null,
+        ?string $hdTargetKey = null,
+    ): array {
         if (! $image->object_key_original) {
             throw new RuntimeException("Image {$image->id} sans object_key_original.");
         }
@@ -124,25 +142,64 @@ class ImageVariantGenerator
             $height = $size ? $size[1] : null;
             $targetPrefix = trim($targetPrefix, '/');
 
-            $variants = [
-                'original' => [
-                    'object_key' => $sourceKey,
-                    'mime_type' => $mimeType,
-                    'width' => $width,
-                    'height' => $height,
-                    'size_bytes' => filesize($sourcePath) ?: null,
-                ],
+            $originalVariant = [
+                'object_key' => $sourceKey,
+                'mime_type' => $mimeType,
+                'width' => $width,
+                'height' => $height,
+                'size_bytes' => filesize($sourcePath) ?: null,
             ];
 
-            $variants['thumb'] = $this->putResizedVariant($disk, "{$targetPrefix}/".self::THUMBNAIL_VARIANT_DIRECTORY."/{$image->id}.{$extension}", $sourcePath, $mimeType, 480);
-            $variants['web'] = $this->putResizedVariant($disk, "{$targetPrefix}/".self::WEB_VARIANT_DIRECTORY."/{$image->id}.{$extension}", $sourcePath, $mimeType, 1600);
-            $variants['hd'] = $variants['original'];
+            $variants = [
+                'original' => $originalVariant,
+            ];
+
+            if ($generateThumb) {
+                $variants['thumb'] = $this->putResizedVariant(
+                    $disk,
+                    $thumbTargetKey ?: "{$targetPrefix}/".self::THUMBNAIL_VARIANT_DIRECTORY."/{$image->id}.{$extension}",
+                    $sourcePath,
+                    $mimeType,
+                    self::THUMBNAIL_MAX_SIZE,
+                    self::THUMBNAIL_QUALITY,
+                );
+            } elseif ($image->object_key_thumb) {
+                $variants['thumb'] = $this->existingVariantData($image->object_key_thumb, $mimeType);
+            }
+
+            if ($generateWeb) {
+                $variants['web'] = $this->putResizedVariant(
+                    $disk,
+                    $webTargetKey ?: "{$targetPrefix}/".self::WEB_VARIANT_DIRECTORY."/{$image->id}.{$extension}",
+                    $sourcePath,
+                    $mimeType,
+                    self::WEB_MAX_SIZE,
+                    self::WEB_QUALITY,
+                );
+            } elseif ($image->object_key_web) {
+                $variants['web'] = $this->existingVariantData($image->object_key_web, $mimeType, $image->width, $image->height);
+            }
+
+            if ($generateHd) {
+                $hdKey = $hdTargetKey ?: "{$targetPrefix}/".self::HD_VARIANT_DIRECTORY."/{$image->id}.{$extension}";
+                $this->putFile($disk, $hdKey, $sourcePath, $mimeType);
+
+                $variants['hd'] = [
+                    ...$originalVariant,
+                    'object_key' => $hdKey,
+                ];
+                $variants['original'] = $variants['hd'];
+            } else {
+                $variants['hd'] = $image->object_key_hd
+                    ? $this->existingVariantData($image->object_key_hd, $mimeType, $width, $height)
+                    : $variants['original'];
+            }
 
             return [
                 'disk' => $disk,
                 'original' => $variants['original']['object_key'],
-                'web' => $variants['web']['object_key'],
-                'thumb' => $variants['thumb']['object_key'],
+                'web' => $variants['web']['object_key'] ?? $image->object_key_web,
+                'thumb' => $variants['thumb']['object_key'] ?? $image->object_key_thumb,
                 'hd' => $variants['hd']['object_key'],
                 'width' => $width,
                 'height' => $height,
@@ -176,7 +233,7 @@ class ImageVariantGenerator
         }
     }
 
-    private function putResizedVariant(string $disk, string $key, string $sourcePath, ?string $mimeType, int $maxSize): array
+    private function putResizedVariant(string $disk, string $key, string $sourcePath, ?string $mimeType, int $maxSize, int $quality): array
     {
         $source = $this->createImageResource($sourcePath, $mimeType);
 
@@ -215,7 +272,7 @@ class ImageVariantGenerator
             throw new RuntimeException('Impossible de creer une variante image.');
         }
 
-        $this->writeImageResource($target, $tempPath, $mimeType);
+        $this->writeImageResource($target, $tempPath, $mimeType, $quality);
         $this->putFile($disk, $key, $tempPath, $mimeType);
         $sizeBytes = filesize($tempPath) ?: null;
 
@@ -229,6 +286,21 @@ class ImageVariantGenerator
             'width' => $targetWidth,
             'height' => $targetHeight,
             'size_bytes' => $sizeBytes,
+        ];
+    }
+
+    private function existingVariantData(
+        string $objectKey,
+        ?string $mimeType,
+        ?int $width = null,
+        ?int $height = null,
+    ): array {
+        return [
+            'object_key' => $objectKey,
+            'mime_type' => $mimeType,
+            'width' => $width,
+            'height' => $height,
+            'size_bytes' => null,
         ];
     }
 
@@ -257,12 +329,12 @@ class ImageVariantGenerator
         };
     }
 
-    private function writeImageResource(\GdImage $image, string $targetPath, ?string $mimeType): void
+    private function writeImageResource(\GdImage $image, string $targetPath, ?string $mimeType, int $quality): void
     {
         match ($mimeType) {
-            'image/png' => imagepng($image, $targetPath, 6),
-            'image/webp' => function_exists('imagewebp') ? imagewebp($image, $targetPath, 82) : imagejpeg($image, $targetPath, 82),
-            default => imagejpeg($image, $targetPath, 82),
+            'image/png' => imagepng($image, $targetPath, $quality <= self::THUMBNAIL_QUALITY ? 8 : 6),
+            'image/webp' => function_exists('imagewebp') ? imagewebp($image, $targetPath, $quality) : imagejpeg($image, $targetPath, $quality),
+            default => imagejpeg($image, $targetPath, $quality),
         };
     }
 

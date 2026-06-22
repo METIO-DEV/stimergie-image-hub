@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Image;
 use App\Support\ImageVariantGenerator;
 use App\Support\ProjectImageStoragePath;
+use App\Support\ProjectImageVariantConvention;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -23,8 +24,11 @@ use Throwable;
 #[Description('Genere les variantes web/thumb/hd depuis les originaux deja presents dans le bucket')]
 class GenerateImageVariants extends Command
 {
-    public function handle(ImageVariantGenerator $variants, ProjectImageStoragePath $storagePath): int
-    {
+    public function handle(
+        ImageVariantGenerator $variants,
+        ProjectImageStoragePath $storagePath,
+        ProjectImageVariantConvention $convention,
+    ): int {
         $sourcePrefix = trim((string) $this->option('source-prefix'), '/');
         $targetPrefix = trim((string) $this->option('target-prefix'), '/');
         $projectId = $this->option('project') ? (int) $this->option('project') : null;
@@ -40,21 +44,12 @@ class GenerateImageVariants extends Command
             ->where('object_key_original', 'like', "{$sourcePrefix}/%")
             ->when($projectId, fn ($query) => $query->where('project_id', $projectId))
             ->when($folder !== '', fn ($query) => $this->constrainFolder($query, $sourcePrefix, $folder))
-            ->when($missingWebOnly, fn ($query) => $this->constrainMissingUsableWeb($query))
-            ->when(! $force && ! $missingWebOnly, fn ($query) => $query->where(function ($query) {
-                $query
-                    ->whereNull('object_key_web')
-                    ->orWhereNull('object_key_thumb')
-                    ->orWhereNull('object_key_hd');
-            }))
+            ->when(! $force, fn ($query) => $this->constrainMissingProjectVariants($query, $missingWebOnly))
             ->orderBy('id');
-
-        if ($limit) {
-            $query->limit($limit);
-        }
 
         $checked = 0;
         $generated = 0;
+        $alreadyConforming = 0;
         $missingOriginals = 0;
         $failed = 0;
 
@@ -63,11 +58,20 @@ class GenerateImageVariants extends Command
             $storagePath,
             $targetPrefix,
             $dryRun,
+            $force,
+            $missingWebOnly,
+            $convention,
+            $limit,
             &$checked,
             &$generated,
+            &$alreadyConforming,
             &$missingOriginals,
             &$failed,
-        ): void {
+        ): bool {
+            if ($limit !== null && $checked >= $limit) {
+                return false;
+            }
+
             $checked++;
             $disk = match ($image->storage_provider) {
                 'public' => 'public',
@@ -75,30 +79,43 @@ class GenerateImageVariants extends Command
                 default => 'scaleway',
             };
 
+            $generationPlan = $this->generationPlan($image, $convention, $disk, $missingWebOnly, $force);
+
+            if (! $generationPlan['web'] && ! $generationPlan['thumb'] && ! $generationPlan['hd']) {
+                $alreadyConforming++;
+
+                return true;
+            }
+
             if (! $image->object_key_original || ! Storage::disk($disk)->exists($image->object_key_original)) {
                 $missingOriginals++;
                 $this->warn("Original absent: {$image->object_key_original} ({$image->title})");
 
-                return;
+                return true;
             }
 
             if ($dryRun) {
                 $generated++;
-                $this->line("[dry-run] {$image->id} -> {$image->object_key_original} => ".$this->targetPrefixForImage($image, $storagePath, $targetPrefix));
+                $plannedKinds = implode('+', array_keys(array_filter($generationPlan)));
+                $this->line("[dry-run] {$image->id} {$plannedKinds} -> {$image->object_key_original} => ".$this->targetPrefixForImage($image, $storagePath, $targetPrefix));
 
-                return;
+                return true;
             }
 
             try {
                 $fileData = $variants->generateFromOriginal(
                     $image,
                     $this->targetPrefixForImage($image, $storagePath, $targetPrefix),
+                    $generationPlan['web'],
+                    $generationPlan['thumb'],
+                    $generationPlan['hd'],
                 );
 
                 $image->update([
                     'storage_provider' => $fileData['disk'],
                     'object_key_web' => $fileData['web'],
                     'object_key_thumb' => $fileData['thumb'] ?? null,
+                    'object_key_original' => $fileData['original'],
                     'object_key_hd' => $fileData['hd'],
                     'width' => $image->width ?: $fileData['width'],
                     'height' => $image->height ?: $fileData['height'],
@@ -122,11 +139,14 @@ class GenerateImageVariants extends Command
                 $image->update(['processing_error' => $exception->getMessage()]);
                 $this->error("Echec image {$image->id}: {$exception->getMessage()}");
             }
+
+            return true;
         });
 
         $this->newLine();
         $this->components->twoColumnDetail('Images verifiees', (string) $checked);
         $this->components->twoColumnDetail($dryRun ? 'Images a generer' : 'Images generees', (string) $generated);
+        $this->components->twoColumnDetail('Images deja conformes', (string) $alreadyConforming);
         $this->components->twoColumnDetail('Originaux absents', (string) $missingOriginals);
         $this->components->twoColumnDetail('Echecs', (string) $failed);
 
@@ -148,14 +168,66 @@ class GenerateImageVariants extends Command
         });
     }
 
-    private function constrainMissingUsableWeb($query): void
+    private function constrainMissingProjectVariants($query, bool $missingWebOnly): void
     {
-        $query->where(function ($query): void {
-            $query
+        $query->where(function ($query) use ($missingWebOnly): void {
+            $query = $query
                 ->whereNull('object_key_web')
                 ->orWhereColumn('object_key_web', 'object_key_original')
-                ->orWhereColumn('object_key_web', 'object_key_hd');
+                ->orWhereColumn('object_key_web', 'object_key_hd')
+                ->orWhere('object_key_web', 'like', 'images/%')
+                ->orWhere('object_key_web', 'like', '%/JPG/%')
+                ->orWhere('object_key_web', 'not like', 'photos/%/web/%');
+
+            if (! $missingWebOnly) {
+                $query
+                    ->orWhereNull('object_key_thumb')
+                    ->orWhereColumn('object_key_thumb', 'object_key_web')
+                    ->orWhereColumn('object_key_thumb', 'object_key_original')
+                    ->orWhereColumn('object_key_thumb', 'object_key_hd')
+                    ->orWhere('object_key_thumb', 'like', 'images/%')
+                    ->orWhere('object_key_thumb', 'like', '%/JPG/%')
+                    ->orWhere('object_key_thumb', 'not like', 'photos/%/miniatures/%')
+                    ->orWhereNull('object_key_hd')
+                    ->orWhere('object_key_hd', 'not like', 'photos/%/hd/%')
+                    ->orWhereNull('object_key_original')
+                    ->orWhere('object_key_original', 'not like', 'photos/%/hd/%');
+            }
         });
+    }
+
+    /**
+     * @return array{web: bool, thumb: bool, hd: bool}
+     */
+    private function generationPlan(
+        Image $image,
+        ProjectImageVariantConvention $convention,
+        string $disk,
+        bool $missingWebOnly,
+        bool $force,
+    ): array {
+        $generateWeb = $force
+            || ! $convention->isConformingWebKey($image, $image->object_key_web)
+            || ($image->object_key_web && ! Storage::disk($disk)->exists($image->object_key_web));
+
+        $thumbAllowed = ! $missingWebOnly || $generateWeb || $force;
+        $generateThumb = $thumbAllowed && (
+            $force
+            || ! $convention->isConformingThumbnailKey($image, $image->object_key_thumb)
+            || ($image->object_key_thumb && ! Storage::disk($disk)->exists($image->object_key_thumb))
+        );
+        $generateHd = ! $missingWebOnly && (
+            $force
+            || ! $convention->isConformingHdKey($image, $image->object_key_hd)
+            || ! $convention->isConformingHdKey($image, $image->object_key_original)
+            || ($image->object_key_hd && ! Storage::disk($disk)->exists($image->object_key_hd))
+        );
+
+        return [
+            'web' => $generateWeb,
+            'thumb' => $generateThumb,
+            'hd' => $generateHd,
+        ];
     }
 
     private function targetPrefixForImage(Image $image, ProjectImageStoragePath $storagePath, string $targetPrefix): string
