@@ -56,13 +56,16 @@ export default function Authenticated({
     basketAction?: ReactNode;
     navActions?: ReactNode;
 }>) {
-    const { abilities, user } = usePage().props.auth;
-    const { flash } = usePage().props;
+    const page = usePage();
+    const { abilities, user } = page.props.auth;
+    const { flash } = page.props;
     const [mobileOpen, setMobileOpen] = useState(false);
     const [contactOpen, setContactOpen] = useState(false);
     const [basketCount, setBasketCount] = useState(0);
 
     const isSuperAdmin = abilities.isSuperAdmin;
+    const currentSearch = page.url.split("?")[1] ?? "";
+    const currentTab = new URLSearchParams(currentSearch).get("tab");
     const initials = useMemo(
         () => {
             if (!user) {
@@ -180,7 +183,17 @@ export default function Authenticated({
             href: route("images.index"),
             label: "Gestion des images",
             icon: Image,
-            active: route().current("images.index"),
+            active:
+                route().current("images.index") &&
+                currentTab !== "rights-extensions",
+        },
+        {
+            href: route("images.index", { tab: "rights-extensions" }),
+            label: "Gestion des demandes de cession",
+            icon: Shield,
+            active:
+                route().current("images.index") &&
+                currentTab === "rights-extensions",
         },
         {
             href: route("operations.index"),
@@ -224,6 +237,10 @@ export default function Authenticated({
         ? adminMenu
         : adminMenu.filter((item) => {
               if (item.label === "Gestion des images") {
+                  return abilities.canManageClientContent;
+              }
+
+              if (item.label === "Gestion des demandes de cession") {
                   return abilities.canManageClientContent;
               }
 
