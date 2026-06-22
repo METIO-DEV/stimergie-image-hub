@@ -755,7 +755,7 @@ class AppPageController extends Controller
      */
     private function rightsExtensionRequestSummaries(?array $manageableClientIds): array
     {
-        return ImageRightsExtensionRequest::query()
+        $requests = ImageRightsExtensionRequest::query()
             ->with([
                 'image:id,title',
                 'client:id,name',
@@ -779,7 +779,49 @@ class AppPageController extends Controller
                 'requestedAt' => $request->created_at?->toIso8601String(),
                 'resolvedAt' => $request->resolved_at?->toIso8601String(),
                 'updateUrl' => route('image-rights-extension-requests.update', $request),
+                'isLegacy' => false,
             ])
+            ->values();
+
+        $requestImageIds = $requests
+            ->pluck('imageId')
+            ->filter()
+            ->all();
+
+        $legacyRequests = Image::query()
+            ->with([
+                'client:id,name',
+                'project:id,name',
+                'latestRightsExtensionRequest',
+                'rightsExtensionRequester:id,name,email',
+            ])
+            ->whereNotNull('rights_extension_requested_at')
+            ->when($requestImageIds !== [], fn ($query) => $query->whereNotIn('id', $requestImageIds))
+            ->when($manageableClientIds !== null, fn ($query) => $query->whereIn('client_id', $manageableClientIds))
+            ->latest('rights_extension_requested_at')
+            ->limit(50)
+            ->get()
+            ->map(fn (Image $image) => [
+                'id' => "legacy-image-{$image->id}",
+                'status' => ImageRightsExtensionRequest::STATUS_REQUESTED,
+                'statusLabel' => 'Demandée',
+                'imageId' => $image->id,
+                'imageTitle' => $image->title,
+                'clientName' => $image->client?->name,
+                'projectName' => $image->project?->name,
+                'rightsEndsAt' => $image->rights_ends_at?->toDateString(),
+                'requestedBy' => $image->rightsExtensionRequester?->name ?: $image->rightsExtensionRequester?->email,
+                'requestedAt' => $image->rights_extension_requested_at?->toIso8601String(),
+                'resolvedAt' => null,
+                'updateUrl' => null,
+                'isLegacy' => true,
+            ]);
+
+        return $requests
+            ->concat($legacyRequests)
+            ->sortByDesc('requestedAt')
+            ->take(50)
+            ->values()
             ->all();
     }
 

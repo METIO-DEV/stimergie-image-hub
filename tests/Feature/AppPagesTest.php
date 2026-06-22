@@ -297,6 +297,54 @@ class AppPagesTest extends TestCase
                 ->etc());
     }
 
+    public function test_image_management_page_shows_legacy_rights_extension_requests(): void
+    {
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $requester = User::factory()->create([
+            'name' => 'Client Demandeur',
+            'status' => 'active',
+        ]);
+        $client = Client::create([
+            'name' => 'Client Cession',
+            'slug' => 'client-cession',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Cession',
+            'slug' => 'projet-cession',
+            'status' => 'active',
+        ]);
+        $image = Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Image demande historique',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/client-cession/source.jpg',
+            'rights_ends_at' => now()->subDay(),
+            'rights_extension_requested_at' => now()->subDays(2),
+            'rights_extension_requested_by' => $requester->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('images.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Images/Index')
+                ->has('rightsExtensionRequests', 1)
+                ->where('rightsExtensionRequests.0.id', "legacy-image-{$image->id}")
+                ->where('rightsExtensionRequests.0.imageTitle', 'Image demande historique')
+                ->where('rightsExtensionRequests.0.requestedBy', 'Client Demandeur')
+                ->where('rightsExtensionRequests.0.status', ImageRightsExtensionRequest::STATUS_REQUESTED)
+                ->where('rightsExtensionRequests.0.isLegacy', true)
+                ->where('rightsExtensionRequests.0.updateUrl', null)
+                ->etc());
+    }
+
     public function test_access_periods_page_exposes_management_action_for_admins(): void
     {
         $admin = User::factory()->create([

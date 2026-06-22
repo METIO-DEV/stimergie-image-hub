@@ -85,6 +85,11 @@ class Image extends Model
         return $this->hasOne(ImageRightsExtensionRequest::class)->latestOfMany();
     }
 
+    public function rightsExtensionRequester(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'rights_extension_requested_by');
+    }
+
     public function tags(): BelongsToMany
     {
         return $this->belongsToMany(Tag::class);

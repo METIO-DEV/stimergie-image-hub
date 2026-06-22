@@ -693,19 +693,34 @@ export function ImageInfoSheet({
                                             : "Vous pouvez demander une extension si l'image doit rester exploitable au-delà de la date prévue."}
                                     </p>
                                     {image.rightsExtensionRequestedAt ? (
-                                        <p className="mt-3 font-medium">
-                                            Demande d'extension{" "}
-                                            {image.rightsExtensionRequest
-                                                ? `(${image.rightsExtensionRequest.statusLabel.toLowerCase()}) `
-                                                : "déjà envoyée "}
-                                            le{" "}
-                                            {formatLegacyDate(
-                                                image.rightsExtensionRequest
-                                                    ?.requestedAt ||
-                                                    image.rightsExtensionRequestedAt,
-                                            )}
-                                            .
-                                        </p>
+                                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                                            <p className="font-medium">
+                                                Demande d'extension{" "}
+                                                {image.rightsExtensionRequest
+                                                    ? `(${image.rightsExtensionRequest.statusLabel.toLowerCase()}) `
+                                                    : "déjà envoyée "}
+                                                le{" "}
+                                                {formatLegacyDate(
+                                                    image.rightsExtensionRequest
+                                                        ?.requestedAt ||
+                                                        image.rightsExtensionRequestedAt,
+                                                )}
+                                                .
+                                            </p>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => {
+                                                    window.location.href =
+                                                        route("images.index", {
+                                                            tab: "rights-extensions",
+                                                        });
+                                                }}
+                                            >
+                                                Voir le suivi
+                                            </Button>
+                                        </div>
                                     ) : image.canRequestRightsExtension &&
                                       onRightsExtensionRequest ? (
                                         <Button
@@ -716,7 +731,7 @@ export function ImageInfoSheet({
                                                 onRightsExtensionRequest(image)
                                             }
                                         >
-                                            Étendre la cession de droits
+                                            Demander une extension de cession
                                         </Button>
                                     ) : null}
                                 </div>

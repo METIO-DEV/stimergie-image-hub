@@ -132,7 +132,7 @@ type ImportStats = {
 };
 
 type RightsExtensionRequest = {
-    id: number;
+    id: number | string;
     status: string;
     statusLabel: string;
     imageId: number;
@@ -143,7 +143,8 @@ type RightsExtensionRequest = {
     requestedBy?: string | null;
     requestedAt?: string | null;
     resolvedAt?: string | null;
-    updateUrl: string;
+    updateUrl?: string | null;
+    isLegacy?: boolean;
 };
 
 type ImportSummary = {
@@ -204,6 +205,18 @@ const folderSegment = (value: string, fallback: string) => {
 const generatedProjectFolder = (clientName: string, projectName: string) =>
     `${folderSegment(clientName, "entreprise")}_${folderSegment(projectName, "projet")}`;
 
+function initialImagesTab(): ImagesTab {
+    if (typeof window === "undefined") {
+        return "library";
+    }
+
+    const tab = new URL(window.location.href).searchParams.get("tab");
+
+    return tab === "imports" || tab === "ai-tags" || tab === "rights-extensions"
+        ? tab
+        : "library";
+}
+
 export default function ImagesIndex({
     images,
     imports,
@@ -220,7 +233,7 @@ export default function ImagesIndex({
     const [clientId, setClientId] = useState(activeFilters.clientId);
     const [search, setSearch] = useState(activeFilters.search);
     const [tag, setTag] = useState(activeFilters.tag);
-    const [activeTab, setActiveTab] = useState<ImagesTab>("library");
+    const [activeTab, setActiveTab] = useState<ImagesTab>(initialImagesTab);
     const [selectedImportId, setSelectedImportId] = useState<number | null>(
         imports[0]?.id ?? null,
     );
@@ -623,10 +636,10 @@ function RightsExtensionRequestsPanel({
     requests: RightsExtensionRequest[];
     statuses: Array<{ value: string; label: string }>;
 }) {
-    const [updatingId, setUpdatingId] = useState<number | null>(null);
+    const [updatingId, setUpdatingId] = useState<number | string | null>(null);
 
     const updateStatus = (request: RightsExtensionRequest, status: string) => {
-        if (status === request.status) {
+        if (status === request.status || !request.updateUrl) {
             return;
         }
 
@@ -721,28 +734,34 @@ function RightsExtensionRequestsPanel({
                                                 status={request.status}
                                                 label={request.statusLabel}
                                             />
-                                            <select
-                                                value={request.status}
-                                                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-                                                disabled={
-                                                    updatingId === request.id
-                                                }
-                                                onChange={(event) =>
-                                                    updateStatus(
-                                                        request,
-                                                        event.target.value,
-                                                    )
-                                                }
-                                            >
-                                                {statuses.map((status) => (
-                                                    <option
-                                                        key={status.value}
-                                                        value={status.value}
-                                                    >
-                                                        {status.label}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                            {request.isLegacy ? (
+                                                <Badge variant="outline">
+                                                    Historique
+                                                </Badge>
+                                            ) : (
+                                                <select
+                                                    value={request.status}
+                                                    className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                                                    disabled={
+                                                        updatingId === request.id
+                                                    }
+                                                    onChange={(event) =>
+                                                        updateStatus(
+                                                            request,
+                                                            event.target.value,
+                                                        )
+                                                    }
+                                                >
+                                                    {statuses.map((status) => (
+                                                        <option
+                                                            key={status.value}
+                                                            value={status.value}
+                                                        >
+                                                            {status.label}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            )}
                                         </div>
                                     </TableCell>
                                 </TableRow>
