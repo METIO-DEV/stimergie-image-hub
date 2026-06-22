@@ -6,6 +6,7 @@ use App\Models\AssetTransferJob;
 use App\Models\Project;
 use App\Support\ProjectBucketImageSynchronizer;
 use App\Support\ProjectFolderMatcher;
+use App\Support\ProjectImageStoragePath;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\File;
@@ -23,8 +24,11 @@ class RunAssetTransferJob implements ShouldQueue
 
     public function __construct(public readonly int $transferJobId) {}
 
-    public function handle(ProjectBucketImageSynchronizer $synchronizer, ProjectFolderMatcher $folderMatcher): void
-    {
+    public function handle(
+        ProjectBucketImageSynchronizer $synchronizer,
+        ProjectFolderMatcher $folderMatcher,
+        ProjectImageStoragePath $storagePath,
+    ): void {
         $transfer = AssetTransferJob::find($this->transferJobId);
 
         if (! $transfer || ! $transfer->isActive()) {
@@ -42,7 +46,7 @@ class RunAssetTransferJob implements ShouldQueue
                 return;
             }
 
-            $this->runFolder($transfer, (string) $folder, $synchronizer, $folderMatcher);
+            $this->runFolder($transfer, (string) $folder, $synchronizer, $folderMatcher, $storagePath);
         }
 
         $transfer->refresh();
@@ -89,6 +93,7 @@ class RunAssetTransferJob implements ShouldQueue
         string $folder,
         ProjectBucketImageSynchronizer $synchronizer,
         ProjectFolderMatcher $folderMatcher,
+        ProjectImageStoragePath $storagePath,
     ): void {
         $transfer->forceFill([
             'current_folder' => $folder,
@@ -97,11 +102,16 @@ class RunAssetTransferJob implements ShouldQueue
 
         $this->appendLog($transfer, "\n--- {$folder} ---\n");
 
-        if (! $this->projectForFolder($folder, $folderMatcher)) {
+        $project = $this->projectForFolder($folder, $folderMatcher);
+
+        if (! $project) {
             $this->markFolderFailed($transfer, $folder, 'Aucun projet associé au dossier FTP.');
 
             return;
         }
+
+        $destinationFolder = $this->destinationFolder($project, $storagePath);
+        $this->appendLog($transfer, "Destination bucket: photos/{$destinationFolder}\n");
 
         $batchFile = storage_path("app/asset-transfers/transfer-{$transfer->id}-batch.txt");
         File::put($batchFile, $folder.PHP_EOL);
@@ -113,6 +123,7 @@ class RunAssetTransferJob implements ShouldQueue
                 'RCLONE_BIN' => 'rclone',
                 'MODE' => 'batch-copy',
                 'BATCH_FILE' => $batchFile,
+                'DEST_FOLDER' => $destinationFolder,
                 'LOG_FILE' => (string) $transfer->log_file,
             ],
             null,
@@ -212,24 +223,18 @@ class RunAssetTransferJob implements ShouldQueue
 
     private function projectForFolder(string $folder, ProjectFolderMatcher $folderMatcher): ?Project
     {
-        if ($folderMatcher->ignored($folder)) {
-            return null;
-        }
-
-        $mapped = $folderMatcher->mappedProject($folder);
-
-        if ($mapped) {
-            return $mapped;
-        }
-
         $projects = Project::query()->get();
-        $exact = $folderMatcher->exactProject($folder, $projects);
 
-        if ($exact) {
-            return $exact;
-        }
+        return $folderMatcher->exactProject($folder, $projects);
+    }
 
-        return null;
+    private function destinationFolder(Project $project, ProjectImageStoragePath $storagePath): string
+    {
+        $prefix = trim($storagePath->prefix($project), '/');
+
+        return str_starts_with($prefix, 'photos/')
+            ? substr($prefix, strlen('photos/'))
+            : $prefix;
     }
 
     private function markFolderCompleted(AssetTransferJob $transfer, string $folder): void

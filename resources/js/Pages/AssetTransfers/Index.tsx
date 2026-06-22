@@ -14,12 +14,10 @@ import { cn } from "@/lib/utils";
 import { Head } from "@inertiajs/react";
 import {
     CheckCircle2,
-    Link2,
     Loader2,
     Play,
     RefreshCw,
     Square,
-    Wand2,
     XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -37,29 +35,6 @@ type SourceFolder = {
     missingWebVariantCount: number;
     transferable: boolean;
     transferBlockedReason?: string | null;
-};
-
-type ProjectOption = {
-    id: number;
-    name: string;
-    clientName?: string | null;
-    sourceFolder?: string | null;
-    imagesCount?: number | null;
-};
-
-type FolderMatch = {
-    folder: string;
-    status: "unmatched" | "suggested" | "mapped" | "exact" | "ignored";
-    onFtp: boolean;
-    onBucket: boolean;
-    bucketFileCount: number;
-    mappedProject?: ProjectOption | null;
-    exactProject?: ProjectOption | null;
-    suggestion?: (ProjectOption & {
-        score: number;
-        source?: string | null;
-        autoMappable: boolean;
-    }) | null;
 };
 
 type TransferJob = {
@@ -115,12 +90,7 @@ const csrfToken = () =>
 
 export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
     const [folders, setFolders] = useState<SourceFolder[]>([]);
-    const [folderMatches, setFolderMatches] = useState<FolderMatch[]>([]);
     const [webVariantAudits, setWebVariantAudits] = useState<WebVariantAudit[]>([]);
-    const [projectOptions, setProjectOptions] = useState<ProjectOption[]>([]);
-    const [mappingSelections, setMappingSelections] = useState<
-        Record<string, string>
-    >({});
     const [jobs, setJobs] = useState<TransferJob[]>(initialJobs);
     const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
     const [selectedJobId, setSelectedJobId] = useState<number | null>(
@@ -129,9 +99,6 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
     const [limit, setLimit] = useState("5");
     const [loadingSources, setLoadingSources] = useState(false);
     const [submitting, setSubmitting] = useState(false);
-    const [mappingSubmittingFolders, setMappingSubmittingFolders] = useState<
-        Record<string, boolean>
-    >({});
     const [error, setError] = useState<string | null>(null);
     const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
     const mounted = useRef(false);
@@ -170,13 +137,6 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
             transferableNames.has(folderName),
         );
     }, [folders, selectedFolders]);
-    const unresolvedFolderMatches = useMemo(
-        () =>
-            folderMatches.filter((match) =>
-                ["unmatched", "suggested"].includes(match.status),
-            ),
-        [folderMatches],
-    );
     const missingWebVariantTotal = useMemo(
         () =>
             webVariantAudits.reduce(
@@ -212,29 +172,6 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
 
             setFolders(payload.folders || []);
             setWebVariantAudits(payload.webVariantAudits || []);
-            const nextMatches: FolderMatch[] = payload.folderMatches || [];
-            setFolderMatches(nextMatches);
-            setProjectOptions(payload.projectOptions || []);
-            setMappingSelections((currentSelections) => {
-                const nextSelections = { ...currentSelections };
-
-                nextMatches.forEach((match) => {
-                    if (nextSelections[match.folder]) {
-                        return;
-                    }
-
-                    const projectId =
-                        match.mappedProject?.id ||
-                        match.exactProject?.id ||
-                        match.suggestion?.id;
-
-                    if (projectId) {
-                        nextSelections[match.folder] = String(projectId);
-                    }
-                });
-
-                return nextSelections;
-            });
             setRefreshedAt(payload.refreshedAt || null);
         } catch (exception) {
             if (exception instanceof DOMException && exception.name === "AbortError") {
@@ -452,201 +389,6 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
         }
     };
 
-    const projectOptionById = useMemo(
-        () =>
-            new Map(
-                projectOptions.map((project) => [project.id, project] as const),
-            ),
-        [projectOptions],
-    );
-
-    const markFolderAsMapped = useCallback(
-        (folder: string, projectId: number) => {
-            const project = projectOptionById.get(projectId);
-
-            if (!project) {
-                return;
-            }
-
-            setFolderMatches((currentMatches) =>
-                currentMatches.map((match) =>
-                    match.folder === folder
-                        ? {
-                              ...match,
-                              status: "mapped",
-                              mappedProject: project,
-                              exactProject: null,
-                              suggestion: null,
-                          }
-                        : match,
-                ),
-            );
-            setFolders((currentFolders) =>
-                currentFolders.map((currentFolder) =>
-                    currentFolder.name === folder
-                        ? {
-                              ...currentFolder,
-                              projectId: project.id,
-                              projectName: project.name,
-                              databaseImageCount:
-                                  project.imagesCount ??
-                                  currentFolder.databaseImageCount,
-                          }
-                        : currentFolder,
-                ),
-            );
-            setMappingSelections((currentSelections) => ({
-                ...currentSelections,
-                [folder]: String(project.id),
-            }));
-        },
-        [projectOptionById],
-    );
-
-    const markFolderAsIgnored = useCallback((folder: string) => {
-        setFolderMatches((currentMatches) =>
-            currentMatches.map((match) =>
-                match.folder === folder
-                    ? {
-                          ...match,
-                          status: "ignored",
-                          mappedProject: null,
-                          exactProject: null,
-                          suggestion: null,
-                      }
-                    : match,
-            ),
-        );
-    }, []);
-
-    const setMappingSubmitting = (folder: string, value: boolean) => {
-        setMappingSubmittingFolders((current) => {
-            const next = { ...current };
-
-            if (value) {
-                next[folder] = true;
-            } else {
-                delete next[folder];
-            }
-
-            return next;
-        });
-    };
-
-    const mapFolder = async (folder: string, projectId?: string) => {
-        if (!projectId) {
-            setError("Sélectionnez un projet avant d'associer le dossier.");
-            return;
-        }
-
-        const numericProjectId = Number(projectId);
-
-        setMappingSubmitting(folder, true);
-        setError(null);
-
-        try {
-            const response = await fetch(
-                route("asset-transfers.folder-mappings.store"),
-                {
-                    method: "POST",
-                    headers: {
-                        Accept: "application/json",
-                        "Content-Type": "application/json",
-                        "X-CSRF-TOKEN": csrfToken(),
-                    },
-                    body: JSON.stringify({
-                        folder,
-                        project_id: numericProjectId,
-                    }),
-                },
-            );
-            const payload = await response.json();
-
-            if (!response.ok) {
-                throw new Error(payload.message || "Association impossible.");
-            }
-
-            markFolderAsMapped(folder, numericProjectId);
-        } catch (exception) {
-            setError(
-                exception instanceof Error
-                    ? exception.message
-                    : "Association impossible.",
-            );
-        } finally {
-            setMappingSubmitting(folder, false);
-        }
-    };
-
-    const ignoreFolder = async (folder: string) => {
-        setMappingSubmitting(folder, true);
-        setError(null);
-
-        try {
-            const response = await fetch(
-                route("asset-transfers.folder-mappings.ignore"),
-                {
-                    method: "POST",
-                    headers: {
-                        Accept: "application/json",
-                        "Content-Type": "application/json",
-                        "X-CSRF-TOKEN": csrfToken(),
-                    },
-                    body: JSON.stringify({ folder }),
-                },
-            );
-            const payload = await response.json();
-
-            if (!response.ok) {
-                throw new Error(payload.message || "Action impossible.");
-            }
-
-            markFolderAsIgnored(folder);
-        } catch (exception) {
-            setError(
-                exception instanceof Error
-                    ? exception.message
-                    : "Action impossible.",
-            );
-        } finally {
-            setMappingSubmitting(folder, false);
-        }
-    };
-
-    const autoMapFolders = async () => {
-        setSubmitting(true);
-        setError(null);
-
-        try {
-            const response = await fetch(
-                route("asset-transfers.folder-mappings.auto"),
-                {
-                    method: "POST",
-                    headers: {
-                        Accept: "application/json",
-                        "Content-Type": "application/json",
-                        "X-CSRF-TOKEN": csrfToken(),
-                    },
-                },
-            );
-            const payload = await response.json();
-
-            if (!response.ok) {
-                throw new Error(payload.message || "Auto-match impossible.");
-            }
-
-            await loadSources();
-        } catch (exception) {
-            setError(
-                exception instanceof Error
-                    ? exception.message
-                    : "Auto-match impossible.",
-            );
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
     const startBucketResync = async () => {
         setSubmitting(true);
         setError(null);
@@ -754,12 +496,11 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                     </div>
                 )}
 
-                <section className="mt-8 grid gap-4 md:grid-cols-5">
+                <section className="mt-8 grid gap-4 md:grid-cols-4">
                     <Metric label="FTP" value={folders.filter((folder) => folder.onFtp).length} />
                     <Metric label="Bucket" value={folders.filter((folder) => folder.onBucket).length} />
                     <Metric label="À transférer" value={missingFolders.length} />
-                    <Metric label="À rapprocher" value={unresolvedFolderMatches.length} />
-                    <Metric label="Web manquant" value={missingWebVariantTotal} />
+                    <Metric label="JPG web à générer" value={missingWebVariantTotal} />
                 </section>
 
                 <section className="mt-8 rounded-lg border bg-card p-5">
@@ -835,37 +576,36 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                 <section className="mt-8 overflow-hidden rounded-lg border bg-card">
                     <div className="flex flex-col gap-4 border-b p-4 lg:flex-row lg:items-end lg:justify-between">
                         <div>
-                            <h2 className="text-xl font-semibold">
-                                Variantes web manquantes
-                            </h2>
+                            <h2 className="text-xl font-semibold">Images web JPG</h2>
                             <p className="mt-1 text-sm text-muted-foreground">
-                                Projets avec des originaux disponibles mais sans version web exploitable.
+                                Regénère les versions légères manquantes dans le dossier JPG du projet.
                             </p>
                         </div>
-                        <Button
-                            type="button"
-                            onClick={() => void startWebVariantGeneration()}
-                            disabled={
-                                Boolean(activeWebVariantJob) ||
-                                submitting ||
-                                missingWebVariantTotal === 0
-                            }
-                        >
-                            <Play className="mr-2 h-4 w-4" />
-                            Générer toutes les versions web
-                        </Button>
+                        <div className="flex flex-wrap gap-3">
+                            <Button
+                                type="button"
+                                onClick={() => void startWebVariantGeneration()}
+                                disabled={
+                                    Boolean(activeWebVariantJob) ||
+                                    submitting
+                                }
+                            >
+                                <Play className="mr-2 h-4 w-4" />
+                                Générer les JPG web
+                            </Button>
+                        </div>
                     </div>
                     <div className="max-h-[420px] overflow-auto">
                         <Table>
                             <TableHeader>
-                                <TableRow>
-                                    <TableHead>Projet</TableHead>
-                                    <TableHead>Dossier</TableHead>
-                                    <TableHead className="text-right">Originaux</TableHead>
-                                    <TableHead className="text-right">Web OK</TableHead>
-                                    <TableHead className="text-right">À générer</TableHead>
-                                    <TableHead className="text-right">Action</TableHead>
-                                </TableRow>
+                                    <TableRow>
+                                        <TableHead>Projet</TableHead>
+                                        <TableHead>Dossier</TableHead>
+                                        <TableHead className="text-right">Originaux</TableHead>
+                                        <TableHead className="text-right">JPG prêts</TableHead>
+                                        <TableHead className="text-right">JPG à générer</TableHead>
+                                        <TableHead className="text-right">Actions</TableHead>
+                                    </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {webVariantAudits.length === 0 ? (
@@ -876,7 +616,7 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                                         >
                                             {loadingSources
                                                 ? "Chargement..."
-                                                : "Toutes les images avec original ont une version web exploitable."}
+                                                : "Toutes les images avec original ont une version JPG web."}
                                         </TableCell>
                                     </TableRow>
                                 ) : (
@@ -907,200 +647,27 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <Button
-                                                    type="button"
-                                                    size="sm"
-                                                    onClick={() =>
-                                                        void startWebVariantGeneration(
-                                                            audit.projectId,
-                                                        )
-                                                    }
-                                                    disabled={
-                                                        Boolean(activeWebVariantJob) ||
-                                                        submitting
-                                                    }
-                                                >
-                                                    <Play className="mr-2 h-4 w-4" />
-                                                    Générer
-                                                </Button>
+                                                <div className="flex justify-end gap-2">
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            void startWebVariantGeneration(
+                                                                audit.projectId,
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            Boolean(activeWebVariantJob) ||
+                                                            submitting
+                                                        }
+                                                    >
+                                                        <Play className="mr-2 h-4 w-4" />
+                                                        Générer
+                                                    </Button>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </section>
-
-                <section className="mt-8 overflow-hidden rounded-lg border bg-card">
-                    <div className="flex flex-col gap-4 border-b p-4 lg:flex-row lg:items-center lg:justify-between">
-                        <div>
-                            <h2 className="text-xl font-semibold">
-                                Rapprochement dossiers / projets
-                            </h2>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                                Associez les dossiers FTP ou bucket aux projets avant de resynchroniser la base.
-                            </p>
-                        </div>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => void autoMapFolders()}
-                            disabled={submitting || folderMatches.length === 0}
-                        >
-                            <Wand2 className="mr-2 h-4 w-4" />
-                            Auto-match confiance élevée
-                        </Button>
-                    </div>
-                    <div className="max-h-[520px] overflow-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Dossier</TableHead>
-                                    <TableHead>Statut</TableHead>
-                                    <TableHead>Suggestion</TableHead>
-                                    <TableHead>Projet</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {folderMatches.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell
-                                            colSpan={5}
-                                            className="py-10 text-center text-sm text-muted-foreground"
-                                        >
-                                            {loadingSources
-                                                ? "Chargement..."
-                                                : "Aucun rapprochement chargé."}
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    folderMatches.map((match) => {
-                                        const selectedProjectId =
-                                            mappingSelections[match.folder] || "";
-                                        const isMappingSubmitting = Boolean(
-                                            mappingSubmittingFolders[match.folder],
-                                        );
-
-                                        return (
-                                            <TableRow key={match.folder}>
-                                                <TableCell className="min-w-[260px]">
-                                                    <div className="font-medium">
-                                                        {match.folder}
-                                                    </div>
-                                                    <div className="mt-2 flex flex-wrap gap-2">
-                                                        <PresenceBadge present={match.onFtp} label="FTP" />
-                                                        <PresenceBadge present={match.onBucket} label="Bucket" />
-                                                        {match.onBucket && (
-                                                            <span className="text-xs text-muted-foreground">
-                                                                {match.bucketFileCount} fichiers
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <FolderMatchBadge status={match.status} />
-                                                </TableCell>
-                                                <TableCell className="min-w-[220px]">
-                                                    {match.mappedProject ? (
-                                                        <ProjectSummary
-                                                            project={match.mappedProject}
-                                                            prefix="Associé"
-                                                        />
-                                                    ) : match.exactProject ? (
-                                                        <ProjectSummary
-                                                            project={match.exactProject}
-                                                            prefix="Exact"
-                                                        />
-                                                    ) : match.suggestion ? (
-                                                        <div>
-                                                            <ProjectSummary
-                                                                project={match.suggestion}
-                                                                prefix={`${match.suggestion.score}%`}
-                                                            />
-                                                            {match.suggestion.source && (
-                                                                <div className="mt-1 text-xs text-muted-foreground">
-                                                                    via {match.suggestion.source}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-sm text-muted-foreground">
-                                                            Aucune suggestion fiable
-                                                        </span>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell className="min-w-[260px]">
-                                                    <select
-                                                        className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                                        value={selectedProjectId}
-                                                        onChange={(event) =>
-                                                            setMappingSelections(
-                                                                (current) => ({
-                                                                    ...current,
-                                                                    [match.folder]:
-                                                                        event.target.value,
-                                                                }),
-                                                            )
-                                                        }
-                                                        disabled={isMappingSubmitting}
-                                                    >
-                                                        <option value="">
-                                                            Sélectionner un projet
-                                                        </option>
-                                                        {projectOptions.map((project) => (
-                                                            <option
-                                                                key={project.id}
-                                                                value={project.id}
-                                                            >
-                                                                {project.clientName
-                                                                    ? `${project.clientName} · `
-                                                                    : ""}
-                                                                {project.name}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                </TableCell>
-                                                <TableCell className="text-right">
-                                                    <div className="flex justify-end gap-2">
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            onClick={() =>
-                                                                void mapFolder(
-                                                                    match.folder,
-                                                                    selectedProjectId,
-                                                                )
-                                                            }
-                                                            disabled={
-                                                                isMappingSubmitting ||
-                                                                !selectedProjectId
-                                                            }
-                                                        >
-                                                            <Link2 className="mr-2 h-4 w-4" />
-                                                            {isMappingSubmitting
-                                                                ? "Association..."
-                                                                : "Associer"}
-                                                        </Button>
-                                                        <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() =>
-                                                                void ignoreFolder(match.folder)
-                                                            }
-                                                            disabled={isMappingSubmitting}
-                                                        >
-                                                            {isMappingSubmitting
-                                                                ? "..."
-                                                                : "Ignorer"}
-                                                        </Button>
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        );
-                                    })
                                 )}
                             </TableBody>
                         </Table>
@@ -1128,7 +695,7 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                                         <TableHead>FTP</TableHead>
                                         <TableHead>Bucket</TableHead>
                                         <TableHead>Base</TableHead>
-                                        <TableHead>Web</TableHead>
+                                        <TableHead>Structure</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -1203,7 +770,7 @@ export default function AssetTransfersIndex({ jobs: initialJobs }: Props) {
                                                 </TableCell>
                                                 <TableCell>
                                                     {folder.projectId ? (
-                                                        <WebVariantBadge
+                                                        <VariantStatusBadge
                                                             missing={
                                                                 folder.missingWebVariantCount
                                                             }
@@ -1462,13 +1029,13 @@ function PresenceBadge({
     );
 }
 
-function WebVariantBadge({ missing, ready }: { missing: number; ready: number }) {
+function VariantStatusBadge({ missing, ready }: { missing: number; ready: number }) {
     if (missing > 0) {
         return (
             <div className="flex flex-col gap-1">
-                <Badge variant="destructive">{missing} manquante(s)</Badge>
+                <Badge variant="destructive">{missing} à traiter</Badge>
                 <span className="text-xs text-muted-foreground">
-                    {ready} prête(s)
+                    {ready} conforme(s)
                 </span>
             </div>
         );
@@ -1478,56 +1045,6 @@ function WebVariantBadge({ missing, ready }: { missing: number; ready: number })
         <Badge variant="secondary">
             <CheckCircle2 className="mr-1 h-3 w-3" />
             OK
-        </Badge>
-    );
-}
-
-function ProjectSummary({
-    project,
-    prefix,
-}: {
-    project: ProjectOption;
-    prefix: string;
-}) {
-    return (
-        <div className="text-sm">
-            <div className="font-medium">
-                {prefix} · {project.name}
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground">
-                {[
-                    project.clientName,
-                    project.sourceFolder,
-                    typeof project.imagesCount === "number"
-                        ? `${project.imagesCount} images`
-                        : null,
-                ]
-                    .filter(Boolean)
-                    .join(" · ")}
-            </div>
-        </div>
-    );
-}
-
-function FolderMatchBadge({ status }: { status: FolderMatch["status"] }) {
-    const variant =
-        status === "unmatched"
-            ? "destructive"
-            : ["mapped", "exact"].includes(status)
-              ? "secondary"
-              : "outline";
-
-    return (
-        <Badge variant={variant}>
-            {
-                {
-                    unmatched: "À traiter",
-                    suggested: "Suggestion",
-                    mapped: "Associé",
-                    exact: "Exact",
-                    ignored: "Ignoré",
-                }[status]
-            }
         </Badge>
     );
 }
@@ -1572,7 +1089,7 @@ function jobLabel(job: TransferJob): string {
     }
 
     if (job.mode === "web-variant-generation") {
-        return "Génération web";
+        return "Génération JPG web";
     }
 
     return "Transfert";

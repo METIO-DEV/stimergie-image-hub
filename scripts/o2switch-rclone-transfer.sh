@@ -10,6 +10,7 @@ OVERRIDE_BATCH_FILE="${BATCH_FILE:-}"
 OVERRIDE_LIMIT_PATH="${LIMIT_PATH:-}"
 OVERRIDE_MAX_TRANSFER_GB="${MAX_TRANSFER_GB:-}"
 OVERRIDE_DEST_PREFIX="${DEST_PREFIX:-}"
+OVERRIDE_DEST_FOLDER="${DEST_FOLDER:-}"
 OVERRIDE_VERIFY_AFTER_COPY="${VERIFY_AFTER_COPY:-}"
 OVERRIDE_ALLOW_SYNC_DELETE="${ALLOW_SYNC_DELETE:-}"
 OVERRIDE_LOG_FILE="${LOG_FILE:-}"
@@ -36,6 +37,7 @@ apply_override BATCH_FILE "${OVERRIDE_BATCH_FILE}"
 apply_override LIMIT_PATH "${OVERRIDE_LIMIT_PATH}"
 apply_override MAX_TRANSFER_GB "${OVERRIDE_MAX_TRANSFER_GB}"
 apply_override DEST_PREFIX "${OVERRIDE_DEST_PREFIX}"
+apply_override DEST_FOLDER "${OVERRIDE_DEST_FOLDER}"
 apply_override VERIFY_AFTER_COPY "${OVERRIDE_VERIFY_AFTER_COPY}"
 apply_override ALLOW_SYNC_DELETE "${OVERRIDE_ALLOW_SYNC_DELETE}"
 apply_override LOG_FILE "${OVERRIDE_LOG_FILE}"
@@ -47,6 +49,7 @@ SOURCE_TYPE="${SOURCE_TYPE:-ftp}"
 SOURCE_REMOTE="${SOURCE_REMOTE:-o2switch}"
 SOURCE_DIR="${SOURCE_DIR:-/collabspace.veni6445.odns.fr/photos}"
 DEST_PREFIX="${DEST_PREFIX:-photos}"
+DEST_FOLDER="${DEST_FOLDER:-}"
 MODE="${MODE:-dry-run}"
 TRANSFERS="${TRANSFERS:-6}"
 CHECKERS="${CHECKERS:-12}"
@@ -182,8 +185,9 @@ list_source_dirs() {
 
 copy_dir() {
   local dir_name="$1"
+  local dest_dir_name="${DEST_FOLDER:-${dir_name}}"
   local source_dir="${SOURCE_DIR}/${dir_name}"
-  local target_dir="${RCLONE_REMOTE}:${SCALEWAY_BUCKET}/${DEST_PREFIX}/${dir_name}"
+  local target_dir="${RCLONE_REMOTE}:${SCALEWAY_BUCKET}/${DEST_PREFIX}/${dest_dir_name}"
 
   if [[ "${SOURCE_TYPE}" == "ftp" ]]; then
     source_dir="${SOURCE_REMOTE}:${SOURCE_DIR#/}/${dir_name}"
@@ -195,8 +199,9 @@ copy_dir() {
 
 sync_dir() {
   local dir_name="$1"
+  local dest_dir_name="${DEST_FOLDER:-${dir_name}}"
   local source_dir="${SOURCE_DIR}/${dir_name}"
-  local target_dir="${RCLONE_REMOTE}:${SCALEWAY_BUCKET}/${DEST_PREFIX}/${dir_name}"
+  local target_dir="${RCLONE_REMOTE}:${SCALEWAY_BUCKET}/${DEST_PREFIX}/${dest_dir_name}"
 
   if [[ "${SOURCE_TYPE}" == "ftp" ]]; then
     source_dir="${SOURCE_REMOTE}:${SOURCE_DIR#/}/${dir_name}"
@@ -214,8 +219,9 @@ sync_dir() {
 
 dry_run_dir() {
   local dir_name="$1"
+  local dest_dir_name="${DEST_FOLDER:-${dir_name}}"
   local source_dir="${SOURCE_DIR}/${dir_name}"
-  local target_dir="${RCLONE_REMOTE}:${SCALEWAY_BUCKET}/${DEST_PREFIX}/${dir_name}"
+  local target_dir="${RCLONE_REMOTE}:${SCALEWAY_BUCKET}/${DEST_PREFIX}/${dest_dir_name}"
 
   if [[ "${SOURCE_TYPE}" == "ftp" ]]; then
     source_dir="${SOURCE_REMOTE}:${SOURCE_DIR#/}/${dir_name}"
@@ -227,8 +233,9 @@ dry_run_dir() {
 
 verify_dir() {
   local dir_name="$1"
+  local dest_dir_name="${DEST_FOLDER:-${dir_name}}"
   local source_dir="${SOURCE_DIR}/${dir_name}"
-  local target_dir="${RCLONE_REMOTE}:${SCALEWAY_BUCKET}/${DEST_PREFIX}/${dir_name}"
+  local target_dir="${RCLONE_REMOTE}:${SCALEWAY_BUCKET}/${DEST_PREFIX}/${dest_dir_name}"
 
   if [[ "${SOURCE_TYPE}" == "ftp" ]]; then
     source_dir="${SOURCE_REMOTE}:${SOURCE_DIR#/}/${dir_name}"

@@ -2,7 +2,6 @@
 
 namespace App\Support;
 
-use App\Models\AssetFolderMapping;
 use App\Models\Project;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -63,38 +62,6 @@ class ProjectFolderMatcher
         });
     }
 
-    public function mappedProject(string $folder): ?Project
-    {
-        $mapping = AssetFolderMapping::query()
-            ->with('project')
-            ->where('folder', $folder)
-            ->where('status', 'mapped')
-            ->first();
-
-        return $mapping?->project;
-    }
-
-    public function ignored(string $folder): bool
-    {
-        return AssetFolderMapping::query()
-            ->where('folder', $folder)
-            ->where('status', 'ignored')
-            ->exists();
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    public function mappedFoldersForProject(Project $project): array
-    {
-        return AssetFolderMapping::query()
-            ->where('project_id', $project->id)
-            ->where('status', 'mapped')
-            ->pluck('folder')
-            ->map(fn ($folder) => (string) $folder)
-            ->all();
-    }
-
     /**
      * @return array<int, string>
      */
@@ -110,7 +77,6 @@ class ProjectFolderMatcher
             $project->slug,
             $project->name,
             ...$aliases,
-            ...$this->mappedFoldersForProject($project),
         ])
             ->filter()
             ->map(fn ($value) => (string) $value)

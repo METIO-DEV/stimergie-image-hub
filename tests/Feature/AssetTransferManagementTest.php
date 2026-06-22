@@ -277,96 +277,7 @@ class AssetTransferManagementTest extends TestCase
         Queue::assertPushedOn('sync', RunMissingWebVariantGenerationJob::class);
     }
 
-    public function test_super_admin_can_map_and_ignore_asset_folders(): void
-    {
-        $admin = User::factory()->create([
-            'platform_role' => 'super_admin',
-            'status' => 'active',
-        ]);
-        $client = Client::create([
-            'name' => 'Client',
-            'slug' => 'client',
-            'status' => 'active',
-        ]);
-        $project = Project::create([
-            'client_id' => $client->id,
-            'name' => 'Projet associé',
-            'slug' => 'projet-associe',
-            'source_folder' => 'PROJET_ASSOCIE',
-            'status' => 'active',
-        ]);
-
-        $this->actingAs($admin)
-            ->postJson(route('asset-transfers.folder-mappings.store'), [
-                'folder' => 'DOSSIER_BUCKET_SANS_PROJET',
-                'project_id' => $project->id,
-            ])
-            ->assertOk();
-
-        $this->assertDatabaseHas('asset_folder_mappings', [
-            'folder' => 'DOSSIER_BUCKET_SANS_PROJET',
-            'project_id' => $project->id,
-            'status' => 'mapped',
-        ]);
-
-        $this->actingAs($admin)
-            ->postJson(route('asset-transfers.folder-mappings.ignore'), [
-                'folder' => 'DOSSIER_A_IGNORER',
-            ])
-            ->assertOk();
-
-        $this->assertDatabaseHas('asset_folder_mappings', [
-            'folder' => 'DOSSIER_A_IGNORER',
-            'project_id' => null,
-            'status' => 'ignored',
-        ]);
-    }
-
-    public function test_super_admin_can_auto_map_high_confidence_asset_folders(): void
-    {
-        $this->instance(O2SwitchAssetBrowser::class, new class extends O2SwitchAssetBrowser
-        {
-            public function ftpFolders(int $limit = 1000): array
-            {
-                return ['COMPAS_SHOOT EXALT 071025 HD'];
-            }
-
-            public function bucketFolders(string $prefix = 'photos'): array
-            {
-                return ['COMPAS_SHOOT EXALT 071025 HD' => 12];
-            }
-        });
-
-        $admin = User::factory()->create([
-            'platform_role' => 'super_admin',
-            'status' => 'active',
-        ]);
-        $client = Client::create([
-            'name' => 'Compas',
-            'slug' => 'compas',
-            'status' => 'active',
-        ]);
-        $project = Project::create([
-            'client_id' => $client->id,
-            'name' => 'COMPAS SHOOT EXALT 071025',
-            'slug' => 'compas-shoot-exalt-071025',
-            'source_folder' => 'COMPAS_SHOOT EXALT_071025',
-            'status' => 'active',
-        ]);
-
-        $this->actingAs($admin)
-            ->postJson(route('asset-transfers.folder-mappings.auto'))
-            ->assertOk()
-            ->assertJsonPath('mapped', 1);
-
-        $this->assertDatabaseHas('asset_folder_mappings', [
-            'folder' => 'COMPAS_SHOOT EXALT 071025 HD',
-            'project_id' => $project->id,
-            'status' => 'mapped',
-        ]);
-    }
-
-    public function test_sources_report_projects_missing_web_variants(): void
+    public function test_sources_report_projects_missing_web_jpg_variants(): void
     {
         $this->instance(O2SwitchAssetBrowser::class, new class extends O2SwitchAssetBrowser
         {
@@ -421,7 +332,7 @@ class AssetTransferManagementTest extends TestCase
         Image::create([
             'client_id' => $client->id,
             'project_id' => $project->id,
-            'title' => 'Web OK',
+            'title' => 'Web legacy JPG',
             'status' => 'ready',
             'storage_provider' => 'scaleway',
             'object_key_original' => 'photos/DOSSIER_WEB_MANQUANT/original.jpg',

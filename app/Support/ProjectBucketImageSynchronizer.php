@@ -122,14 +122,6 @@ class ProjectBucketImageSynchronizer
     {
         $prefixes = [];
 
-        foreach ($this->folderMatcher->mappedFoldersForProject($project) as $folder) {
-            $prefix = 'photos/'.trim($folder, '/');
-
-            if ($this->filesForPrefix($disk, $prefix) !== []) {
-                $prefixes[] = $prefix;
-            }
-        }
-
         $expectedPrefix = $this->storagePath->prefix($project);
         $resolvedPrefix = $this->resolveExistingPrefix($disk, $expectedPrefix) ?? $expectedPrefix;
         $prefixes[] = $resolvedPrefix;

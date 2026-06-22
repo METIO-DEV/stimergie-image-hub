@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Jobs\RunAssetTransferJob;
 use App\Jobs\RunBucketDatabaseSyncJob;
 use App\Jobs\RunMissingWebVariantGenerationJob;
-use App\Models\AssetFolderMapping;
 use App\Models\AssetTransferJob;
 use App\Models\Project;
 use App\Support\O2SwitchAssetBrowser;
@@ -46,9 +45,7 @@ class AssetTransferController extends Controller
 
         return response()->json([
             'folders' => $this->sourceRows($ftpFolders, $bucketFolders, $folderMatcher),
-            'folderMatches' => $this->folderMatchRows($ftpFolders, $bucketFolders, $folderMatcher),
             'webVariantAudits' => $this->webVariantAuditRows(),
-            'projectOptions' => $this->projectOptions(),
             'refreshedAt' => now()->toIso8601String(),
         ]);
     }
@@ -163,7 +160,11 @@ class AssetTransferController extends Controller
     {
         $this->authorizeSuperAdmin($request);
 
-        abort_if($this->activeWebVariantGeneration(), 409, 'Une génération de variantes web est déjà en cours.');
+        abort_if(
+            $this->activeWebVariantGeneration(),
+            409,
+            'Une génération web est déjà en cours.',
+        );
 
         $data = $request->validate([
             'project_id' => ['nullable', 'integer', 'exists:projects,id'],
@@ -205,94 +206,6 @@ class AssetTransferController extends Controller
         return response()->json([
             'job' => $this->jobSummary($job->fresh()),
         ], 201);
-    }
-
-    public function mapFolder(Request $request): JsonResponse
-    {
-        $this->authorizeSuperAdmin($request);
-
-        $data = $request->validate([
-            'folder' => ['required', 'string', 'max:255'],
-            'project_id' => ['required', 'integer', 'exists:projects,id'],
-        ]);
-
-        AssetFolderMapping::updateOrCreate(
-            ['folder' => trim($data['folder'])],
-            [
-                'project_id' => (int) $data['project_id'],
-                'status' => 'mapped',
-                'created_by' => $request->user()->id,
-                'metadata' => [
-                    'source' => 'manual_mapping',
-                    'mapped_at' => now()->toIso8601String(),
-                ],
-            ],
-        );
-
-        return response()->json(['ok' => true]);
-    }
-
-    public function ignoreFolder(Request $request): JsonResponse
-    {
-        $this->authorizeSuperAdmin($request);
-
-        $data = $request->validate([
-            'folder' => ['required', 'string', 'max:255'],
-        ]);
-
-        AssetFolderMapping::updateOrCreate(
-            ['folder' => trim($data['folder'])],
-            [
-                'project_id' => null,
-                'status' => 'ignored',
-                'created_by' => $request->user()->id,
-                'metadata' => [
-                    'source' => 'manual_ignore',
-                    'ignored_at' => now()->toIso8601String(),
-                ],
-            ],
-        );
-
-        return response()->json(['ok' => true]);
-    }
-
-    public function autoMapFolders(
-        Request $request,
-        O2SwitchAssetBrowser $browser,
-        ProjectFolderMatcher $folderMatcher,
-    ): JsonResponse {
-        $this->authorizeSuperAdmin($request);
-
-        $ftpFolders = $browser->ftpFolders();
-        $bucketFolders = $browser->bucketFolders();
-        $mapped = 0;
-
-        foreach ($this->folderMatchRows($ftpFolders, $bucketFolders, $folderMatcher) as $row) {
-            if (
-                $row['status'] !== 'suggested'
-                || ($row['suggestion']['score'] ?? 0) < ProjectFolderMatcher::AUTO_MATCH_SCORE
-            ) {
-                continue;
-            }
-
-            AssetFolderMapping::updateOrCreate(
-                ['folder' => $row['folder']],
-                [
-                    'project_id' => $row['suggestion']['id'],
-                    'status' => 'mapped',
-                    'created_by' => $request->user()->id,
-                    'metadata' => [
-                        'source' => 'auto_high_confidence',
-                        'score' => $row['suggestion']['score'],
-                        'matched_at' => now()->toIso8601String(),
-                    ],
-                ],
-            );
-
-            $mapped++;
-        }
-
-        return response()->json(['mapped' => $mapped]);
     }
 
     public function show(Request $request, AssetTransferJob $assetTransferJob): JsonResponse
@@ -403,64 +316,6 @@ class AssetTransferController extends Controller
             ->all();
     }
 
-    /**
-     * @param  array<int, string>  $ftpFolders
-     * @param  array<string, int>  $bucketFolders
-     * @return array<int, array<string, mixed>>
-     */
-    private function folderMatchRows(array $ftpFolders, array $bucketFolders, ProjectFolderMatcher $folderMatcher): array
-    {
-        $projects = Project::query()
-            ->with('client:id,name')
-            ->withCount('images')
-            ->orderBy('name')
-            ->get();
-        $mappings = AssetFolderMapping::query()
-            ->with('project.client:id,name')
-            ->get()
-            ->keyBy('folder');
-
-        return collect([...$ftpFolders, ...array_keys($bucketFolders)])
-            ->unique()
-            ->reject(fn (string $folder) => $this->isSystemFolder($folder))
-            ->sort(SORT_NATURAL | SORT_FLAG_CASE)
-            ->values()
-            ->map(function (string $folder) use ($bucketFolders, $folderMatcher, $ftpFolders, $mappings, $projects): array {
-                $mapping = $mappings->get($folder);
-                $exact = $folderMatcher->exactProject($folder, $projects);
-                $best = $folderMatcher->bestProject($folder, $projects);
-                $suggestedProject = $best['project'];
-                $status = 'unmatched';
-
-                if ($mapping?->status === 'ignored') {
-                    $status = 'ignored';
-                } elseif ($mapping?->status === 'mapped' && $mapping->project) {
-                    $status = 'mapped';
-                } elseif ($exact) {
-                    $status = 'exact';
-                } elseif ($suggestedProject && $best['score'] >= ProjectFolderMatcher::SUGGESTION_SCORE) {
-                    $status = 'suggested';
-                }
-
-                return [
-                    'folder' => $folder,
-                    'status' => $status,
-                    'onFtp' => in_array($folder, $ftpFolders, true),
-                    'onBucket' => array_key_exists($folder, $bucketFolders),
-                    'bucketFileCount' => $bucketFolders[$folder] ?? 0,
-                    'mappedProject' => $mapping?->project ? $this->projectOption($mapping->project) : null,
-                    'exactProject' => $exact ? $this->projectOption($exact) : null,
-                    'suggestion' => $suggestedProject ? [
-                        ...$this->projectOption($suggestedProject),
-                        'source' => $best['source'],
-                        'score' => round($best['score'], 1),
-                        'autoMappable' => $best['score'] >= ProjectFolderMatcher::AUTO_MATCH_SCORE,
-                    ] : null,
-                ];
-            })
-            ->all();
-    }
-
     private function isSystemFolder(string $folder): bool
     {
         return in_array(Str::lower(trim($folder)), ['assets'], true)
@@ -485,16 +340,6 @@ class AssetTransferController extends Controller
         ProjectFolderMatcher $folderMatcher,
         ?Collection $projects = null,
     ): ?Project {
-        if ($folderMatcher->ignored($folder)) {
-            return null;
-        }
-
-        $mapped = $folderMatcher->mappedProject($folder);
-
-        if ($mapped) {
-            return $mapped;
-        }
-
         return $folderMatcher->exactProject($folder, $projects);
     }
 
@@ -505,38 +350,10 @@ class AssetTransferController extends Controller
         }
 
         if (! $project) {
-            return 'Projet à associer';
+            return 'Aucun projet existant pour ce dossier';
         }
 
         return null;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function projectOption(Project $project): array
-    {
-        return [
-            'id' => $project->id,
-            'name' => $project->name,
-            'clientName' => $project->client?->name,
-            'sourceFolder' => $project->source_folder,
-            'imagesCount' => $project->images_count ?? null,
-        ];
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function projectOptions(): array
-    {
-        return Project::query()
-            ->with('client:id,name')
-            ->withCount('images')
-            ->orderBy('name')
-            ->get()
-            ->map(fn (Project $project) => $this->projectOption($project))
-            ->all();
     }
 
     /**
@@ -569,19 +386,21 @@ class AssetTransferController extends Controller
             ->withCount([
                 'images',
                 'images as images_with_original_count' => fn ($query) => $query->whereNotNull('object_key_original'),
-                'images as missing_web_variant_count' => fn ($query) => $this->constrainMissingUsableWeb($query),
+                'images as missing_web_variant_count' => fn ($query) => $this->constrainMissingProjectWeb($query),
             ]);
     }
 
-    private function constrainMissingUsableWeb($query): void
+    private function constrainMissingProjectWeb($query): void
     {
         $query
             ->whereNotNull('object_key_original')
-            ->where(function ($query) {
+            ->where('object_key_original', 'not like', '%/JPG/%')
+            ->where(function ($query): void {
                 $query
                     ->whereNull('object_key_web')
                     ->orWhereColumn('object_key_web', 'object_key_original')
-                    ->orWhereColumn('object_key_web', 'object_key_hd');
+                    ->orWhereColumn('object_key_web', 'object_key_hd')
+                    ->orWhere('object_key_web', 'not like', 'photos/%/JPG/%');
             });
     }
 
@@ -703,7 +522,6 @@ class AssetTransferController extends Controller
 
         return strlen($content) > 60000 ? substr($content, -60000) : $content;
     }
-
     private function signalProcess(int $pid): void
     {
         if ($pid < 1) {
