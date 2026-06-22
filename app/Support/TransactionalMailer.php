@@ -45,6 +45,7 @@ class TransactionalMailer
             'user_invitation' => 'emails.user-invitation',
             'shared_album_invitation' => 'emails.shared-album-invitation',
             'monthly_image_digest' => 'emails.monthly-image-digest',
+            'rights_extension_request' => 'emails.rights-extension-request',
             default => null,
         };
     }
@@ -63,6 +64,10 @@ class TransactionalMailer
             'monthly_image_digest' => sprintf(
                 '%d nouvelle(s) image(s) disponibles',
                 $params['image_count'] ?? 0,
+            ),
+            'rights_extension_request' => sprintf(
+                'Demande d extension de cession - %s',
+                $params['image_title'] ?? 'image',
             ),
             default => 'Stimergie Image Hub',
         };

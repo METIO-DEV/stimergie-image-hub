@@ -7,7 +7,9 @@ use App\Http\Requests\StoreImageRequest;
 use App\Http\Requests\UpdateImageRequest;
 use App\Models\AuditLog;
 use App\Models\Image;
+use App\Models\ImageRightsExtensionRequest;
 use App\Models\Project;
+use App\Support\ImageRightsExtensionRequestMailer;
 use App\Support\ImageTagSyncer;
 use App\Support\ImageUrlResolver;
 use App\Support\ImageVariantGenerator;
@@ -30,6 +32,7 @@ class ImageController extends Controller
         private readonly ProjectAccess $projectAccess,
         private readonly ImageTagSyncer $tagSyncer,
         private readonly ObjectStoragePolicy $storagePolicy,
+        private readonly ImageRightsExtensionRequestMailer $rightsExtensionMailer,
     ) {}
 
     public function bulkProject(BulkAssignImagesProjectRequest $request): RedirectResponse
@@ -195,23 +198,57 @@ class ImageController extends Controller
         abort_unless($this->projectAccess->userCanViewImage($request->user(), $image), 403);
         abort_unless($image->canRequestRightsExtension(), 422);
 
-        $image->forceFill([
-            'rights_extension_requested_at' => now(),
-            'rights_extension_requested_by' => $request->user()->id,
-        ])->save();
+        $rightsRequest = DB::transaction(function () use ($image, $request): ImageRightsExtensionRequest {
+            $rightsRequest = ImageRightsExtensionRequest::create([
+                'image_id' => $image->id,
+                'client_id' => $image->client_id,
+                'project_id' => $image->project_id,
+                'requested_by' => $request->user()->id,
+                'status' => ImageRightsExtensionRequest::STATUS_REQUESTED,
+                'rights_ends_at' => $image->rights_ends_at,
+                'metadata' => [
+                    'image_title' => $image->title,
+                    'client_name' => $image->client?->name,
+                    'project_name' => $image->project?->name,
+                ],
+            ]);
 
-        AuditLog::create([
-            'actor_id' => $request->user()->id,
-            'action' => 'image.rights_extension_requested',
-            'subject_type' => Image::class,
-            'subject_id' => $image->id,
-            'properties' => [
-                'image_title' => $image->title,
-                'rights_ends_at' => $image->rights_ends_at?->toDateString(),
-            ],
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-        ]);
+            $image->forceFill([
+                'rights_extension_requested_at' => now(),
+                'rights_extension_requested_by' => $request->user()->id,
+            ])->save();
+
+            AuditLog::create([
+                'actor_id' => $request->user()->id,
+                'action' => 'image.rights_extension_requested',
+                'subject_type' => Image::class,
+                'subject_id' => $image->id,
+                'properties' => [
+                    'rights_extension_request_id' => $rightsRequest->id,
+                    'image_title' => $image->title,
+                    'client_id' => $image->client_id,
+                    'project_id' => $image->project_id,
+                    'status' => $rightsRequest->status,
+                    'rights_ends_at' => $image->rights_ends_at?->toDateString(),
+                ],
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            return $rightsRequest;
+        });
+
+        try {
+            $mailSent = $this->rightsExtensionMailer->send($rightsRequest);
+        } catch (Throwable) {
+            $mailSent = false;
+        }
+
+        if (! $mailSent) {
+            return back()
+                ->with('success', 'Demande d’extension de cession enregistrée.')
+                ->with('warning', "L'email de notification n'a pas pu être envoyé. Vérifiez la configuration email.");
+        }
 
         return back()->with('success', 'Demande d’extension de cession envoyée.');
     }

@@ -69,6 +69,13 @@ export type LegacyImage = {
     rightsStatus?: "unlimited" | "active" | "expiring_soon" | "expired";
     rightsStatusLabel?: string;
     rightsExtensionRequestedAt?: string | null;
+    rightsExtensionRequest?: {
+        id: number;
+        status: string;
+        statusLabel: string;
+        requestedAt?: string | null;
+        rightsEndsAt?: string | null;
+    } | null;
     canRequestRightsExtension?: boolean;
     rightsExtensionRequestUrl?: string;
     tags?: string[];
@@ -687,9 +694,15 @@ export function ImageInfoSheet({
                                     </p>
                                     {image.rightsExtensionRequestedAt ? (
                                         <p className="mt-3 font-medium">
-                                            Demande d'extension déjà envoyée le{" "}
+                                            Demande d'extension{" "}
+                                            {image.rightsExtensionRequest
+                                                ? `(${image.rightsExtensionRequest.statusLabel.toLowerCase()}) `
+                                                : "déjà envoyée "}
+                                            le{" "}
                                             {formatLegacyDate(
-                                                image.rightsExtensionRequestedAt,
+                                                image.rightsExtensionRequest
+                                                    ?.requestedAt ||
+                                                    image.rightsExtensionRequestedAt,
                                             )}
                                             .
                                         </p>

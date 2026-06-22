@@ -71,6 +71,11 @@ type Props = {
     imports: ImportBatch[];
     stats: ImportStats;
     canManageImages: boolean;
+    rightsExtensionRequests: RightsExtensionRequest[];
+    rightsExtensionRequestStatuses: Array<{
+        value: string;
+        label: string;
+    }>;
     filters: {
         clients: FilterOption[];
         projects: FilterOption[];
@@ -126,6 +131,21 @@ type ImportStats = {
     completed: number;
 };
 
+type RightsExtensionRequest = {
+    id: number;
+    status: string;
+    statusLabel: string;
+    imageId: number;
+    imageTitle?: string | null;
+    clientName?: string | null;
+    projectName?: string | null;
+    rightsEndsAt?: string | null;
+    requestedBy?: string | null;
+    requestedAt?: string | null;
+    resolvedAt?: string | null;
+    updateUrl: string;
+};
+
 type ImportSummary = {
     id: number;
     status: string;
@@ -144,7 +164,7 @@ type ImportSummary = {
 };
 
 type ImportProjectMode = "existing" | "new";
-type ImagesTab = "library" | "imports" | "ai-tags";
+type ImagesTab = "library" | "imports" | "ai-tags" | "rights-extensions";
 
 type TagAnalysisDashboard = {
     stats: {
@@ -189,6 +209,8 @@ export default function ImagesIndex({
     imports,
     stats,
     canManageImages,
+    rightsExtensionRequests,
+    rightsExtensionRequestStatuses,
     filters,
     activeFilters,
     imagePagination,
@@ -260,6 +282,13 @@ export default function ImagesIndex({
         imports.find((importBatch) => importBatch.id === selectedImportId) ||
         imports[0] ||
         null;
+    const activeRightsExtensionRequests = useMemo(
+        () =>
+            rightsExtensionRequests.filter((request) =>
+                ["demande", "en_cours"].includes(request.status),
+            ),
+        [rightsExtensionRequests],
+    );
 
     const refreshTagAnalysis = async () => {
         const response = await window.axios.get<TagAnalysisDashboard>(
@@ -417,7 +446,20 @@ export default function ImagesIndex({
                             Suivi des imports
                         </TabsTrigger>
                         <TabsTrigger value="ai-tags">Tags IA</TabsTrigger>
+                        <TabsTrigger value="rights-extensions">
+                            Cessions
+                            {activeRightsExtensionRequests.length > 0
+                                ? ` (${activeRightsExtensionRequests.length})`
+                                : ""}
+                        </TabsTrigger>
                     </TabsList>
+
+                    <TabsContent value="rights-extensions">
+                        <RightsExtensionRequestsPanel
+                            requests={rightsExtensionRequests}
+                            statuses={rightsExtensionRequestStatuses}
+                        />
+                    </TabsContent>
 
                     <TabsContent value="ai-tags">
                         <TagAnalysisPanel
@@ -571,6 +613,145 @@ export default function ImagesIndex({
                 onClose={() => setSelectedClientImage(null)}
             />
         </AuthenticatedLayout>
+    );
+}
+
+function RightsExtensionRequestsPanel({
+    requests,
+    statuses,
+}: {
+    requests: RightsExtensionRequest[];
+    statuses: Array<{ value: string; label: string }>;
+}) {
+    const [updatingId, setUpdatingId] = useState<number | null>(null);
+
+    const updateStatus = (request: RightsExtensionRequest, status: string) => {
+        if (status === request.status) {
+            return;
+        }
+
+        setUpdatingId(request.id);
+        router.patch(
+            request.updateUrl,
+            { status },
+            {
+                preserveScroll: true,
+                onFinish: () => setUpdatingId(null),
+                only: ["rightsExtensionRequests", "images", "flash"],
+            },
+        );
+    };
+
+    return (
+        <section className="space-y-4">
+            <div className="rounded-md border border-border bg-background p-5">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <h2 className="text-lg font-semibold">
+                            Demandes d'extension de cession
+                        </h2>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            Suivez les demandes clients et mettez à jour leur
+                            statut de traitement.
+                        </p>
+                    </div>
+                    <Badge variant="secondary">
+                        {
+                            requests.filter((request) =>
+                                ["demande", "en_cours"].includes(
+                                    request.status,
+                                ),
+                            ).length
+                        }{" "}
+                        active(s)
+                    </Badge>
+                </div>
+            </div>
+
+            <div className="mobile-card-table-wrapper overflow-hidden rounded-md border">
+                <Table className="mobile-card-table">
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Image</TableHead>
+                            <TableHead>Client</TableHead>
+                            <TableHead>Projet</TableHead>
+                            <TableHead>Fin de cession</TableHead>
+                            <TableHead>Demandeur</TableHead>
+                            <TableHead>Demandée le</TableHead>
+                            <TableHead>Statut</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {requests.length === 0 ? (
+                            <TableRow>
+                                <TableCell
+                                    colSpan={7}
+                                    className="py-10 text-center text-muted-foreground"
+                                >
+                                    Aucune demande d'extension à traiter.
+                                </TableCell>
+                            </TableRow>
+                        ) : (
+                            requests.map((request) => (
+                                <TableRow key={request.id}>
+                                    <TableCell data-label="Image">
+                                        <div className="font-medium">
+                                            #{request.imageId} -{" "}
+                                            {request.imageTitle || "Image"}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell data-label="Client">
+                                        {request.clientName || "-"}
+                                    </TableCell>
+                                    <TableCell data-label="Projet">
+                                        {request.projectName || "-"}
+                                    </TableCell>
+                                    <TableCell data-label="Fin de cession">
+                                        {formatDate(request.rightsEndsAt)}
+                                    </TableCell>
+                                    <TableCell data-label="Demandeur">
+                                        {request.requestedBy || "-"}
+                                    </TableCell>
+                                    <TableCell data-label="Demandée le">
+                                        {formatDate(request.requestedAt)}
+                                    </TableCell>
+                                    <TableCell data-label="Statut">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <StatusBadge
+                                                status={request.status}
+                                                label={request.statusLabel}
+                                            />
+                                            <select
+                                                value={request.status}
+                                                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                                                disabled={
+                                                    updatingId === request.id
+                                                }
+                                                onChange={(event) =>
+                                                    updateStatus(
+                                                        request,
+                                                        event.target.value,
+                                                    )
+                                                }
+                                            >
+                                                {statuses.map((status) => (
+                                                    <option
+                                                        key={status.value}
+                                                        value={status.value}
+                                                    >
+                                                        {status.label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
+        </section>
     );
 }
 
@@ -1407,11 +1588,13 @@ function ProgressBar({ importBatch }: { importBatch: ImportBatch }) {
     );
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status, label }: { status: string; label?: string }) {
     const variant =
-        status === "failed"
+        status === "failed" || status === "refuse"
             ? "destructive"
-            : status === "completed" || status === "done"
+            : status === "completed" ||
+                status === "done" ||
+                status === "accepte"
               ? "secondary"
               : "default";
 
@@ -1420,7 +1603,7 @@ function StatusBadge({ status }: { status: string }) {
             {(status === "completed" || status === "done") && (
                 <CheckCircle2 className="mr-1 h-3 w-3" />
             )}
-            {statusLabel(status)}
+            {label || statusLabel(status)}
         </Badge>
     );
 }
@@ -1752,6 +1935,10 @@ function statusLabel(status: string): string {
             completed: "Terminé",
             failed: "Erreur",
             duplicate: "Doublon",
+            demande: "Demandée",
+            en_cours: "En cours",
+            accepte: "Acceptée",
+            refuse: "Refusée",
         }[status] || status
     );
 }

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Image extends Model
 {
@@ -46,8 +47,17 @@ class Image extends Model
 
     public function canRequestRightsExtension(): bool
     {
-        return in_array($this->rightsStatus(), ['expired', 'expiring_soon'], true)
-            && $this->rights_extension_requested_at === null;
+        if (! in_array($this->rightsStatus(), ['expired', 'expiring_soon'], true)) {
+            return false;
+        }
+
+        $request = $this->currentRightsExtensionRequest();
+
+        if ($request instanceof ImageRightsExtensionRequest) {
+            return $request->isClosed() && $request->status === ImageRightsExtensionRequest::STATUS_REFUSED;
+        }
+
+        return $this->rights_extension_requested_at === null;
     }
 
     public function client(): BelongsTo
@@ -65,6 +75,16 @@ class Image extends Model
         return $this->hasMany(ImageVariant::class);
     }
 
+    public function rightsExtensionRequests(): HasMany
+    {
+        return $this->hasMany(ImageRightsExtensionRequest::class);
+    }
+
+    public function latestRightsExtensionRequest(): HasOne
+    {
+        return $this->hasOne(ImageRightsExtensionRequest::class)->latestOfMany();
+    }
+
     public function tags(): BelongsToMany
     {
         return $this->belongsToMany(Tag::class);
@@ -75,5 +95,14 @@ class Image extends Model
         return $this->belongsToMany(Client::class, 'image_client_shares')
             ->withPivot(['created_by', 'expires_at'])
             ->withTimestamps();
+    }
+
+    private function currentRightsExtensionRequest(): ?ImageRightsExtensionRequest
+    {
+        if ($this->relationLoaded('latestRightsExtensionRequest')) {
+            return $this->latestRightsExtensionRequest;
+        }
+
+        return $this->latestRightsExtensionRequest()->first();
     }
 }

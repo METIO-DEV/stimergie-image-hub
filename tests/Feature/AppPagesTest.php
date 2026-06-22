@@ -5,15 +5,19 @@ namespace Tests\Feature;
 use App\Models\Client;
 use App\Models\ClientMembership;
 use App\Models\Image;
+use App\Models\ImageRightsExtensionRequest;
 use App\Models\LegalPage;
 use App\Models\Project;
 use App\Models\ProjectAccessPeriod;
 use App\Models\Tag;
 use App\Models\User;
+use App\Support\ImageRightsExtensionRequestMailer;
+use App\Support\TransactionalMailer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Inertia\Testing\AssertableInertia as Assert;
+use Mockery;
 use Tests\TestCase;
 
 class AppPagesTest extends TestCase
@@ -888,6 +892,15 @@ class AppPagesTest extends TestCase
             'status' => 'active',
         ]);
 
+        $this->mock(ImageRightsExtensionRequestMailer::class, function ($mock) use ($image): void {
+            $mock
+                ->shouldReceive('send')
+                ->once()
+                ->with(Mockery::on(fn (ImageRightsExtensionRequest $request): bool => $request->image_id === $image->id
+                    && $request->status === ImageRightsExtensionRequest::STATUS_REQUESTED))
+                ->andReturn(true);
+        });
+
         $this->actingAs($user)
             ->post(route('images.rights-extension', $image))
             ->assertRedirect();
@@ -896,12 +909,223 @@ class AppPagesTest extends TestCase
 
         $this->assertNotNull($image->rights_extension_requested_at);
         $this->assertSame($user->id, $image->rights_extension_requested_by);
+        $this->assertDatabaseHas('image_rights_extension_requests', [
+            'image_id' => $image->id,
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'requested_by' => $user->id,
+            'status' => ImageRightsExtensionRequest::STATUS_REQUESTED,
+            'rights_ends_at' => $image->rights_ends_at->toDateTimeString(),
+        ]);
         $this->assertDatabaseHas('audit_logs', [
             'actor_id' => $user->id,
             'action' => 'image.rights_extension_requested',
             'subject_type' => Image::class,
             'subject_id' => $image->id,
         ]);
+    }
+
+    public function test_gallery_exposes_rights_extension_request_status(): void
+    {
+        $user = User::factory()->create(['status' => 'active']);
+        $client = Client::create([
+            'name' => 'Client Suivi',
+            'slug' => 'client-suivi',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Suivi',
+            'slug' => 'projet-suivi',
+            'status' => 'active',
+        ]);
+        $image = Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Image suivi',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/client-suivi/source.jpg',
+            'rights_ends_at' => now()->subDay()->toDateString(),
+            'rights_extension_requested_at' => now(),
+            'rights_extension_requested_by' => $user->id,
+        ]);
+        $rightsRequest = ImageRightsExtensionRequest::create([
+            'image_id' => $image->id,
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'requested_by' => $user->id,
+            'status' => ImageRightsExtensionRequest::STATUS_IN_PROGRESS,
+            'rights_ends_at' => $image->rights_ends_at,
+        ]);
+
+        ClientMembership::create([
+            'client_id' => $client->id,
+            'user_id' => $user->id,
+            'role' => 'viewer',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('gallery.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Gallery/Index')
+                ->where('images.0.id', $image->id)
+                ->where('images.0.rightsExtensionRequest.id', $rightsRequest->id)
+                ->where('images.0.rightsExtensionRequest.status', ImageRightsExtensionRequest::STATUS_IN_PROGRESS)
+                ->where('images.0.rightsExtensionRequest.statusLabel', 'En cours')
+                ->where('images.0.canRequestRightsExtension', false)
+                ->etc());
+    }
+
+    public function test_admin_can_track_and_update_rights_extension_requests(): void
+    {
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $requester = User::factory()->create(['status' => 'active']);
+        $client = Client::create([
+            'name' => 'Client Admin Droits',
+            'slug' => 'client-admin-droits',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Admin Droits',
+            'slug' => 'projet-admin-droits',
+            'status' => 'active',
+        ]);
+        $image = Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Image admin droits',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/client-admin-droits/source.jpg',
+            'rights_ends_at' => now()->subDay()->toDateString(),
+        ]);
+        $rightsRequest = ImageRightsExtensionRequest::create([
+            'image_id' => $image->id,
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'requested_by' => $requester->id,
+            'status' => ImageRightsExtensionRequest::STATUS_REQUESTED,
+            'rights_ends_at' => $image->rights_ends_at,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('images.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Images/Index')
+                ->where('rightsExtensionRequests.0.id', $rightsRequest->id)
+                ->where('rightsExtensionRequests.0.imageId', $image->id)
+                ->where('rightsExtensionRequests.0.status', ImageRightsExtensionRequest::STATUS_REQUESTED)
+                ->where('rightsExtensionRequests.0.statusLabel', 'Demandée')
+                ->has('rightsExtensionRequestStatuses', 4)
+                ->etc());
+
+        $this->actingAs($admin)
+            ->patch(route('image-rights-extension-requests.update', $rightsRequest), [
+                'status' => ImageRightsExtensionRequest::STATUS_ACCEPTED,
+            ])
+            ->assertRedirect();
+
+        $rightsRequest->refresh();
+
+        $this->assertSame(ImageRightsExtensionRequest::STATUS_ACCEPTED, $rightsRequest->status);
+        $this->assertSame($admin->id, $rightsRequest->resolved_by);
+        $this->assertNotNull($rightsRequest->resolved_at);
+        $this->assertDatabaseHas('audit_logs', [
+            'actor_id' => $admin->id,
+            'client_id' => $client->id,
+            'action' => 'image.rights_extension_status_updated',
+            'subject_type' => ImageRightsExtensionRequest::class,
+            'subject_id' => $rightsRequest->id,
+        ]);
+    }
+
+    public function test_rights_extension_request_mailer_notifies_stimergie_and_client_admins(): void
+    {
+        $superAdmin = User::factory()->create([
+            'name' => 'Admin Stimergie',
+            'email' => 'admin@stimergie.test',
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $clientAdmin = User::factory()->create([
+            'name' => 'Admin Client',
+            'email' => 'admin-client@example.test',
+            'status' => 'active',
+        ]);
+        $viewer = User::factory()->create([
+            'email' => 'viewer@example.test',
+            'status' => 'active',
+        ]);
+        $client = Client::create([
+            'name' => 'Client Mail',
+            'slug' => 'client-mail',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Mail',
+            'slug' => 'projet-mail',
+            'status' => 'active',
+        ]);
+        $image = Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Image mail',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/client-mail/source.jpg',
+            'rights_ends_at' => now()->addDays(5)->toDateString(),
+        ]);
+        ClientMembership::create([
+            'client_id' => $client->id,
+            'user_id' => $clientAdmin->id,
+            'role' => 'owner',
+            'status' => 'active',
+        ]);
+        ClientMembership::create([
+            'client_id' => $client->id,
+            'user_id' => $viewer->id,
+            'role' => 'viewer',
+            'status' => 'active',
+        ]);
+        $rightsRequest = ImageRightsExtensionRequest::create([
+            'image_id' => $image->id,
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'requested_by' => $viewer->id,
+            'status' => ImageRightsExtensionRequest::STATUS_REQUESTED,
+            'rights_ends_at' => $image->rights_ends_at,
+        ]);
+
+        $this->mock(TransactionalMailer::class, function ($mock) use ($clientAdmin, $image, $superAdmin): void {
+            $mock
+                ->shouldReceive('send')
+                ->once()
+                ->with(
+                    'rights_extension_request',
+                    Mockery::on(function (array $to) use ($clientAdmin, $superAdmin): bool {
+                        $emails = collect($to)->pluck('email')->sort()->values()->all();
+
+                        return $emails === collect([$clientAdmin->email, $superAdmin->email])->sort()->values()->all();
+                    }),
+                    Mockery::on(fn (array $params): bool => $params['image_id'] === $image->id
+                        && $params['client_name'] === 'Client Mail'
+                        && $params['project_name'] === 'Projet Mail')
+                )
+                ->andReturn(true);
+        });
+
+        $mailer = new ImageRightsExtensionRequestMailer(app(TransactionalMailer::class));
+
+        $this->assertTrue($mailer->send($rightsRequest));
     }
 
     public function test_client_logos_are_resolved_from_scaleway_object_keys(): void

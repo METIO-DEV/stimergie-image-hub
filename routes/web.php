@@ -11,6 +11,7 @@ use App\Http\Controllers\ImageAssetController;
 use App\Http\Controllers\ImageClientShareController;
 use App\Http\Controllers\ImageController;
 use App\Http\Controllers\ImageImportController;
+use App\Http\Controllers\ImageRightsExtensionRequestController;
 use App\Http\Controllers\ImageTagAnalysisRunController;
 use App\Http\Controllers\LegalPageController;
 use App\Http\Controllers\ProfileController;
@@ -104,6 +105,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/images', [ImageController::class, 'store'])->name('images.store');
     Route::patch('/images/bulk-project', [ImageController::class, 'bulkProject'])->name('images.bulk-project');
     Route::post('/images/{image}', [ImageController::class, 'update'])->name('images.update');
+    Route::patch('/image-rights-extension-requests/{rightsExtensionRequest}', [ImageRightsExtensionRequestController::class, 'update'])->name('image-rights-extension-requests.update');
     Route::get('/image-tag-analysis-runs', [ImageTagAnalysisRunController::class, 'index'])->name('image-tag-analysis-runs.index');
     Route::post('/image-tag-analysis-runs', [ImageTagAnalysisRunController::class, 'store'])->name('image-tag-analysis-runs.store');
     Route::post('/image-tag-analysis-runs/{run}/stop', [ImageTagAnalysisRunController::class, 'stop'])->name('image-tag-analysis-runs.stop');

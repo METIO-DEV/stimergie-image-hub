@@ -6,6 +6,7 @@ use App\Models\AuditLog;
 use App\Models\Client;
 use App\Models\DownloadJob;
 use App\Models\Image;
+use App\Models\ImageRightsExtensionRequest;
 use App\Models\Import;
 use App\Models\Project;
 use App\Models\ProjectAccessPeriod;
@@ -50,6 +51,7 @@ class AppPageController extends Controller
                 'tags:id,name',
                 'sharedClients:id,name',
                 'variants:id,image_id,kind,object_key,mime_type,width,height,size_bytes',
+                'latestRightsExtensionRequest',
             ])
             ->tap(fn ($query) => $this->applyPhotoBucketFilter($query))
             ->tap(fn ($query) => $this->projectAccess->applyImageVisibility($query, $request->user()))
@@ -192,6 +194,7 @@ class AppPageController extends Controller
                 'tags:id,name',
                 'sharedClients:id,name',
                 'variants:id,image_id,kind,object_key,mime_type,width,height,size_bytes',
+                'latestRightsExtensionRequest',
             ])
             ->latest()
             ->forPage($page, $perPage)
@@ -217,6 +220,8 @@ class AppPageController extends Controller
                 'perPage' => $perPage,
                 'total' => $totalImages,
             ],
+            'rightsExtensionRequests' => $this->rightsExtensionRequestSummaries($manageableClientIds),
+            'rightsExtensionRequestStatuses' => $this->rightsExtensionRequestStatusOptions(),
         ]);
     }
 
@@ -466,6 +471,7 @@ class AppPageController extends Controller
             'rightsStatus' => $rightsStatus,
             'rightsStatusLabel' => $this->rightsStatusLabel($rightsStatus),
             'rightsExtensionRequestedAt' => $image->rights_extension_requested_at?->toIso8601String(),
+            'rightsExtensionRequest' => $this->latestRightsExtensionRequestSummary($image),
             'canRequestRightsExtension' => $this->canRequestRightsExtension($image, $user),
             'rightsExtensionRequestUrl' => route('images.rights-extension', $image),
             'tags' => $image->tags->pluck('name')->values(),
@@ -489,6 +495,25 @@ class AppPageController extends Controller
             'active' => 'Cession active',
             default => 'Cession non limitée',
         };
+    }
+
+    private function latestRightsExtensionRequestSummary(Image $image): ?array
+    {
+        $request = $image->relationLoaded('latestRightsExtensionRequest')
+            ? $image->latestRightsExtensionRequest
+            : null;
+
+        if (! $request instanceof ImageRightsExtensionRequest) {
+            return null;
+        }
+
+        return [
+            'id' => $request->id,
+            'status' => $request->status,
+            'statusLabel' => $request->statusLabel(),
+            'requestedAt' => $request->created_at?->toIso8601String(),
+            'rightsEndsAt' => $request->rights_ends_at?->toDateString(),
+        ];
     }
 
     private function hasStandaloneWebVariant(Image $image): bool
@@ -723,5 +748,51 @@ class AppPageController extends Controller
                 'completed' => (clone $query)->where('status', 'completed')->count(),
             ],
         ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function rightsExtensionRequestSummaries(?array $manageableClientIds): array
+    {
+        return ImageRightsExtensionRequest::query()
+            ->with([
+                'image:id,title',
+                'client:id,name',
+                'project:id,name',
+                'requester:id,name,email',
+            ])
+            ->when($manageableClientIds !== null, fn ($query) => $query->whereIn('client_id', $manageableClientIds))
+            ->latest()
+            ->limit(50)
+            ->get()
+            ->map(fn (ImageRightsExtensionRequest $request) => [
+                'id' => $request->id,
+                'status' => $request->status,
+                'statusLabel' => $request->statusLabel(),
+                'imageId' => $request->image_id,
+                'imageTitle' => $request->image?->title,
+                'clientName' => $request->client?->name,
+                'projectName' => $request->project?->name,
+                'rightsEndsAt' => $request->rights_ends_at?->toDateString(),
+                'requestedBy' => $request->requester?->name ?: $request->requester?->email,
+                'requestedAt' => $request->created_at?->toIso8601String(),
+                'resolvedAt' => $request->resolved_at?->toIso8601String(),
+                'updateUrl' => route('image-rights-extension-requests.update', $request),
+            ])
+            ->all();
+    }
+
+    /**
+     * @return array<int, array{value: string, label: string}>
+     */
+    private function rightsExtensionRequestStatusOptions(): array
+    {
+        return collect(ImageRightsExtensionRequest::STATUSES)
+            ->map(fn (string $status) => [
+                'value' => $status,
+                'label' => (new ImageRightsExtensionRequest(['status' => $status]))->statusLabel(),
+            ])
+            ->all();
     }
 }
