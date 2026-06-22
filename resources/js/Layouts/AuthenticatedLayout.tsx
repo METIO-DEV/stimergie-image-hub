@@ -64,8 +64,6 @@ export default function Authenticated({
     const [basketCount, setBasketCount] = useState(0);
 
     const isSuperAdmin = abilities.isSuperAdmin;
-    const currentSearch = page.url.split("?")[1] ?? "";
-    const currentTab = new URLSearchParams(currentSearch).get("tab");
     const initials = useMemo(
         () => {
             if (!user) {
@@ -183,21 +181,11 @@ export default function Authenticated({
             href: route("images.index"),
             label: "Gestion des images",
             icon: Image,
-            active:
-                route().current("images.index") &&
-                currentTab !== "rights-extensions",
-        },
-        {
-            href: route("images.index", { tab: "rights-extensions" }),
-            label: "Gestion des demandes de cession",
-            icon: Shield,
-            active:
-                route().current("images.index") &&
-                currentTab === "rights-extensions",
+            active: route().current("images.index"),
         },
         {
             href: route("operations.index"),
-            label: "Suivi opérationnel",
+            label: "Suivi technique",
             icon: History,
             active: route().current("operations.index"),
         },
@@ -240,11 +228,7 @@ export default function Authenticated({
                   return abilities.canManageClientContent;
               }
 
-              if (item.label === "Gestion des demandes de cession") {
-                  return abilities.canManageClientContent;
-              }
-
-              if (item.label === "Suivi opérationnel") {
+              if (item.label === "Suivi technique") {
                   return abilities.canViewOperationalLogs;
               }
 
@@ -266,9 +250,16 @@ export default function Authenticated({
 
               return false;
           });
+    const visibleUserMenu = userMenu.filter(
+        (item) =>
+            !(
+                abilities.canManageClientContent &&
+                item.href === route("rights-extension-requests.index")
+            ),
+    );
     const mobileNav = [
         ...primaryNav,
-        ...userMenu.filter((item) => item.href !== route("gallery.index")),
+        ...visibleUserMenu.filter((item) => item.href !== route("gallery.index")),
         ...visibleAdminMenu,
     ];
     const breadcrumbs = breadcrumbItems();
@@ -475,7 +466,7 @@ export default function Authenticated({
                                     </div>
                                 </DropdownMenuLabel>
                                 <DropdownMenuSeparator />
-                                {userMenu.map((item) => (
+                                {visibleUserMenu.map((item) => (
                                     <UserMenuItem
                                         key={item.label}
                                         item={item}
@@ -610,7 +601,7 @@ function breadcrumbItems(): BreadcrumbItem[] {
     }
 
     if (route().current("operations.index")) {
-        return [home, { label: "Suivi opérationnel" }];
+        return [home, { label: "Suivi technique" }];
     }
 
     if (route().current("projects.index")) {

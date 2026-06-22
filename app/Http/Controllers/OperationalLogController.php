@@ -2,33 +2,42 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AssetTransferJob;
 use App\Models\AuditLog;
 use App\Models\Client;
 use App\Models\DownloadJob;
 use App\Models\Image;
 use App\Models\ImageRightsExtensionRequest;
+use App\Models\Import;
 use App\Models\Project;
-use App\Models\ProjectAccessPeriod;
-use App\Models\SharedAlbum;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class OperationalLogController extends Controller
 {
     private const EVENT_TYPES = [
-        'cession',
-        'demande_extension',
-        'droits_acces',
-        'telechargement',
-        'partage',
         'audit',
+        'telechargement',
+        'import',
+        'transfert',
+        'job',
+        'demande_extension',
     ];
 
-    private const PER_SOURCE_LIMIT = 80;
+    private const EVENT_VIEWS = [
+        'audit_traces',
+        'open_rights_requests',
+        'failed_downloads',
+        'failed_imports',
+        'failed_transfers',
+        'failed_jobs',
+    ];
 
     public function index(Request $request): Response
     {
@@ -38,19 +47,23 @@ class OperationalLogController extends Controller
 
         $clientIds = $this->manageableClientIds($user);
         $filters = $this->filters($request);
-        $events = $this->events($user, $clientIds, $filters);
+        $page = max(1, (int) $request->integer('page', 1));
+        $perPage = min(100, max(10, (int) $request->integer('per_page', 25)));
+        $events = $this->paginatedEvents($user, $clientIds, $filters, $page, $perPage);
 
         return Inertia::render('Operations/Index', [
-            'events' => $events
-                ->sortByDesc('date')
-                ->values()
-                ->take(120)
-                ->all(),
+            'events' => $events->items(),
+            'pagination' => [
+                'currentPage' => $events->currentPage(),
+                'perPage' => $events->perPage(),
+                'total' => $events->total(),
+                'lastPage' => $events->lastPage(),
+            ],
             'stats' => $this->stats($user, $clientIds),
             'filters' => [
                 'clients' => $this->clientOptions($clientIds),
                 'projects' => $this->projectOptions($user, $clientIds),
-                'types' => $this->typeOptions(),
+                'types' => $this->typeOptions($user),
                 'statuses' => $this->statusOptions(),
             ],
             'activeFilters' => [
@@ -59,19 +72,22 @@ class OperationalLogController extends Controller
                 'projectId' => $filters['projectId'] ? (string) $filters['projectId'] : '',
                 'type' => $filters['type'],
                 'status' => $filters['status'],
+                'view' => $filters['view'],
                 'dateFrom' => $filters['dateFrom'],
                 'dateTo' => $filters['dateTo'],
+                'perPage' => (string) $perPage,
             ],
             'canViewSensitiveAuditData' => $user->isSuperAdmin(),
         ]);
     }
 
     /**
-     * @return array{search: string, clientId: int|null, projectId: int|null, type: string, status: string, dateFrom: string, dateTo: string}
+     * @return array{search: string, clientId: int|null, projectId: int|null, type: string, status: string, view: string, dateFrom: string, dateTo: string}
      */
     private function filters(Request $request): array
     {
         $type = (string) $request->query('type', '');
+        $view = (string) $request->query('view', '');
 
         return [
             'search' => trim((string) $request->query('search', '')),
@@ -79,6 +95,7 @@ class OperationalLogController extends Controller
             'projectId' => $request->query('project_id') ? max(1, (int) $request->query('project_id')) : null,
             'type' => in_array($type, self::EVENT_TYPES, true) ? $type : '',
             'status' => trim((string) $request->query('status', '')),
+            'view' => in_array($view, self::EVENT_VIEWS, true) ? $view : '',
             'dateFrom' => $this->dateFilter($request->query('date_from')),
             'dateTo' => $this->dateFilter($request->query('date_to')),
         ];
@@ -86,79 +103,297 @@ class OperationalLogController extends Controller
 
     /**
      * @param  array<int>|null  $clientIds
-     * @param  array{search: string, clientId: int|null, projectId: int|null, type: string, status: string, dateFrom: string, dateTo: string}  $filters
+     * @param  array{search: string, clientId: int|null, projectId: int|null, type: string, status: string, view: string, dateFrom: string, dateTo: string}  $filters
      */
-    private function events(User $user, ?array $clientIds, array $filters): Collection
+    private function paginatedEvents(User $user, ?array $clientIds, array $filters, int $page, int $perPage): LengthAwarePaginator
     {
-        $events = collect();
-
-        if ($this->shouldLoadType($filters, 'cession')) {
-            $events = $events->merge($this->cessionEvents($clientIds, $filters));
-        }
-
-        if ($this->shouldLoadType($filters, 'demande_extension')) {
-            $events = $events->merge($this->rightsExtensionRequestEvents($clientIds, $filters));
-        }
-
-        if ($this->shouldLoadType($filters, 'droits_acces')) {
-            $events = $events->merge($this->accessPeriodEvents($clientIds, $filters));
-        }
-
-        if ($this->shouldLoadType($filters, 'telechargement')) {
-            $events = $events->merge($this->downloadEvents($user, $clientIds, $filters));
-        }
-
-        if ($this->shouldLoadType($filters, 'partage')) {
-            $events = $events->merge($this->sharedAlbumEvents($user, $clientIds, $filters));
-        }
-
-        if ($this->shouldLoadType($filters, 'audit')) {
-            $events = $events->merge($this->auditEvents($user, $clientIds, $filters));
-        }
+        $events = $filters['view'] !== ''
+            ? $this->eventsForView($user, $clientIds, $filters)
+            : collect()
+                ->when($this->shouldLoadType($filters, 'audit'), fn (Collection $events) => $events->merge($this->auditEvents($user, $clientIds, $filters)))
+                ->when($this->shouldLoadType($filters, 'telechargement'), fn (Collection $events) => $events->merge($this->downloadEvents($user, $clientIds, $filters)))
+                ->when($this->shouldLoadType($filters, 'import'), fn (Collection $events) => $events->merge($this->importEvents($clientIds, $filters)))
+                ->when($user->isSuperAdmin() && $this->shouldLoadType($filters, 'transfert'), fn (Collection $events) => $events->merge($this->transferEvents($filters)))
+                ->when($user->isSuperAdmin() && $this->shouldLoadType($filters, 'job'), fn (Collection $events) => $events->merge($this->failedJobEvents($filters)))
+                ->when($this->shouldLoadType($filters, 'demande_extension'), fn (Collection $events) => $events->merge($this->rightsExtensionRequestEvents($clientIds, $filters)));
 
         if ($filters['status'] !== '') {
             $events = $events->filter(fn (array $event) => $event['status'] === $filters['status']);
         }
 
-        return $events;
+        $events = $events
+            ->sortByDesc(fn (array $event) => $event['date'] ?: '')
+            ->values();
+
+        return new LengthAwarePaginator(
+            $events->forPage($page, $perPage)->values()->all(),
+            $events->count(),
+            $perPage,
+            $page,
+            [
+                'path' => route('operations.index'),
+                'query' => request()->query(),
+            ],
+        );
     }
 
     /**
      * @param  array<int>|null  $clientIds
      * @param  array<string, mixed>  $filters
      */
-    private function cessionEvents(?array $clientIds, array $filters): Collection
+    private function eventsForView(User $user, ?array $clientIds, array $filters): Collection
     {
-        return Image::query()
-            ->with(['client:id,name', 'project:id,name'])
-            ->whereNotNull('rights_ends_at')
+        return match ($filters['view']) {
+            'audit_traces' => $this->auditEvents($user, $clientIds, $filters),
+            'open_rights_requests' => $this->rightsExtensionRequestEvents($clientIds, $filters)
+                ->filter(fn (array $event) => in_array($event['status'], [
+                    ImageRightsExtensionRequest::STATUS_REQUESTED,
+                    ImageRightsExtensionRequest::STATUS_IN_PROGRESS,
+                ], true)),
+            'failed_downloads' => $this->downloadEvents($user, $clientIds, $filters)
+                ->filter(fn (array $event) => $event['status'] === 'failed'),
+            'failed_imports' => $this->importEvents($clientIds, $filters)
+                ->filter(fn (array $event) => $event['status'] === 'failed' || (int) ($event['metadata']['failedItems'] ?? 0) > 0),
+            'failed_transfers' => $user->isSuperAdmin()
+                ? $this->transferEvents($filters)
+                    ->filter(fn (array $event) => $event['status'] === 'failed' || (int) ($event['metadata']['failedFolders'] ?? 0) > 0)
+                : collect(),
+            'failed_jobs' => $user->isSuperAdmin() ? $this->failedJobEvents($filters) : collect(),
+            default => collect(),
+        };
+    }
+
+    /**
+     * @param  array<int>|null  $clientIds
+     * @param  array<string, mixed>  $filters
+     */
+    private function auditEvents(User $user, ?array $clientIds, array $filters): Collection
+    {
+        if ($filters['projectId'] !== null) {
+            return collect();
+        }
+
+        return AuditLog::query()
+            ->with(['actor:id,name,email', 'client:id,name'])
             ->tap(fn (Builder $query) => $this->applyClientScope($query, $clientIds))
-            ->tap(fn (Builder $query) => $this->applyCommonFilters($query, $filters, 'rights_ends_at'))
-            ->tap(fn (Builder $query) => $this->applySearch($query, $filters['search'], [
-                'title',
-                'description',
-            ]))
-            ->orderByDesc('rights_ends_at')
-            ->limit(self::PER_SOURCE_LIMIT)
+            ->tap(fn (Builder $query) => $this->applyCommonFilters($query, $filters, 'created_at', false))
+            ->tap(fn (Builder $query) => $this->applySearch($query, $filters['search'], ['action']))
+            ->latest()
             ->get()
-            ->map(fn (Image $image) => [
-                'id' => "cession-{$image->id}",
-                'sourceId' => $image->id,
-                'type' => 'cession',
-                'typeLabel' => 'Cession',
-                'date' => $image->rights_ends_at?->toIso8601String(),
-                'status' => $image->rightsStatus(),
-                'statusLabel' => $this->rightsStatusLabel($image->rightsStatus()),
-                'title' => $image->title,
-                'description' => 'Fin de cession des droits image.',
-                'clientName' => $image->client?->name,
-                'projectName' => $image->project?->name,
-                'imageTitle' => $image->title,
-                'actorName' => null,
-                'targetUrl' => route('images.index', ['search' => $image->title]),
+            ->map(fn (AuditLog $log) => [
+                'id' => "audit-{$log->id}",
+                'sourceId' => $log->id,
+                'type' => 'audit',
+                'typeLabel' => 'Audit applicatif',
+                'date' => $log->created_at?->toIso8601String(),
+                'status' => 'trace',
+                'statusLabel' => 'Trace',
+                'severity' => $this->auditSeverity($log),
+                'title' => $log->action,
+                'description' => $this->auditSubjectLabel($log),
+                'clientName' => $log->client?->name,
+                'projectName' => null,
+                'actorName' => $log->actor?->name ?: $log->actor?->email,
+                'targetUrl' => null,
                 'metadata' => [
-                    'rightsStartsAt' => $image->rights_starts_at?->toDateString(),
-                    'rightsEndsAt' => $image->rights_ends_at?->toDateString(),
+                    'subjectType' => $log->subject_type,
+                    'subjectId' => $log->subject_id,
+                    'properties' => $this->compactPayload($log->properties),
+                    ...$this->sensitiveAuditMetadata($user, $log),
+                ],
+            ]);
+    }
+
+    /**
+     * @param  array<int>|null  $clientIds
+     * @param  array<string, mixed>  $filters
+     */
+    private function downloadEvents(User $user, ?array $clientIds, array $filters): Collection
+    {
+        if ($filters['projectId'] !== null) {
+            return collect();
+        }
+
+        return DownloadJob::query()
+            ->with(['client:id,name', 'user:id,name,email'])
+            ->when(! $user->isSuperAdmin(), fn (Builder $query) => $query->where('user_id', $user->id))
+            ->when($clientIds !== null, fn (Builder $query) => $query->where(function (Builder $query) use ($clientIds): void {
+                $query->whereNull('client_id')->orWhereIn('client_id', $clientIds);
+            }))
+            ->tap(fn (Builder $query) => $this->applyCommonFilters($query, $filters, 'created_at', false))
+            ->tap(fn (Builder $query) => $this->applySearch($query, $filters['search'], ['title', 'error_details']))
+            ->latest()
+            ->get()
+            ->map(fn (DownloadJob $job) => [
+                'id' => "telechargement-{$job->id}",
+                'sourceId' => $job->id,
+                'type' => 'telechargement',
+                'typeLabel' => 'Téléchargement',
+                'date' => $job->created_at?->toIso8601String(),
+                'status' => $job->status,
+                'statusLabel' => $this->downloadStatusLabel($job->status),
+                'severity' => $job->status === 'failed' ? 'error' : ($job->status === 'ready' ? 'info' : 'warning'),
+                'title' => $job->title,
+                'description' => $job->error_details ?: "{$job->image_count} image".($job->image_count > 1 ? 's' : '').($job->is_hd ? ' en HD' : ''),
+                'clientName' => $job->client?->name,
+                'projectName' => null,
+                'actorName' => $job->user?->name ?: $job->user?->email,
+                'targetUrl' => route('downloads.index'),
+                'metadata' => [
+                    'imageCount' => $job->image_count,
+                    'isHd' => $job->is_hd,
+                    'format' => $this->downloadFormatLabel($job),
+                    'requestedImages' => $this->downloadImageSummary($job),
+                    'skippedImages' => $this->downloadSkippedImageSummary($job),
+                    'variant' => $job->payload['variant'] ?? null,
+                    'cropPreset' => $job->payload['crop_preset'] ?? null,
+                    'cropSource' => $job->payload['crop_source'] ?? null,
+                    'processedAt' => $job->processed_at?->toIso8601String(),
+                    'expiresAt' => $job->download_url_expires_at?->toIso8601String(),
+                    'errorDetails' => $job->error_details,
+                ],
+            ]);
+    }
+
+    /**
+     * @param  array<int>|null  $clientIds
+     * @param  array<string, mixed>  $filters
+     */
+    private function importEvents(?array $clientIds, array $filters): Collection
+    {
+        return Import::query()
+            ->with(['client:id,name', 'project:id,name', 'starter:id,name,email'])
+            ->tap(fn (Builder $query) => $this->applyClientScope($query, $clientIds))
+            ->tap(fn (Builder $query) => $this->applyCommonFilters($query, $filters, 'created_at'))
+            ->tap(fn (Builder $query) => $this->applySearch($query, $filters['search'], ['source', 'status']))
+            ->latest()
+            ->get()
+            ->map(fn (Import $import) => [
+                'id' => "import-{$import->id}",
+                'sourceId' => $import->id,
+                'type' => 'import',
+                'typeLabel' => 'Import images',
+                'date' => ($import->finished_at ?: $import->started_at ?: $import->created_at)?->toIso8601String(),
+                'status' => $import->status,
+                'statusLabel' => $this->importStatusLabel($import->status),
+                'severity' => $import->status === 'failed' || $import->failed_items > 0 ? 'error' : ($import->status === 'completed' ? 'info' : 'warning'),
+                'title' => "Import #{$import->id}",
+                'description' => "{$import->processed_items}/{$import->total_items} traité(s), {$import->failed_items} échec(s).",
+                'clientName' => $import->client?->name,
+                'projectName' => $import->project?->name,
+                'actorName' => $import->starter?->name ?: $import->starter?->email,
+                'targetUrl' => route('images.index', ['tab' => 'imports']),
+                'metadata' => [
+                    'source' => $import->source,
+                    'totalItems' => $import->total_items,
+                    'uploadedItems' => $import->uploaded_items,
+                    'processedItems' => $import->processed_items,
+                    'failedItems' => $import->failed_items,
+                    'duplicateItems' => $import->duplicate_items,
+                    'failedItemDetails' => $this->failedImportItemSummary($import),
+                    'startedAt' => $import->started_at?->toIso8601String(),
+                    'finishedAt' => $import->finished_at?->toIso8601String(),
+                    'metadata' => $this->compactPayload($import->metadata),
+                ],
+            ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    private function transferEvents(array $filters): Collection
+    {
+        if ($filters['clientId'] !== null || $filters['projectId'] !== null) {
+            return collect();
+        }
+
+        return AssetTransferJob::query()
+            ->with('starter:id,name,email')
+            ->tap(fn (Builder $query) => $this->applyCommonFilters($query, $filters, 'created_at', false))
+            ->tap(fn (Builder $query) => $this->applySearch($query, $filters['search'], ['mode', 'current_folder', 'log_file']))
+            ->latest()
+            ->get()
+            ->map(fn (AssetTransferJob $job) => [
+                'id' => "transfert-{$job->id}",
+                'sourceId' => $job->id,
+                'type' => 'transfert',
+                'typeLabel' => 'Transfert fichiers',
+                'date' => ($job->finished_at ?: $job->started_at ?: $job->created_at)?->toIso8601String(),
+                'status' => $job->status,
+                'statusLabel' => $this->transferStatusLabel($job->status),
+                'severity' => $job->status === 'failed' || $job->failed_folders > 0 ? 'error' : ($job->isActive() ? 'warning' : 'info'),
+                'title' => "Transfert #{$job->id}",
+                'description' => "{$job->processed_folders}/{$job->total_folders} dossier(s), {$job->failed_folders} échec(s).",
+                'clientName' => null,
+                'projectName' => null,
+                'actorName' => $job->starter?->name ?: $job->starter?->email,
+                'targetUrl' => route('asset-transfers.index'),
+                'metadata' => [
+                    'mode' => $job->mode,
+                    'currentFolder' => $job->current_folder,
+                    'totalFolders' => $job->total_folders,
+                    'processedFolders' => $job->processed_folders,
+                    'failedFolders' => $job->failed_folders,
+                    'failedFolderDetails' => $this->compactPayload($job->failed_folder_details),
+                    'logFile' => $job->log_file,
+                    'startedAt' => $job->started_at?->toIso8601String(),
+                    'finishedAt' => $job->finished_at?->toIso8601String(),
+                ],
+            ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    private function failedJobEvents(array $filters): Collection
+    {
+        if ($filters['clientId'] !== null || $filters['projectId'] !== null) {
+            return collect();
+        }
+
+        $query = DB::table('failed_jobs');
+
+        if ($filters['dateFrom'] !== '') {
+            $query->whereDate('failed_at', '>=', $filters['dateFrom']);
+        }
+
+        if ($filters['dateTo'] !== '') {
+            $query->whereDate('failed_at', '<=', $filters['dateTo']);
+        }
+
+        if ($filters['search'] !== '') {
+            $search = $filters['search'];
+            $query->where(function ($query) use ($search): void {
+                $query
+                    ->where('queue', 'like', "%{$search}%")
+                    ->orWhere('connection', 'like', "%{$search}%")
+                    ->orWhere('exception', 'like', "%{$search}%");
+            });
+        }
+
+        return $query
+            ->orderByDesc('failed_at')
+            ->get()
+            ->map(fn ($job) => [
+                'id' => "job-{$job->id}",
+                'sourceId' => $job->id,
+                'type' => 'job',
+                'typeLabel' => 'Job échoué',
+                'date' => $job->failed_at,
+                'status' => 'failed',
+                'statusLabel' => 'Échec',
+                'severity' => 'error',
+                'title' => "Job {$job->queue}",
+                'description' => $this->firstLine($job->exception),
+                'clientName' => null,
+                'projectName' => null,
+                'actorName' => null,
+                'targetUrl' => null,
+                'metadata' => [
+                    'uuid' => $job->uuid,
+                    'connection' => $job->connection,
+                    'queue' => $job->queue,
+                    'exception' => $this->compactText($job->exception, 1200),
                 ],
             ]);
     }
@@ -181,7 +416,6 @@ class OperationalLogController extends Controller
             ->tap(fn (Builder $query) => $this->applyCommonFilters($query, $filters, 'created_at'))
             ->tap(fn (Builder $query) => $this->applySearch($query, $filters['search']))
             ->latest()
-            ->limit(self::PER_SOURCE_LIMIT)
             ->get()
             ->map(fn (ImageRightsExtensionRequest $rightsRequest) => [
                 'id' => "demande_extension-{$rightsRequest->id}",
@@ -191,185 +425,21 @@ class OperationalLogController extends Controller
                 'date' => $rightsRequest->created_at?->toIso8601String(),
                 'status' => $rightsRequest->status,
                 'statusLabel' => $rightsRequest->statusLabel(),
+                'severity' => in_array($rightsRequest->status, [
+                    ImageRightsExtensionRequest::STATUS_REQUESTED,
+                    ImageRightsExtensionRequest::STATUS_IN_PROGRESS,
+                ], true) ? 'warning' : 'info',
                 'title' => $rightsRequest->image?->title ?: "Demande #{$rightsRequest->id}",
                 'description' => 'Demande de prolongation de cession de droits.',
                 'clientName' => $rightsRequest->client?->name,
                 'projectName' => $rightsRequest->project?->name,
-                'imageTitle' => $rightsRequest->image?->title,
                 'actorName' => $rightsRequest->requester?->name ?: $rightsRequest->requester?->email,
                 'targetUrl' => route('images.index', ['search' => $rightsRequest->image?->title]),
                 'metadata' => [
                     'rightsEndsAt' => $rightsRequest->rights_ends_at?->toDateString(),
                     'resolvedAt' => $rightsRequest->resolved_at?->toIso8601String(),
                     'resolvedBy' => $rightsRequest->resolver?->name ?: $rightsRequest->resolver?->email,
-                ],
-            ]);
-    }
-
-    /**
-     * @param  array<int>|null  $clientIds
-     * @param  array<string, mixed>  $filters
-     */
-    private function accessPeriodEvents(?array $clientIds, array $filters): Collection
-    {
-        return ProjectAccessPeriod::query()
-            ->with(['client:id,name', 'project:id,name'])
-            ->tap(fn (Builder $query) => $this->applyClientScope($query, $clientIds))
-            ->tap(fn (Builder $query) => $this->applyCommonFilters($query, $filters, 'ends_at'))
-            ->tap(fn (Builder $query) => $this->applySearch($query, $filters['search']))
-            ->orderByDesc('ends_at')
-            ->limit(self::PER_SOURCE_LIMIT)
-            ->get()
-            ->map(fn (ProjectAccessPeriod $period) => [
-                'id' => "droits_acces-{$period->id}",
-                'sourceId' => $period->id,
-                'type' => 'droits_acces',
-                'typeLabel' => "Droits d'accès",
-                'date' => ($period->ends_at ?: $period->starts_at ?: $period->created_at)?->toIso8601String(),
-                'status' => $this->accessPeriodStatus($period),
-                'statusLabel' => $this->accessPeriodStatusLabel($this->accessPeriodStatus($period)),
-                'title' => $period->project?->name ?: "Accès #{$period->id}",
-                'description' => "Période d'accès client au projet.",
-                'clientName' => $period->client?->name,
-                'projectName' => $period->project?->name,
-                'imageTitle' => null,
-                'actorName' => null,
-                'targetUrl' => route('access-periods.index'),
-                'metadata' => [
-                    'startsAt' => $period->starts_at?->toDateString(),
-                    'endsAt' => $period->ends_at?->toDateString(),
-                    'isActive' => $period->is_active,
-                ],
-            ]);
-    }
-
-    /**
-     * @param  array<int>|null  $clientIds
-     * @param  array<string, mixed>  $filters
-     */
-    private function downloadEvents(User $user, ?array $clientIds, array $filters): Collection
-    {
-        if ($filters['projectId'] !== null) {
-            return collect();
-        }
-
-        return DownloadJob::query()
-            ->with(['client:id,name', 'user:id,name,email'])
-            ->when(! $user->isSuperAdmin(), fn (Builder $query) => $query->where('user_id', $user->id))
-            ->when($clientIds !== null, fn (Builder $query) => $query->where(function (Builder $query) use ($clientIds): void {
-                $query->whereNull('client_id')->orWhereIn('client_id', $clientIds);
-            }))
-            ->tap(fn (Builder $query) => $this->applyCommonFilters($query, $filters, 'created_at', false))
-            ->tap(fn (Builder $query) => $this->applySearch($query, $filters['search'], ['title']))
-            ->latest()
-            ->limit(self::PER_SOURCE_LIMIT)
-            ->get()
-            ->map(fn (DownloadJob $job) => [
-                'id' => "telechargement-{$job->id}",
-                'sourceId' => $job->id,
-                'type' => 'telechargement',
-                'typeLabel' => 'Téléchargement',
-                'date' => $job->created_at?->toIso8601String(),
-                'status' => $job->status,
-                'statusLabel' => $this->downloadStatusLabel($job->status),
-                'title' => $job->title,
-                'description' => "{$job->image_count} image".($job->image_count > 1 ? 's' : '').($job->is_hd ? ' en HD' : ''),
-                'clientName' => $job->client?->name,
-                'projectName' => null,
-                'imageTitle' => null,
-                'actorName' => $job->user?->name ?: $job->user?->email,
-                'targetUrl' => route('downloads.index'),
-                'metadata' => [
-                    'imageCount' => $job->image_count,
-                    'isHd' => $job->is_hd,
-                    'processedAt' => $job->processed_at?->toIso8601String(),
-                    'expiresAt' => $job->download_url_expires_at?->toIso8601String(),
-                ],
-            ]);
-    }
-
-    /**
-     * @param  array<int>|null  $clientIds
-     * @param  array<string, mixed>  $filters
-     */
-    private function sharedAlbumEvents(User $user, ?array $clientIds, array $filters): Collection
-    {
-        if ($filters['projectId'] !== null) {
-            return collect();
-        }
-
-        return SharedAlbum::query()
-            ->with(['client:id,name', 'creator:id,name,email'])
-            ->withCount('images')
-            ->when($clientIds !== null, fn (Builder $query) => $query->where(function (Builder $query) use ($clientIds, $user): void {
-                $query->whereIn('client_id', $clientIds)
-                    ->orWhere('created_by', $user->id);
-            }))
-            ->tap(fn (Builder $query) => $this->applyCommonFilters($query, $filters, 'expires_at', false))
-            ->tap(fn (Builder $query) => $this->applySearch($query, $filters['search'], ['name', 'description']))
-            ->orderByDesc('expires_at')
-            ->limit(self::PER_SOURCE_LIMIT)
-            ->get()
-            ->map(fn (SharedAlbum $album) => [
-                'id' => "partage-{$album->id}",
-                'sourceId' => $album->id,
-                'type' => 'partage',
-                'typeLabel' => 'Lien partagé',
-                'date' => ($album->expires_at ?: $album->created_at)?->toIso8601String(),
-                'status' => $this->sharedAlbumStatus($album),
-                'statusLabel' => $this->sharedAlbumStatusLabel($this->sharedAlbumStatus($album)),
-                'title' => $album->name,
-                'description' => "{$album->images_count} image".($album->images_count > 1 ? 's' : '').' partagée(s).',
-                'clientName' => $album->client?->name,
-                'projectName' => null,
-                'imageTitle' => null,
-                'actorName' => $album->creator?->name ?: $album->creator?->email,
-                'targetUrl' => route('gallery.index'),
-                'metadata' => [
-                    'startsAt' => $album->starts_at?->toDateString(),
-                    'expiresAt' => $album->expires_at?->toDateString(),
-                    'isActive' => $album->is_active,
-                ],
-            ]);
-    }
-
-    /**
-     * @param  array<int>|null  $clientIds
-     * @param  array<string, mixed>  $filters
-     */
-    private function auditEvents(User $user, ?array $clientIds, array $filters): Collection
-    {
-        if ($filters['projectId'] !== null) {
-            return collect();
-        }
-
-        return AuditLog::query()
-            ->with(['actor:id,name,email', 'client:id,name'])
-            ->tap(fn (Builder $query) => $this->applyClientScope($query, $clientIds))
-            ->tap(fn (Builder $query) => $this->applyCommonFilters($query, $filters, 'created_at', false))
-            ->tap(fn (Builder $query) => $this->applySearch($query, $filters['search'], ['action']))
-            ->latest()
-            ->limit(self::PER_SOURCE_LIMIT)
-            ->get()
-            ->map(fn (AuditLog $log) => [
-                'id' => "audit-{$log->id}",
-                'sourceId' => $log->id,
-                'type' => 'audit',
-                'typeLabel' => 'Audit',
-                'date' => $log->created_at?->toIso8601String(),
-                'status' => 'trace',
-                'statusLabel' => 'Trace',
-                'title' => $log->action,
-                'description' => $this->auditSubjectLabel($log),
-                'clientName' => $log->client?->name,
-                'projectName' => null,
-                'imageTitle' => null,
-                'actorName' => $log->actor?->name ?: $log->actor?->email,
-                'targetUrl' => null,
-                'metadata' => [
-                    'subjectType' => $log->subject_type,
-                    'subjectId' => $log->subject_id,
-                    ...$this->sensitiveAuditMetadata($user, $log),
+                    'requestMetadata' => $this->compactPayload($rightsRequest->metadata),
                 ],
             ]);
     }
@@ -380,13 +450,7 @@ class OperationalLogController extends Controller
     private function stats(User $user, ?array $clientIds): array
     {
         return [
-            'rightsExpired' => Image::query()
-                ->whereNotNull('rights_ends_at')
-                ->whereDate('rights_ends_at', '<', today())
-                ->tap(fn (Builder $query) => $this->applyClientScope($query, $clientIds))
-                ->count(),
-            'rightsExpiringSoon' => Image::query()
-                ->whereBetween('rights_ends_at', [today(), today()->addDays(30)])
+            'auditLogs' => AuditLog::query()
                 ->tap(fn (Builder $query) => $this->applyClientScope($query, $clientIds))
                 ->count(),
             'openRightsRequests' => ImageRightsExtensionRequest::query()
@@ -396,11 +460,6 @@ class OperationalLogController extends Controller
                 ])
                 ->tap(fn (Builder $query) => $this->applyClientScope($query, $clientIds))
                 ->count(),
-            'accessEndingSoon' => ProjectAccessPeriod::query()
-                ->where('is_active', true)
-                ->whereBetween('ends_at', [now(), now()->addDays(30)])
-                ->tap(fn (Builder $query) => $this->applyClientScope($query, $clientIds))
-                ->count(),
             'failedDownloads' => DownloadJob::query()
                 ->where('status', 'failed')
                 ->when(! $user->isSuperAdmin(), fn (Builder $query) => $query->where('user_id', $user->id))
@@ -408,14 +467,18 @@ class OperationalLogController extends Controller
                     $query->whereNull('client_id')->orWhereIn('client_id', $clientIds);
                 }))
                 ->count(),
-            'activeSharedAlbums' => SharedAlbum::query()
-                ->where('is_active', true)
-                ->where(fn (Builder $query) => $query->whereNull('expires_at')->orWhere('expires_at', '>=', now()))
-                ->when($clientIds !== null, fn (Builder $query) => $query->where(function (Builder $query) use ($clientIds, $user): void {
-                    $query->whereIn('client_id', $clientIds)
-                        ->orWhere('created_by', $user->id);
-                }))
+            'failedImports' => Import::query()
+                ->where(fn (Builder $query) => $query->where('status', 'failed')->orWhere('failed_items', '>', 0))
+                ->tap(fn (Builder $query) => $this->applyClientScope($query, $clientIds))
                 ->count(),
+            'failedTransfers' => $user->isSuperAdmin()
+                ? AssetTransferJob::query()
+                    ->where(fn (Builder $query) => $query->where('status', 'failed')->orWhere('failed_folders', '>', 0))
+                    ->count()
+                : 0,
+            'failedJobs' => $user->isSuperAdmin()
+                ? DB::table('failed_jobs')->count()
+                : 0,
         ];
     }
 
@@ -493,6 +556,95 @@ class OperationalLogController extends Controller
         return $filters['type'] === '' || $filters['type'] === $type;
     }
 
+    private function downloadFormatLabel(DownloadJob $job): string
+    {
+        $variant = (string) ($job->payload['variant'] ?? '');
+
+        if ($variant === 'crop') {
+            return 'Export '.($job->payload['crop_preset'] ?? 'recadré');
+        }
+
+        if ($job->is_hd || $variant === 'hd') {
+            return 'HD impression';
+        }
+
+        return 'Web réseaux sociaux';
+    }
+
+    private function downloadImageSummary(DownloadJob $job): ?string
+    {
+        $ids = collect($job->payload['requested_image_ids'] ?? [])
+            ->map(fn ($imageId) => (int) $imageId)
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return null;
+        }
+
+        $images = Image::query()
+            ->with(['client:id,name', 'project:id,name'])
+            ->whereIn('id', $ids)
+            ->get()
+            ->sortBy(fn (Image $image) => $ids->search($image->id))
+            ->map(fn (Image $image) => trim(sprintf(
+                '#%d %s%s%s',
+                $image->id,
+                $image->title,
+                $image->client?->name ? " - {$image->client->name}" : '',
+                $image->project?->name ? " / {$image->project->name}" : '',
+            )))
+            ->implode(' ; ');
+
+        return $this->compactText($images, 800);
+    }
+
+    private function downloadSkippedImageSummary(DownloadJob $job): ?string
+    {
+        $skipped = collect($job->payload['skipped_images'] ?? [])
+            ->map(function ($image): ?string {
+                if (! is_array($image)) {
+                    return null;
+                }
+
+                $title = trim((string) ($image['title'] ?? ''));
+                $id = (int) ($image['id'] ?? 0);
+
+                return trim(($id > 0 ? "#{$id} " : '').($title !== '' ? $title : 'Image sans titre'));
+            })
+            ->filter()
+            ->implode(' ; ');
+
+        return $this->compactText($skipped, 500);
+    }
+
+    private function failedImportItemSummary(Import $import): ?string
+    {
+        $items = $import->items()
+            ->with('image:id,title')
+            ->where('status', 'failed')
+            ->latest()
+            ->limit(8)
+            ->get()
+            ->map(function ($item): string {
+                $label = $item->original_filename ?: $item->relative_path ?: $item->source_identifier;
+
+                if ($item->image?->title) {
+                    $label .= " ({$item->image->title})";
+                }
+
+                if ($item->error_details) {
+                    $label .= ": {$item->error_details}";
+                }
+
+                return $label;
+            })
+            ->implode(' ; ');
+
+        return $this->compactText($items, 800);
+    }
+
     private function dateFilter(mixed $value): string
     {
         $value = trim((string) $value);
@@ -533,74 +685,39 @@ class OperationalLogController extends Controller
             ]);
     }
 
-    private function typeOptions(): array
+    private function typeOptions(User $user): array
     {
-        return [
-            ['value' => 'cession', 'label' => 'Cessions'],
-            ['value' => 'demande_extension', 'label' => "Demandes d'extension"],
-            ['value' => 'droits_acces', 'label' => "Droits d'accès"],
+        $types = [
+            ['value' => 'audit', 'label' => 'Audit applicatif'],
             ['value' => 'telechargement', 'label' => 'Téléchargements'],
-            ['value' => 'partage', 'label' => 'Liens partagés'],
-            ['value' => 'audit', 'label' => 'Audit'],
+            ['value' => 'import', 'label' => 'Imports'],
+            ['value' => 'demande_extension', 'label' => "Demandes d'extension"],
         ];
+
+        if ($user->isSuperAdmin()) {
+            $types[] = ['value' => 'transfert', 'label' => 'Transferts fichiers'];
+            $types[] = ['value' => 'job', 'label' => 'Jobs échoués'];
+        }
+
+        return $types;
     }
 
     private function statusOptions(): array
     {
         return [
-            ['value' => 'expired', 'label' => 'Expiré'],
-            ['value' => 'expiring_soon', 'label' => 'À échéance'],
-            ['value' => 'active', 'label' => 'Actif'],
-            ['value' => 'unlimited', 'label' => 'Sans limite'],
+            ['value' => 'trace', 'label' => 'Trace'],
+            ['value' => 'ready', 'label' => 'Prêt'],
+            ['value' => 'pending', 'label' => 'En attente'],
+            ['value' => 'processing', 'label' => 'Traitement'],
+            ['value' => 'running', 'label' => 'En cours'],
+            ['value' => 'completed', 'label' => 'Terminé'],
+            ['value' => 'failed', 'label' => 'Échec'],
+            ['value' => 'cancelled', 'label' => 'Annulé'],
             ['value' => 'demande', 'label' => 'Demandée'],
             ['value' => 'en_cours', 'label' => 'En cours'],
             ['value' => 'accepte', 'label' => 'Acceptée'],
             ['value' => 'refuse', 'label' => 'Refusée'],
-            ['value' => 'ready', 'label' => 'Prêt'],
-            ['value' => 'pending', 'label' => 'En attente'],
-            ['value' => 'processing', 'label' => 'Traitement'],
-            ['value' => 'failed', 'label' => 'Échec'],
-            ['value' => 'inactive', 'label' => 'Inactif'],
-            ['value' => 'upcoming', 'label' => 'À venir'],
-            ['value' => 'trace', 'label' => 'Trace'],
         ];
-    }
-
-    private function rightsStatusLabel(string $status): string
-    {
-        return match ($status) {
-            'expired' => 'Cession expirée',
-            'expiring_soon' => 'Cession bientôt expirée',
-            'active' => 'Cession active',
-            default => 'Cession non limitée',
-        };
-    }
-
-    private function accessPeriodStatus(ProjectAccessPeriod $period): string
-    {
-        if (! $period->is_active) {
-            return 'inactive';
-        }
-
-        if ($period->starts_at && $period->starts_at->isFuture()) {
-            return 'upcoming';
-        }
-
-        if ($period->ends_at && $period->ends_at->isPast()) {
-            return 'expired';
-        }
-
-        return 'active';
-    }
-
-    private function accessPeriodStatusLabel(string $status): string
-    {
-        return match ($status) {
-            'inactive' => 'Inactif',
-            'upcoming' => 'À venir',
-            'expired' => 'Expiré',
-            default => 'Actif',
-        };
     }
 
     private function downloadStatusLabel(string $status): string
@@ -613,31 +730,34 @@ class OperationalLogController extends Controller
         };
     }
 
-    private function sharedAlbumStatus(SharedAlbum $album): string
-    {
-        if (! $album->is_active) {
-            return 'inactive';
-        }
-
-        if ($album->starts_at && $album->starts_at->isFuture()) {
-            return 'upcoming';
-        }
-
-        if ($album->expires_at && $album->expires_at->isPast()) {
-            return 'expired';
-        }
-
-        return 'active';
-    }
-
-    private function sharedAlbumStatusLabel(string $status): string
+    private function importStatusLabel(string $status): string
     {
         return match ($status) {
-            'inactive' => 'Inactif',
-            'upcoming' => 'À venir',
-            'expired' => 'Expiré',
-            default => 'Actif',
+            'completed' => 'Terminé',
+            'failed' => 'Échec',
+            'processing' => 'Traitement',
+            'cancelled' => 'Annulé',
+            default => 'En attente',
         };
+    }
+
+    private function transferStatusLabel(string $status): string
+    {
+        return match ($status) {
+            'completed' => 'Terminé',
+            'failed' => 'Échec',
+            'running' => 'En cours',
+            'cancelling' => 'Annulation',
+            'cancelled' => 'Annulé',
+            default => 'En attente',
+        };
+    }
+
+    private function auditSeverity(AuditLog $log): string
+    {
+        return str_contains($log->action, 'failed') || str_contains($log->action, 'error')
+            ? 'error'
+            : 'info';
     }
 
     private function auditSubjectLabel(AuditLog $log): string
@@ -661,5 +781,34 @@ class OperationalLogController extends Controller
             'ipAddress' => $log->ip_address,
             'userAgent' => $log->user_agent,
         ];
+    }
+
+    private function compactPayload(mixed $payload): ?string
+    {
+        if ($payload === null || $payload === []) {
+            return null;
+        }
+
+        return $this->compactText(json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '', 1200);
+    }
+
+    private function compactText(?string $value, int $limit): ?string
+    {
+        if (! $value) {
+            return null;
+        }
+
+        $value = trim($value);
+
+        return mb_strlen($value) > $limit
+            ? mb_substr($value, 0, $limit).'...'
+            : $value;
+    }
+
+    private function firstLine(?string $value): string
+    {
+        $value = $this->compactText($value, 300) ?: 'Exception non renseignée.';
+
+        return strtok($value, "\n") ?: $value;
     }
 }
