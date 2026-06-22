@@ -142,7 +142,9 @@ type RightsExtensionRequest = {
     rightsEndsAt?: string | null;
     requestedBy?: string | null;
     requestedAt?: string | null;
+    resolvedBy?: string | null;
     resolvedAt?: string | null;
+    extendedRightsEndsAt?: string | null;
     updateUrl?: string | null;
     isLegacy?: boolean;
 };
@@ -637,9 +639,17 @@ function RightsExtensionRequestsPanel({
     statuses: Array<{ value: string; label: string }>;
 }) {
     const [updatingId, setUpdatingId] = useState<number | string | null>(null);
+    const [acceptingRequest, setAcceptingRequest] =
+        useState<RightsExtensionRequest | null>(null);
+    const [extendedRightsEndsAt, setExtendedRightsEndsAt] = useState("");
 
     const updateStatus = (request: RightsExtensionRequest, status: string) => {
         if (status === request.status || !request.updateUrl) {
+            return;
+        }
+
+        if (status === "accepte") {
+            openAcceptDialog(request);
             return;
         }
 
@@ -649,6 +659,34 @@ function RightsExtensionRequestsPanel({
             { status },
             {
                 preserveScroll: true,
+                onFinish: () => setUpdatingId(null),
+                only: ["rightsExtensionRequests", "images", "flash"],
+            },
+        );
+    };
+
+    const openAcceptDialog = (request: RightsExtensionRequest) => {
+        setAcceptingRequest(request);
+        setExtendedRightsEndsAt(suggestExtendedRightsEndsAt(request.rightsEndsAt));
+    };
+
+    const submitAcceptance = (event: FormEvent) => {
+        event.preventDefault();
+
+        if (!acceptingRequest?.updateUrl) {
+            return;
+        }
+
+        setUpdatingId(acceptingRequest.id);
+        router.patch(
+            acceptingRequest.updateUrl,
+            {
+                status: "accepte",
+                extended_rights_ends_at: extendedRightsEndsAt,
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => setAcceptingRequest(null),
                 onFinish: () => setUpdatingId(null),
                 only: ["rightsExtensionRequests", "images", "flash"],
             },
@@ -734,33 +772,84 @@ function RightsExtensionRequestsPanel({
                                                 status={request.status}
                                                 label={request.statusLabel}
                                             />
-                                            {request.isLegacy ? (
+                                            {request.isLegacy && (
                                                 <Badge variant="outline">
                                                     Historique
                                                 </Badge>
-                                            ) : (
-                                                <select
-                                                    value={request.status}
-                                                    className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-                                                    disabled={
-                                                        updatingId === request.id
-                                                    }
-                                                    onChange={(event) =>
-                                                        updateStatus(
-                                                            request,
-                                                            event.target.value,
-                                                        )
-                                                    }
-                                                >
-                                                    {statuses.map((status) => (
-                                                        <option
-                                                            key={status.value}
-                                                            value={status.value}
+                                            )}
+                                            {request.updateUrl && (
+                                                <>
+                                                    {isOpenRightsRequest(
+                                                        request,
+                                                    ) && (
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            onClick={() =>
+                                                                openAcceptDialog(
+                                                                    request,
+                                                                )
+                                                            }
+                                                            disabled={
+                                                                updatingId ===
+                                                                request.id
+                                                            }
                                                         >
-                                                            {status.label}
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                                            Étendre
+                                                        </Button>
+                                                    )}
+                                                    <select
+                                                        value={request.status}
+                                                        className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                                                        disabled={
+                                                            updatingId ===
+                                                            request.id
+                                                        }
+                                                        onChange={(event) =>
+                                                            updateStatus(
+                                                                request,
+                                                                event.target
+                                                                    .value,
+                                                            )
+                                                        }
+                                                    >
+                                                        {statuses.map(
+                                                            (status) => (
+                                                                <option
+                                                                    key={
+                                                                        status.value
+                                                                    }
+                                                                    value={
+                                                                        status.value
+                                                                    }
+                                                                >
+                                                                    {
+                                                                        status.label
+                                                                    }
+                                                                </option>
+                                                            ),
+                                                        )}
+                                                    </select>
+                                                    {request.extendedRightsEndsAt && (
+                                                        <span className="w-full text-xs text-muted-foreground">
+                                                            Prolongée jusqu'au{" "}
+                                                            {formatDate(
+                                                                request.extendedRightsEndsAt,
+                                                            )}
+                                                        </span>
+                                                    )}
+                                                    {request.resolvedAt && (
+                                                        <span className="w-full text-xs text-muted-foreground">
+                                                            Résolue le{" "}
+                                                            {formatDate(
+                                                                request.resolvedAt,
+                                                            )}
+                                                            {request.resolvedBy
+                                                                ? ` par ${request.resolvedBy}`
+                                                                : ""}
+                                                        </span>
+                                                    )}
+                                                </>
                                             )}
                                         </div>
                                     </TableCell>
@@ -770,6 +859,68 @@ function RightsExtensionRequestsPanel({
                     </TableBody>
                 </Table>
             </div>
+
+            <Dialog
+                open={acceptingRequest !== null}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setAcceptingRequest(null);
+                    }
+                }}
+            >
+                <DialogContent>
+                    <form onSubmit={submitAcceptance} className="space-y-5">
+                        <DialogHeader>
+                            <DialogTitle>Étendre la cession</DialogTitle>
+                            <DialogDescription>
+                                Indiquez la nouvelle date de fin avant
+                                d'accepter la demande client.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="extended-rights-ends-at">
+                                Nouvelle fin de cession
+                            </Label>
+                            <Input
+                                id="extended-rights-ends-at"
+                                type="date"
+                                value={extendedRightsEndsAt}
+                                min={tomorrowDateInputValue()}
+                                required
+                                onChange={(event) =>
+                                    setExtendedRightsEndsAt(event.target.value)
+                                }
+                            />
+                            {acceptingRequest?.rightsEndsAt && (
+                                <p className="text-sm text-muted-foreground">
+                                    Fin actuelle :{" "}
+                                    {formatDate(acceptingRequest.rightsEndsAt)}
+                                </p>
+                            )}
+                        </div>
+
+                        <DialogFooter>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setAcceptingRequest(null)}
+                            >
+                                Annuler
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={
+                                    !extendedRightsEndsAt ||
+                                    updatingId === acceptingRequest?.id
+                                }
+                            >
+                                Accepter et prolonger
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
         </section>
     );
 }
@@ -1927,6 +2078,33 @@ function imageImportRetryUrl(importId: number): string {
 
 function imageTagAnalysisStopUrl(runId: number): string {
     return `/image-tag-analysis-runs/${runId}/stop`;
+}
+
+function isOpenRightsRequest(request: RightsExtensionRequest): boolean {
+    return ["demande", "en_cours"].includes(request.status);
+}
+
+function dateInputValue(date: Date): string {
+    return date.toISOString().slice(0, 10);
+}
+
+function tomorrowDateInputValue(): string {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    return dateInputValue(tomorrow);
+}
+
+function suggestExtendedRightsEndsAt(currentRightsEndsAt?: string | null): string {
+    const base = currentRightsEndsAt ? new Date(currentRightsEndsAt) : new Date();
+
+    if (Number.isNaN(base.getTime()) || base < new Date()) {
+        base.setTime(Date.now());
+    }
+
+    base.setFullYear(base.getFullYear() + 1);
+
+    return dateInputValue(base);
 }
 
 function formatBytes(bytes: number): string {

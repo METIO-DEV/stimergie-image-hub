@@ -26,6 +26,7 @@ type RightsExtensionRequest = {
     requestedAt?: string | null;
     resolvedBy?: string | null;
     resolvedAt?: string | null;
+    extendedRightsEndsAt?: string | null;
     isLegacy?: boolean;
 };
 
@@ -131,6 +132,14 @@ export default function RightsExtensionsIndex({
                                                             {request.resolvedBy
                                                                 ? ` par ${request.resolvedBy}`
                                                                 : ""}
+                                                        </div>
+                                                    )}
+                                                    {request.extendedRightsEndsAt && (
+                                                        <div className="w-full text-xs text-muted-foreground">
+                                                            Prolongée jusqu'au{" "}
+                                                            {formatDate(
+                                                                request.extendedRightsEndsAt,
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>

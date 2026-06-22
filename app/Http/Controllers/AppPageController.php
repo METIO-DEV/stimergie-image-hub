@@ -799,6 +799,7 @@ class AppPageController extends Controller
                 'client:id,name',
                 'project:id,name',
                 'requester:id,name,email',
+                'resolver:id,name,email',
             ])
             ->when($manageableClientIds !== null, fn ($query) => $query->whereIn('client_id', $manageableClientIds))
             ->latest()
@@ -815,7 +816,9 @@ class AppPageController extends Controller
                 'rightsEndsAt' => $request->rights_ends_at?->toDateString(),
                 'requestedBy' => $request->requester?->name ?: $request->requester?->email,
                 'requestedAt' => $request->created_at?->toIso8601String(),
+                'resolvedBy' => $request->resolver?->name ?: $request->resolver?->email,
                 'resolvedAt' => $request->resolved_at?->toIso8601String(),
+                'extendedRightsEndsAt' => $request->metadata['extended_rights_ends_at'] ?? null,
                 'updateUrl' => route('image-rights-extension-requests.update', $request),
                 'isLegacy' => false,
             ])
@@ -851,7 +854,7 @@ class AppPageController extends Controller
                 'requestedBy' => $image->rightsExtensionRequester?->name ?: $image->rightsExtensionRequester?->email,
                 'requestedAt' => $image->rights_extension_requested_at?->toIso8601String(),
                 'resolvedAt' => null,
-                'updateUrl' => null,
+                'updateUrl' => route('images.legacy-rights-extension-request.update', $image),
                 'isLegacy' => true,
             ]);
 

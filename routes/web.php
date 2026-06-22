@@ -109,6 +109,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/images', [ImageController::class, 'store'])->name('images.store');
     Route::patch('/images/bulk-project', [ImageController::class, 'bulkProject'])->name('images.bulk-project');
     Route::post('/images/{image}', [ImageController::class, 'update'])->name('images.update');
+    Route::patch('/images/{image}/legacy-rights-extension-request', [ImageRightsExtensionRequestController::class, 'updateLegacy'])->name('images.legacy-rights-extension-request.update');
     Route::patch('/image-rights-extension-requests/{rightsExtensionRequest}', [ImageRightsExtensionRequestController::class, 'update'])->name('image-rights-extension-requests.update');
     Route::get('/image-tag-analysis-runs', [ImageTagAnalysisRunController::class, 'index'])->name('image-tag-analysis-runs.index');
     Route::post('/image-tag-analysis-runs', [ImageTagAnalysisRunController::class, 'store'])->name('image-tag-analysis-runs.store');

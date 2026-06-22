@@ -258,6 +258,8 @@ export default function GalleryIndex({
     const [detailImage, setDetailImage] = useState<LegacyImage | null>(null);
     const [editingImage, setEditingImage] = useState<LegacyImage | null>(null);
     const [imageModalOpen, setImageModalOpen] = useState(false);
+    const [rightsExtensionSubmittingId, setRightsExtensionSubmittingId] =
+        useState<number | string | null>(null);
     const [bulkProjectOpen, setBulkProjectOpen] = useState(false);
     const [bulkProjectId, setBulkProjectId] = useState("");
     const [shareOpen, setShareOpen] = useState(false);
@@ -979,10 +981,14 @@ export default function GalleryIndex({
     };
 
     const requestRightsExtension = (image: LegacyImage) => {
-        if (!image.rightsExtensionRequestUrl) {
+        if (
+            !image.rightsExtensionRequestUrl ||
+            rightsExtensionSubmittingId === image.id
+        ) {
             return;
         }
 
+        setRightsExtensionSubmittingId(image.id);
         router.post(
             image.rightsExtensionRequestUrl,
             {},
@@ -1003,6 +1009,7 @@ export default function GalleryIndex({
                         only: ["images"],
                     });
                 },
+                onFinish: () => setRightsExtensionSubmittingId(null),
             },
         );
     };
@@ -1885,6 +1892,7 @@ export default function GalleryIndex({
                 onTagClick={filterByTag}
                 onEditTags={editImageTags}
                 onRightsExtensionRequest={requestRightsExtension}
+                rightsExtensionSubmittingId={rightsExtensionSubmittingId}
             />
             <ImageEditModal
                 image={editingImage}

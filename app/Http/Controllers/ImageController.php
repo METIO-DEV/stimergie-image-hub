@@ -196,9 +196,27 @@ class ImageController extends Controller
     public function requestRightsExtension(Request $request, Image $image): RedirectResponse
     {
         abort_unless($this->projectAccess->userCanViewImage($request->user(), $image), 403);
-        abort_unless($image->canRequestRightsExtension(), 422);
 
-        $rightsRequest = DB::transaction(function () use ($image, $request): ImageRightsExtensionRequest {
+        $alreadyRequested = false;
+        $notRequestable = false;
+
+        $rightsRequest = DB::transaction(function () use ($image, $request, &$alreadyRequested, &$notRequestable): ?ImageRightsExtensionRequest {
+            $image = Image::query()
+                ->whereKey($image->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $image->load(['client', 'project', 'latestRightsExtensionRequest']);
+
+            if (! $image->canRequestRightsExtension()) {
+                $alreadyRequested = $image->rights_extension_requested_at !== null
+                    || ($image->latestRightsExtensionRequest instanceof ImageRightsExtensionRequest
+                        && ! $image->latestRightsExtensionRequest->isClosed());
+                $notRequestable = ! $alreadyRequested;
+
+                return null;
+            }
+
             $rightsRequest = ImageRightsExtensionRequest::create([
                 'image_id' => $image->id,
                 'client_id' => $image->client_id,
@@ -237,6 +255,14 @@ class ImageController extends Controller
 
             return $rightsRequest;
         });
+
+        if ($alreadyRequested) {
+            return back()->with('success', 'Demande d’extension de cession déjà enregistrée.');
+        }
+
+        if ($notRequestable || ! $rightsRequest) {
+            return back()->with('warning', "Cette image ne peut pas faire l'objet d'une demande d'extension de cession.");
+        }
 
         try {
             $mailSent = $this->rightsExtensionMailer->send($rightsRequest);

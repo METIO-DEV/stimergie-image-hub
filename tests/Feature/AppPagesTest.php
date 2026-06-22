@@ -352,7 +352,6 @@ class AppPagesTest extends TestCase
             'rights_extension_requested_at' => now()->subDays(2),
             'rights_extension_requested_by' => $requester->id,
         ]);
-
         $this->actingAs($admin)
             ->get(route('images.index'))
             ->assertOk()
@@ -364,8 +363,57 @@ class AppPagesTest extends TestCase
                 ->where('rightsExtensionRequests.0.requestedBy', 'Client Demandeur')
                 ->where('rightsExtensionRequests.0.status', ImageRightsExtensionRequest::STATUS_REQUESTED)
                 ->where('rightsExtensionRequests.0.isLegacy', true)
-                ->where('rightsExtensionRequests.0.updateUrl', null)
+                ->where('rightsExtensionRequests.0.updateUrl', route('images.legacy-rights-extension-request.update', $image))
                 ->etc());
+    }
+
+    public function test_admin_can_extend_legacy_rights_extension_request(): void
+    {
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $requester = User::factory()->create(['status' => 'active']);
+        $client = Client::create([
+            'name' => 'Client Legacy Extend',
+            'slug' => 'client-legacy-extend',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Legacy Extend',
+            'slug' => 'projet-legacy-extend',
+            'status' => 'active',
+        ]);
+        $image = Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Image legacy extend',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/client-legacy-extend/source.jpg',
+            'rights_ends_at' => now()->subDay()->toDateString(),
+            'rights_extension_requested_at' => now()->subDays(2),
+            'rights_extension_requested_by' => $requester->id,
+        ]);
+        $extendedRightsEndsAt = now()->addYear()->toDateString();
+
+        $this->actingAs($admin)
+            ->patch(route('images.legacy-rights-extension-request.update', $image), [
+                'status' => ImageRightsExtensionRequest::STATUS_ACCEPTED,
+                'extended_rights_ends_at' => $extendedRightsEndsAt,
+            ])
+            ->assertRedirect();
+
+        $image->refresh();
+
+        $this->assertSame($extendedRightsEndsAt, $image->rights_ends_at->toDateString());
+        $this->assertNull($image->rights_extension_requested_at);
+        $this->assertDatabaseHas('image_rights_extension_requests', [
+            'image_id' => $image->id,
+            'status' => ImageRightsExtensionRequest::STATUS_ACCEPTED,
+            'resolved_by' => $admin->id,
+        ]);
     }
 
     public function test_access_periods_page_exposes_management_action_for_admins(): void
@@ -997,6 +1045,59 @@ class AppPagesTest extends TestCase
         ]);
     }
 
+    public function test_duplicate_rights_extension_request_redirects_without_error(): void
+    {
+        $user = User::factory()->create(['status' => 'active']);
+        $client = Client::create([
+            'name' => 'Client Extension Doublon',
+            'slug' => 'client-extension-doublon',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Extension Doublon',
+            'slug' => 'projet-extension-doublon',
+            'status' => 'active',
+        ]);
+        $image = Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Image extension doublon',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/client-extension-doublon/source.jpg',
+            'rights_ends_at' => now()->subDay()->toDateString(),
+            'rights_extension_requested_at' => now(),
+            'rights_extension_requested_by' => $user->id,
+        ]);
+        ImageRightsExtensionRequest::create([
+            'image_id' => $image->id,
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'requested_by' => $user->id,
+            'status' => ImageRightsExtensionRequest::STATUS_REQUESTED,
+            'rights_ends_at' => $image->rights_ends_at,
+        ]);
+
+        ClientMembership::create([
+            'client_id' => $client->id,
+            'user_id' => $user->id,
+            'role' => 'viewer',
+            'status' => 'active',
+        ]);
+
+        $this->mock(ImageRightsExtensionRequestMailer::class, function ($mock): void {
+            $mock->shouldNotReceive('send');
+        });
+
+        $this->actingAs($user)
+            ->post(route('images.rights-extension', $image))
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Demande d’extension de cession déjà enregistrée.');
+
+        $this->assertSame(1, ImageRightsExtensionRequest::where('image_id', $image->id)->count());
+    }
+
     public function test_gallery_exposes_rights_extension_request_status(): void
     {
         $user = User::factory()->create(['status' => 'active']);
@@ -1086,6 +1187,7 @@ class AppPagesTest extends TestCase
             'status' => ImageRightsExtensionRequest::STATUS_REQUESTED,
             'rights_ends_at' => $image->rights_ends_at,
         ]);
+        $extendedRightsEndsAt = now()->addYear()->toDateString();
 
         $this->actingAs($admin)
             ->get(route('images.index'))
@@ -1102,14 +1204,19 @@ class AppPagesTest extends TestCase
         $this->actingAs($admin)
             ->patch(route('image-rights-extension-requests.update', $rightsRequest), [
                 'status' => ImageRightsExtensionRequest::STATUS_ACCEPTED,
+                'extended_rights_ends_at' => $extendedRightsEndsAt,
             ])
             ->assertRedirect();
 
         $rightsRequest->refresh();
+        $image->refresh();
 
         $this->assertSame(ImageRightsExtensionRequest::STATUS_ACCEPTED, $rightsRequest->status);
         $this->assertSame($admin->id, $rightsRequest->resolved_by);
         $this->assertNotNull($rightsRequest->resolved_at);
+        $this->assertSame($extendedRightsEndsAt, $image->rights_ends_at->toDateString());
+        $this->assertNull($image->rights_extension_requested_at);
+        $this->assertSame($extendedRightsEndsAt, $rightsRequest->metadata['extended_rights_ends_at']);
         $this->assertDatabaseHas('audit_logs', [
             'actor_id' => $admin->id,
             'client_id' => $client->id,

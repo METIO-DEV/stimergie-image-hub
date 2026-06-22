@@ -21,7 +21,7 @@ class RightsExtensionRequestPageController extends Controller
         $clientIds = $this->projectAccess->accessibleClientIds($user);
 
         return Inertia::render('RightsExtensions/Index', [
-            'requests' => $this->requestSummaries($clientIds),
+            'requests' => $this->requestSummaries($clientIds, $user->id),
         ]);
     }
 
@@ -29,7 +29,7 @@ class RightsExtensionRequestPageController extends Controller
      * @param  array<int>|null  $clientIds
      * @return array<int, array<string, mixed>>
      */
-    private function requestSummaries(?array $clientIds): array
+    private function requestSummaries(?array $clientIds, int $userId): array
     {
         $requests = ImageRightsExtensionRequest::query()
             ->with([
@@ -39,7 +39,11 @@ class RightsExtensionRequestPageController extends Controller
                 'requester:id,name,email',
                 'resolver:id,name,email',
             ])
-            ->when($clientIds !== null, fn ($query) => $query->whereIn('client_id', $clientIds))
+            ->when($clientIds !== null, fn ($query) => $query->where(function ($query) use ($clientIds, $userId): void {
+                $query
+                    ->whereIn('client_id', $clientIds)
+                    ->orWhere('requested_by', $userId);
+            }))
             ->latest()
             ->limit(80)
             ->get()
@@ -56,6 +60,7 @@ class RightsExtensionRequestPageController extends Controller
                 'requestedAt' => $request->created_at?->toIso8601String(),
                 'resolvedBy' => $request->resolver?->name ?: $request->resolver?->email,
                 'resolvedAt' => $request->resolved_at?->toIso8601String(),
+                'extendedRightsEndsAt' => $request->metadata['extended_rights_ends_at'] ?? null,
                 'isLegacy' => false,
             ])
             ->values();
@@ -73,7 +78,11 @@ class RightsExtensionRequestPageController extends Controller
             ])
             ->whereNotNull('rights_extension_requested_at')
             ->when($requestImageIds !== [], fn ($query) => $query->whereNotIn('id', $requestImageIds))
-            ->when($clientIds !== null, fn ($query) => $query->whereIn('client_id', $clientIds))
+            ->when($clientIds !== null, fn ($query) => $query->where(function ($query) use ($clientIds, $userId): void {
+                $query
+                    ->whereIn('client_id', $clientIds)
+                    ->orWhere('rights_extension_requested_by', $userId);
+            }))
             ->latest('rights_extension_requested_at')
             ->limit(80)
             ->get()

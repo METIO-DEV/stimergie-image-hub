@@ -54,7 +54,7 @@ class Image extends Model
         $request = $this->currentRightsExtensionRequest();
 
         if ($request instanceof ImageRightsExtensionRequest) {
-            return $request->isClosed() && $request->status === ImageRightsExtensionRequest::STATUS_REFUSED;
+            return $request->isClosed();
         }
 
         return $this->rights_extension_requested_at === null;

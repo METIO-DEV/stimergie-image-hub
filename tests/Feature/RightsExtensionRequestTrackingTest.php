@@ -62,6 +62,7 @@ class RightsExtensionRequestTrackingTest extends TestCase
             'platform_role' => 'user',
             'status' => 'active',
         ]);
+        $otherUser = User::factory()->create(['status' => 'active']);
         [$visibleClient, $visibleProject] = $this->clientProject('Client Visible', 'Projet Visible');
         [$hiddenClient, $hiddenProject] = $this->clientProject('Client Cache', 'Projet Cache');
         $visibleImage = $this->image($visibleClient, $visibleProject, [
@@ -74,7 +75,7 @@ class RightsExtensionRequestTrackingTest extends TestCase
             'title' => 'Image cachee',
             'rights_ends_at' => now()->subDay(),
             'rights_extension_requested_at' => now()->subDays(2),
-            'rights_extension_requested_by' => $viewer->id,
+            'rights_extension_requested_by' => $otherUser->id,
         ]);
 
         ClientMembership::create([
@@ -97,6 +98,46 @@ class RightsExtensionRequestTrackingTest extends TestCase
 
         $response->assertDontSee('Image cachee');
         $response->assertDontSee('Client Cache');
+    }
+
+    public function test_client_viewer_can_follow_own_request_outside_membership_scope(): void
+    {
+        $viewer = User::factory()->create([
+            'platform_role' => 'user',
+            'status' => 'active',
+        ]);
+        [$memberClient] = $this->clientProject('Client Membre', 'Projet Membre');
+        [$sharedClient, $sharedProject] = $this->clientProject('Client Partage', 'Projet Partage');
+        $sharedImage = $this->image($sharedClient, $sharedProject, [
+            'title' => 'Image partage demandee',
+            'rights_ends_at' => now()->subDay(),
+        ]);
+
+        ClientMembership::create([
+            'client_id' => $memberClient->id,
+            'user_id' => $viewer->id,
+            'role' => 'viewer',
+            'status' => 'active',
+        ]);
+
+        ImageRightsExtensionRequest::create([
+            'image_id' => $sharedImage->id,
+            'client_id' => $sharedClient->id,
+            'project_id' => $sharedProject->id,
+            'requested_by' => $viewer->id,
+            'status' => ImageRightsExtensionRequest::STATUS_REQUESTED,
+            'rights_ends_at' => $sharedImage->rights_ends_at,
+        ]);
+
+        $this->actingAs($viewer)
+            ->get(route('rights-extension-requests.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('RightsExtensions/Index')
+                ->has('requests', 1)
+                ->where('requests.0.imageTitle', 'Image partage demandee')
+                ->where('requests.0.clientName', 'Client Partage')
+                ->etc());
     }
 
     private function clientProject(string $clientName, string $projectName): array

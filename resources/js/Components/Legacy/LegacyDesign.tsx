@@ -510,16 +510,20 @@ export function ImageInfoSheet({
     onTagClick,
     onEditTags,
     onRightsExtensionRequest,
+    rightsExtensionSubmittingId,
 }: {
     image: LegacyImage | null;
     onClose: () => void;
     onTagClick?: (tag: string) => void;
     onEditTags?: (image: LegacyImage) => void;
     onRightsExtensionRequest?: (image: LegacyImage) => void;
+    rightsExtensionSubmittingId?: number | string | null;
 }) {
     const imageSrc = image?.imageUrl || image?.thumbUrl || null;
     const rightsExpired = image?.rightsStatus === "expired";
     const rightsWarning = image?.rightsStatus === "expiring_soon";
+    const rightsExtensionSubmitting =
+        image !== null && rightsExtensionSubmittingId === image.id;
     const [zoom, setZoom] = useState(1);
 
     useEffect(() => {
@@ -728,11 +732,14 @@ export function ImageInfoSheet({
                                             type="button"
                                             size="sm"
                                             className="mt-3"
+                                            disabled={rightsExtensionSubmitting}
                                             onClick={() =>
                                                 onRightsExtensionRequest(image)
                                             }
                                         >
-                                            Demander une extension de cession
+                                            {rightsExtensionSubmitting
+                                                ? "Demande en cours..."
+                                                : "Demander une extension de cession"}
                                         </Button>
                                     ) : null}
                                 </div>
