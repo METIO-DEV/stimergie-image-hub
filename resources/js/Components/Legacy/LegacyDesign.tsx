@@ -707,18 +707,18 @@ export function ImageInfoSheet({
                                                 )}
                                                 .
                                             </p>
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() => {
-                                                    window.location.href =
-                                                        route("images.index", {
-                                                            tab: "rights-extensions",
-                                                        });
-                                                }}
-                                            >
-                                                Voir le suivi
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => {
+                                                        window.location.href =
+                                                            route(
+                                                                "rights-extension-requests.index",
+                                                            );
+                                                    }}
+                                                >
+                                                    Voir le suivi
                                             </Button>
                                         </div>
                                     ) : image.canRequestRightsExtension &&

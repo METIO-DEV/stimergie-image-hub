@@ -156,6 +156,12 @@ export default function Authenticated({
             active: route().current("downloads.index"),
         },
         {
+            href: route("rights-extension-requests.index"),
+            label: "Demandes de cession",
+            icon: Shield,
+            active: route().current("rights-extension-requests.index"),
+        },
+        {
             href: route("profile.edit"),
             label: "Profil",
             icon: User,
@@ -580,6 +586,10 @@ function breadcrumbItems(): BreadcrumbItem[] {
 
     if (route().current("downloads.index")) {
         return [home, { label: "Téléchargements" }];
+    }
+
+    if (route().current("rights-extension-requests.index")) {
+        return [home, { label: "Demandes de cession" }];
     }
 
     if (route().current("operations.index")) {

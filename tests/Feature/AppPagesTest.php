@@ -36,6 +36,7 @@ class AppPagesTest extends TestCase
             'gallery.index',
             'contact.index',
             'downloads.index',
+            'rights-extension-requests.index',
             'operations.index',
             'images.index',
             'imports.index',

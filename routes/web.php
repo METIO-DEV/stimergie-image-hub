@@ -19,6 +19,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectAccessPeriodController;
 use App\Http\Controllers\ProjectBucketSyncController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\RightsExtensionRequestPageController;
 use App\Http\Controllers\SharedAlbumController;
 use App\Http\Controllers\UserController;
 use App\Models\Client;
@@ -88,6 +89,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/contact', [AppPageController::class, 'contact'])->name('contact.index');
     Route::post('/contact', [AppPageController::class, 'sendContact'])->name('contact.send');
     Route::get('/downloads', [AppPageController::class, 'downloads'])->name('downloads.index');
+    Route::get('/demandes-extension-cession', [RightsExtensionRequestPageController::class, 'index'])->name('rights-extension-requests.index');
     Route::get('/suivi-operationnel', [OperationalLogController::class, 'index'])->name('operations.index');
     Route::post('/downloads', [DownloadController::class, 'store'])->name('downloads.store');
     Route::get('/downloads/{downloadJob}', [DownloadController::class, 'show'])->name('downloads.show');
