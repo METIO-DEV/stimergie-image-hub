@@ -1,4 +1,5 @@
 import { Button } from "@/Components/ui/button";
+import { ProtectedImage } from "@/Components/ProtectedImage";
 import {
     Dialog,
     DialogContent,
@@ -1743,7 +1744,7 @@ export default function GalleryIndex({
                                                 }
                                             >
                                                 {imageSrc ? (
-                                                    <img
+                                                    <ProtectedImage
                                                         src={imageSrc}
                                                         alt={
                                                             image?.title ||
@@ -2140,7 +2141,7 @@ function CropExportDialog({
                                     >
                                         <span className="h-12 overflow-hidden rounded bg-muted">
                                             {src ? (
-                                                <img
+                                                <ProtectedImage
                                                     src={src}
                                                     alt={image.title}
                                                     className="h-full w-full object-cover"
@@ -2168,7 +2169,7 @@ function CropExportDialog({
                                     }}
                                 >
                                     {previewSrc ? (
-                                        <img
+                                        <ProtectedImage
                                             src={previewSrc}
                                             alt={selectedImage?.title ?? "Aperçu"}
                                             className="h-full w-full object-cover"

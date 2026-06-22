@@ -1,4 +1,5 @@
 import { Badge } from "@/Components/ui/badge";
+import { ProtectedImage } from "@/Components/ProtectedImage";
 import { Button } from "@/Components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/Components/ui/card";
 import {
@@ -595,7 +596,7 @@ export function ImageInfoSheet({
                                                 : "overflow-hidden",
                                         )}
                                     >
-                                        <img
+                                        <ProtectedImage
                                             src={imageSrc}
                                             alt={image.title}
                                             className={cn(
@@ -970,7 +971,7 @@ export const LazyImage = memo(function LazyImage({
             )}
 
             {isInView && !hasError && (
-                <img
+                <ProtectedImage
                     ref={imageRef}
                     src={activeSrc}
                     alt={alt}

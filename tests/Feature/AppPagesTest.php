@@ -79,19 +79,41 @@ class AppPagesTest extends TestCase
     public function test_contact_request_is_recorded_in_audit_log(): void
     {
         $user = User::factory()->create([
+            'name' => 'Client Contact',
+            'email' => 'client-contact@example.test',
             'status' => 'active',
         ]);
+
+        $this->mock(TransactionalMailer::class, function ($mock) use ($user): void {
+            $mock->shouldReceive('send')
+                ->once()
+                ->with(
+                    'contact_request',
+                    [['email' => 'contact@imprononcable.com', 'name' => 'Imprononcable']],
+                    Mockery::on(fn (array $params): bool => $params['subject'] === 'Besoin d acces'
+                        && $params['message'] === 'Pouvez-vous ouvrir un nouvel acces projet ?'
+                        && $params['user_name'] === $user->name
+                        && $params['user_email'] === $user->email
+                        && $params['reply_to_email'] === $user->email),
+                    [['email' => 'gaston@metio.fr', 'name' => 'Gaston Metio']],
+                )
+                ->andReturn(true);
+        });
 
         $this->actingAs($user)
             ->post(route('contact.send'), [
                 'subject' => 'Besoin d acces',
                 'message' => 'Pouvez-vous ouvrir un nouvel acces projet ?',
             ])
-            ->assertRedirect();
+            ->assertRedirect()
+            ->assertSessionHas('success', "Votre message a été transmis à l'équipe Stimergie.");
 
         $this->assertDatabaseHas('audit_logs', [
             'actor_id' => $user->id,
             'action' => 'contact.requested',
+            'properties->mail_sent' => true,
+            'properties->mail_to' => 'contact@imprononcable.com',
+            'properties->mail_cc' => 'gaston@metio.fr',
         ]);
     }
 

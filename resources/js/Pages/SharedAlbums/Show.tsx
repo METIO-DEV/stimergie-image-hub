@@ -1,4 +1,5 @@
 import AppFooter from "@/Components/AppFooter";
+import { ProtectedImage } from "@/Components/ProtectedImage";
 import { Badge } from "@/Components/ui/badge";
 import { Button } from "@/Components/ui/button";
 import { Card, CardContent } from "@/Components/ui/card";
@@ -72,7 +73,7 @@ export default function SharedAlbumShow({
                         <Card key={image.id} className="overflow-hidden">
                             <div className="aspect-square bg-muted">
                                 {image.imageUrl || image.thumbUrl ? (
-                                    <img
+                                    <ProtectedImage
                                         src={image.imageUrl || image.thumbUrl || ""}
                                         alt={image.title}
                                         className="h-full w-full object-cover"

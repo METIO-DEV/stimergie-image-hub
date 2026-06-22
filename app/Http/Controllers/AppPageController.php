@@ -15,17 +15,24 @@ use App\Models\User;
 use App\Support\ClientLogoUrlResolver;
 use App\Support\ImageUrlResolver;
 use App\Support\ProjectAccess;
+use App\Support\TransactionalMailer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Throwable;
 
 class AppPageController extends Controller
 {
+    private const CONTACT_RECIPIENT = 'contact@imprononcable.com';
+
+    private const CONTACT_COPY = 'gaston@metio.fr';
+
     public function __construct(
         private readonly ClientLogoUrlResolver $clientLogos,
         private readonly ImageUrlResolver $imageUrls,
         private readonly ProjectAccess $projectAccess,
+        private readonly TransactionalMailer $mailer,
     ) {}
 
     public function gallery(Request $request): Response
@@ -124,13 +131,44 @@ class AppPageController extends Controller
             'message' => ['required', 'string', 'max:5000'],
         ]);
 
+        $user = $request->user();
+        $mailSent = false;
+
+        try {
+            $mailSent = $this->mailer->send(
+                'contact_request',
+                [['email' => self::CONTACT_RECIPIENT, 'name' => 'Imprononcable']],
+                [
+                    'subject' => $data['subject'],
+                    'message' => $data['message'],
+                    'user_name' => $user->name,
+                    'user_email' => $user->email,
+                    'reply_to_name' => $user->name,
+                    'reply_to_email' => $user->email,
+                    'submitted_at' => now()->format('d/m/Y H:i'),
+                ],
+                [['email' => self::CONTACT_COPY, 'name' => 'Gaston Metio']],
+            );
+        } catch (Throwable) {
+            $mailSent = false;
+        }
+
         AuditLog::create([
-            'actor_id' => $request->user()->id,
+            'actor_id' => $user->id,
             'action' => 'contact.requested',
-            'properties' => $data,
+            'properties' => [
+                ...$data,
+                'mail_sent' => $mailSent,
+                'mail_to' => self::CONTACT_RECIPIENT,
+                'mail_cc' => self::CONTACT_COPY,
+            ],
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
         ]);
+
+        if (! $mailSent) {
+            return back()->with('warning', "Votre message a été enregistré mais l'email n'a pas pu être envoyé. Vérifiez la configuration email.");
+        }
 
         return back()->with('success', "Votre message a été transmis à l'équipe Stimergie.");
     }
