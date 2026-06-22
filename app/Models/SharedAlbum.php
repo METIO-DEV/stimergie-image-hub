@@ -25,6 +25,11 @@ class SharedAlbum extends Model
         return $this->belongsTo(Client::class);
     }
 
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
     public function images(): BelongsToMany
     {
         return $this->belongsToMany(Image::class, 'shared_album_images')

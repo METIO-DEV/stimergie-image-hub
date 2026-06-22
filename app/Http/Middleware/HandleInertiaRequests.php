@@ -48,6 +48,7 @@ class HandleInertiaRequests extends Middleware
                     'canViewUsers' => $user?->isSuperAdmin() ?? false,
                     'canViewAccessPeriods' => $user?->can('viewAny', ProjectAccessPeriod::class) ?? false,
                     'canManageAccessPeriods' => $user?->can('viewAny', ProjectAccessPeriod::class) ?? false,
+                    'canViewOperationalLogs' => $canManageClientContent,
                 ],
             ],
             'flash' => [

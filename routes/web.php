@@ -14,6 +14,7 @@ use App\Http\Controllers\ImageImportController;
 use App\Http\Controllers\ImageRightsExtensionRequestController;
 use App\Http\Controllers\ImageTagAnalysisRunController;
 use App\Http\Controllers\LegalPageController;
+use App\Http\Controllers\OperationalLogController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectAccessPeriodController;
 use App\Http\Controllers\ProjectBucketSyncController;
@@ -87,6 +88,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/contact', [AppPageController::class, 'contact'])->name('contact.index');
     Route::post('/contact', [AppPageController::class, 'sendContact'])->name('contact.send');
     Route::get('/downloads', [AppPageController::class, 'downloads'])->name('downloads.index');
+    Route::get('/suivi-operationnel', [OperationalLogController::class, 'index'])->name('operations.index');
     Route::post('/downloads', [DownloadController::class, 'store'])->name('downloads.store');
     Route::get('/downloads/{downloadJob}', [DownloadController::class, 'show'])->name('downloads.show');
     Route::get('/images', [AppPageController::class, 'images'])->name('images.index');

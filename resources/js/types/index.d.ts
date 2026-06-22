@@ -15,6 +15,7 @@ export interface Abilities {
     canViewUsers: boolean;
     canViewAccessPeriods: boolean;
     canManageAccessPeriods: boolean;
+    canViewOperationalLogs: boolean;
 }
 
 export type PageProps<

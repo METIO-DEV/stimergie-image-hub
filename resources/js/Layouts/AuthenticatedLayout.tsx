@@ -19,6 +19,7 @@ import {
     BookOpenText,
     Download,
     FolderOpen,
+    History,
     Image,
     LayoutDashboard,
     LogOut,
@@ -176,6 +177,12 @@ export default function Authenticated({
             active: route().current("images.index"),
         },
         {
+            href: route("operations.index"),
+            label: "Suivi opérationnel",
+            icon: History,
+            active: route().current("operations.index"),
+        },
+        {
             href: route("asset-transfers.index"),
             label: "Transferts FTP",
             icon: ServerCog,
@@ -212,6 +219,10 @@ export default function Authenticated({
         : adminMenu.filter((item) => {
               if (item.label === "Gestion des images") {
                   return abilities.canManageClientContent;
+              }
+
+              if (item.label === "Suivi opérationnel") {
+                  return abilities.canViewOperationalLogs;
               }
 
               if (item.label === "Blog et ressources") {
@@ -569,6 +580,10 @@ function breadcrumbItems(): BreadcrumbItem[] {
 
     if (route().current("downloads.index")) {
         return [home, { label: "Téléchargements" }];
+    }
+
+    if (route().current("operations.index")) {
+        return [home, { label: "Suivi opérationnel" }];
     }
 
     if (route().current("projects.index")) {
