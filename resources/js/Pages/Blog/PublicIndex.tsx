@@ -42,7 +42,9 @@ export default function PublicIndex({
     };
 
     return (
-        <PublicBlogLayout>
+        <PublicBlogLayout
+            section={contentType === "ensemble" ? "blog" : "resources"}
+        >
             <Head title={title} />
 
             <section className="border-b bg-muted/30">

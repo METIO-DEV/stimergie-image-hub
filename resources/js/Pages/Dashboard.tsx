@@ -166,7 +166,7 @@ export default function Dashboard({
                     <FeatureCard
                         title="Blog et ressources"
                         subtitle="Publier les contenus éditoriaux"
-                        description="Créer des ressources, articles Ensemble et brouillons"
+                        description="Créer des ressources, articles Blog et brouillons"
                         href={route("blog.admin.index")}
                         icon={BookOpenText}
                     />

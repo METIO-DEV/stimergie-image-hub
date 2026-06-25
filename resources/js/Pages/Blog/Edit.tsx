@@ -191,7 +191,7 @@ export default function Edit({
                                         className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
                                     >
                                         <option value="resource">Ressource</option>
-                                        <option value="ensemble">Ensemble</option>
+                                        <option value="ensemble">Blog</option>
                                     </select>
                                     <InputError message={errors.content_type} />
                                 </div>

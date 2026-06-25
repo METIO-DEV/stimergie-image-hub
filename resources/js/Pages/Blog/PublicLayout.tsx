@@ -1,9 +1,13 @@
 import AppFooter from "@/Components/AppFooter";
-import { Button } from "@/Components/ui/button";
+import { cn } from "@/lib/utils";
 import { Link } from "@inertiajs/react";
 import { PropsWithChildren } from "react";
 
-export default function PublicBlogLayout({ children }: PropsWithChildren) {
+type Props = PropsWithChildren<{
+    section?: "resources" | "blog";
+}>;
+
+export default function PublicBlogLayout({ children, section }: Props) {
     return (
         <div className="flex min-h-screen flex-col bg-background text-foreground">
             <header className="border-b border-border/80 bg-[#F2F0F0]">
@@ -16,39 +20,47 @@ export default function PublicBlogLayout({ children }: PropsWithChildren) {
                         />
                     </Link>
                     <nav className="flex min-w-0 flex-wrap items-center justify-end gap-1 text-sm font-semibold sm:gap-2">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            asChild
-                            className="h-auto px-2 py-1.5"
+                        <PublicNavLink
+                            href={route("blog.resources")}
+                            active={section === "resources"}
                         >
-                            <Link href={route("blog.resources")}>
-                                Ressources
-                            </Link>
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            asChild
-                            className="h-auto px-2 py-1.5"
+                            Ressources
+                        </PublicNavLink>
+                        <PublicNavLink
+                            href={route("blog.ensemble")}
+                            active={section === "blog"}
                         >
-                            <Link href={route("blog.ensemble")}>Ensemble</Link>
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            asChild
-                            className="h-auto whitespace-normal px-2 py-1.5 text-center"
-                        >
-                            <Link href={route("gallery.index")}>
-                                Banque d'images
-                            </Link>
-                        </Button>
+                            Blog
+                        </PublicNavLink>
+                        <PublicNavLink href={route("gallery.index")}>
+                            Banque d'images
+                        </PublicNavLink>
                     </nav>
                 </div>
             </header>
             <main className="flex-1">{children}</main>
             <AppFooter />
         </div>
+    );
+}
+
+function PublicNavLink({
+    href,
+    active = false,
+    children,
+}: PropsWithChildren<{ href: string; active?: boolean }>) {
+    return (
+        <Link
+            href={href}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+                "rounded-md px-3 py-2 text-sm transition-colors",
+                active
+                    ? "bg-[#150B0D] text-white shadow-sm"
+                    : "text-[#150B0D]/70 hover:bg-white/70 hover:text-[#150B0D]",
+            )}
+        >
+            {children}
+        </Link>
     );
 }

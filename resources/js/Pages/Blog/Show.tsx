@@ -16,7 +16,9 @@ export default function Show({ post, canEdit }: Props) {
         post.contentType === "ensemble" ? "blog.ensemble" : "blog.resources";
 
     return (
-        <PublicBlogLayout>
+        <PublicBlogLayout
+            section={post.contentType === "ensemble" ? "blog" : "resources"}
+        >
             <Head title={post.title} />
 
             <article className="container py-8 md:py-12">

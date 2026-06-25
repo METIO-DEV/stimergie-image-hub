@@ -30,7 +30,7 @@ class BlogPostController extends Controller
 
     public function ensemble(Request $request): Response
     {
-        return $this->publicIndex($request, 'ensemble', 'Ensemble', 'Retrouvez les actualités, projets et conseils Stimergie.');
+        return $this->publicIndex($request, 'ensemble', 'Blog', 'Retrouvez les actualités, projets et conseils Stimergie.');
     }
 
     public function show(Request $request, BlogPost $blogPost): Response
@@ -208,7 +208,7 @@ class BlogPostController extends Controller
             'content' => $post->content,
             'excerpt' => Str::limit(trim(strip_tags($post->content)), 180),
             'contentType' => $post->content_type,
-            'contentTypeLabel' => $post->content_type === 'ensemble' ? 'Ensemble' : 'Ressource',
+            'contentTypeLabel' => $post->content_type === 'ensemble' ? 'Blog' : 'Ressource',
             'category' => $post->category,
             'categoryLabel' => $this->categoryLabel($post->category),
             'clientId' => $post->client_id,
@@ -276,6 +276,10 @@ class BlogPostController extends Controller
     {
         if (! $objectKey) {
             return null;
+        }
+
+        if (str_starts_with($objectKey, 'https://') || str_starts_with($objectKey, 'http://')) {
+            return $objectKey;
         }
 
         try {

@@ -29,6 +29,7 @@ class BlogPostManagementTest extends TestCase
             'slug' => 'guide-publie',
             'content' => 'Contenu visible',
             'content_type' => 'resource',
+            'featured_image_object_key' => 'https://picsum.photos/seed/test-public-blog/1200/800',
             'external_links' => [
                 ['label' => 'Direction artistique', 'url' => 'https://docs.google.com/presentation/d/example'],
             ],
@@ -50,6 +51,7 @@ class BlogPostManagementTest extends TestCase
                 ->component('Blog/PublicIndex')
                 ->has('posts', 1)
                 ->where('posts.0.id', $published->id)
+                ->where('posts.0.featuredImageUrl', 'https://picsum.photos/seed/test-public-blog/1200/800')
             );
 
         $this->get(route('blog.show', $published->slug))

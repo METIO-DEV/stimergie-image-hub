@@ -59,7 +59,7 @@ export default function AdminIndex({
 
             <SectionHeader
                 title="Blog et ressources"
-                description="Gérez les contenus éditoriaux publiés dans les espaces Ressources et Ensemble."
+                description="Gérez les contenus éditoriaux publiés dans les espaces Ressources et Blog."
                 action={
                     canCreatePost && (
                         <Button asChild className="h-auto whitespace-normal text-left">
@@ -92,7 +92,7 @@ export default function AdminIndex({
                     >
                         <option value="">Tous les types</option>
                         <option value="resource">Ressource</option>
-                        <option value="ensemble">Ensemble</option>
+                        <option value="ensemble">Blog</option>
                     </select>
                 </div>
 
