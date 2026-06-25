@@ -1,19 +1,46 @@
 import { Badge } from "@/Components/ui/badge";
 import { Button } from "@/Components/ui/button";
 import { Card, CardContent } from "@/Components/ui/card";
-import { Head, Link } from "@inertiajs/react";
+import { Head, Link, router } from "@inertiajs/react";
 import { ArrowRight } from "lucide-react";
 import PublicBlogLayout from "./PublicLayout";
-import { BlogPost } from "./types";
+import { BlogClientOption, BlogPost } from "./types";
 
 type Props = {
     posts: BlogPost[];
     title: string;
     description: string;
     contentType: "resource" | "ensemble";
+    filters: {
+        clients: BlogClientOption[];
+    };
+    activeFilters: {
+        clientId: string;
+    };
 };
 
-export default function PublicIndex({ posts, title, description }: Props) {
+export default function PublicIndex({
+    posts,
+    title,
+    description,
+    contentType,
+    filters,
+    activeFilters,
+}: Props) {
+    const changeClient = (clientId: string) => {
+        const routeName =
+            contentType === "ensemble" ? "blog.ensemble" : "blog.resources";
+
+        router.get(
+            route(routeName),
+            clientId ? { client_id: clientId } : {},
+            {
+                preserveScroll: true,
+                preserveState: true,
+            },
+        );
+    };
+
     return (
         <PublicBlogLayout>
             <Head title={title} />
@@ -27,6 +54,27 @@ export default function PublicIndex({ posts, title, description }: Props) {
                         <p className="mt-4 text-base leading-7 text-muted-foreground">
                             {description}
                         </p>
+                        {filters.clients.length > 0 && (
+                            <div className="mt-6 max-w-xs">
+                                <select
+                                    value={activeFilters.clientId}
+                                    onChange={(event) =>
+                                        changeClient(event.target.value)
+                                    }
+                                    className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                                >
+                                    <option value="">Tous les clients</option>
+                                    {filters.clients.map((client) => (
+                                        <option
+                                            key={client.id}
+                                            value={client.id}
+                                        >
+                                            {client.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
                     </div>
                 </div>
             </section>
@@ -69,6 +117,9 @@ function ArticleCard({ post }: { post: BlogPost }) {
                         <Badge variant="secondary">
                             {post.contentTypeLabel}
                         </Badge>
+                        {post.clientName && (
+                            <Badge variant="outline">{post.clientName}</Badge>
+                        )}
                         {post.categoryLabel && (
                             <Badge variant="outline">
                                 {post.categoryLabel}

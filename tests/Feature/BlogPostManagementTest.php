@@ -29,6 +29,9 @@ class BlogPostManagementTest extends TestCase
             'slug' => 'guide-publie',
             'content' => 'Contenu visible',
             'content_type' => 'resource',
+            'external_links' => [
+                ['label' => 'Direction artistique', 'url' => 'https://docs.google.com/presentation/d/example'],
+            ],
             'is_published' => true,
             'published_at' => now(),
         ]);
@@ -49,8 +52,64 @@ class BlogPostManagementTest extends TestCase
                 ->where('posts.0.id', $published->id)
             );
 
-        $this->get(route('blog.show', $published->slug))->assertOk();
+        $this->get(route('blog.show', $published->slug))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('post.externalLinks.0.label', 'Direction artistique')
+                ->where('post.externalLinks.0.url', 'https://docs.google.com/presentation/d/example')
+                ->where('post.externalLinks.0.host', 'docs.google.com')
+            );
         $this->get(route('blog.show', $draft->slug))->assertNotFound();
+    }
+
+    public function test_public_blog_can_filter_published_posts_by_client(): void
+    {
+        $author = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $firstClient = Client::create([
+            'name' => 'Client Alpha',
+            'slug' => 'client-alpha',
+            'status' => 'active',
+        ]);
+        $secondClient = Client::create([
+            'name' => 'Client Beta',
+            'slug' => 'client-beta',
+            'status' => 'active',
+        ]);
+
+        $firstPost = BlogPost::create([
+            'client_id' => $firstClient->id,
+            'author_id' => $author->id,
+            'title' => 'Article Alpha',
+            'slug' => 'article-alpha',
+            'content' => 'Contenu Alpha',
+            'content_type' => 'resource',
+            'is_published' => true,
+            'published_at' => now(),
+        ]);
+        BlogPost::create([
+            'client_id' => $secondClient->id,
+            'author_id' => $author->id,
+            'title' => 'Article Beta',
+            'slug' => 'article-beta',
+            'content' => 'Contenu Beta',
+            'content_type' => 'resource',
+            'is_published' => true,
+            'published_at' => now(),
+        ]);
+
+        $this->get(route('blog.resources', ['client_id' => $firstClient->id]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Blog/PublicIndex')
+                ->has('filters.clients', 2)
+                ->where('activeFilters.clientId', (string) $firstClient->id)
+                ->has('posts', 1)
+                ->where('posts.0.id', $firstPost->id)
+                ->where('posts.0.clientName', 'Client Alpha')
+            );
     }
 
     public function test_super_admin_can_create_update_and_delete_a_blog_post(): void
@@ -91,6 +150,10 @@ class BlogPostManagementTest extends TestCase
                 'content_type' => 'resource',
                 'category' => null,
                 'featured_image_id' => $image->id,
+                'external_links' => [
+                    ['label' => 'Plateforme Canva', 'url' => 'https://www.canva.com/design/example'],
+                    ['label' => '', 'url' => ''],
+                ],
                 'is_published' => true,
             ])
             ->assertRedirect(route('blog.admin.index'));
@@ -104,6 +167,9 @@ class BlogPostManagementTest extends TestCase
             'featured_image_object_key' => 'photos/projet-blog/JPG/source.jpg',
             'is_published' => true,
         ]);
+        $this->assertSame([
+            ['label' => 'Plateforme Canva', 'url' => 'https://www.canva.com/design/example'],
+        ], $post->refresh()->external_links);
 
         $this->actingAs($admin)
             ->patch(route('blog.update', $post), [
@@ -114,6 +180,9 @@ class BlogPostManagementTest extends TestCase
                 'category' => 'projets',
                 'featured_image_id' => null,
                 'remove_featured_image' => true,
+                'external_links' => [
+                    ['label' => 'Slides', 'url' => 'https://docs.google.com/presentation/d/updated'],
+                ],
                 'is_published' => false,
             ])
             ->assertRedirect(route('blog.admin.index'));
@@ -127,6 +196,9 @@ class BlogPostManagementTest extends TestCase
             'featured_image_object_key' => null,
             'is_published' => false,
         ]);
+        $this->assertSame([
+            ['label' => 'Slides', 'url' => 'https://docs.google.com/presentation/d/updated'],
+        ], $post->refresh()->external_links);
 
         $this->actingAs($admin)
             ->delete(route('blog.destroy', $post))

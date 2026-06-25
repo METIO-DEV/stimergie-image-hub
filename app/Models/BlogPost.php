@@ -12,6 +12,7 @@ class BlogPost extends Model
     protected function casts(): array
     {
         return [
+            'external_links' => 'array',
             'is_published' => 'boolean',
             'published_at' => 'datetime',
         ];

@@ -8,10 +8,19 @@ import { Textarea } from "@/Components/ui/textarea";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { cn } from "@/lib/utils";
 import { Head, Link, useForm } from "@inertiajs/react";
-import { ArrowLeft, Check, ImageIcon, Save, X } from "lucide-react";
+import {
+    ArrowLeft,
+    Check,
+    ImageIcon,
+    Plus,
+    Save,
+    Trash2,
+    X,
+} from "lucide-react";
 import { FormEvent, useMemo } from "react";
 import {
     BlogClientOption,
+    BlogExternalLinkFormData,
     BlogFormData,
     BlogImageOption,
     BlogPost,
@@ -55,6 +64,11 @@ export default function Edit({
                 (existingPost?.category as BlogFormData["category"]) ?? null,
             featured_image_id: initialFeaturedImageId,
             remove_featured_image: false,
+            external_links:
+                existingPost?.externalLinks.map((link) => ({
+                    label: link.label,
+                    url: link.url,
+                })) ?? [],
             is_published: existingPost?.isPublished ?? false,
         });
 
@@ -86,6 +100,35 @@ export default function Edit({
             category: contentType === "ensemble" ? values.category : null,
         }));
     };
+
+    const addExternalLink = () => {
+        setData("external_links", [
+            ...data.external_links,
+            { label: "", url: "" },
+        ]);
+    };
+
+    const updateExternalLink = (
+        index: number,
+        field: keyof BlogExternalLinkFormData,
+        value: string,
+    ) => {
+        setData(
+            "external_links",
+            data.external_links.map((link, linkIndex) =>
+                linkIndex === index ? { ...link, [field]: value } : link,
+            ),
+        );
+    };
+
+    const removeExternalLink = (index: number) => {
+        setData(
+            "external_links",
+            data.external_links.filter((_, linkIndex) => linkIndex !== index),
+        );
+    };
+
+    const fieldErrors = errors as Record<string, string | undefined>;
 
     return (
         <AuthenticatedLayout>
@@ -250,6 +293,104 @@ export default function Edit({
                                 />
                                 <InputError message={errors.content} />
                             </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <CardTitle>Liens externes</CardTitle>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={addExternalLink}
+                            >
+                                <Plus className="h-4 w-4" />
+                                Ajouter un lien
+                            </Button>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            {data.external_links.length === 0 ? (
+                                <div className="rounded-md border bg-muted/40 p-4 text-sm text-muted-foreground">
+                                    Aucun lien externe ajouté.
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {data.external_links.map((link, index) => (
+                                        <div
+                                            key={index}
+                                            className="grid gap-3 rounded-md border p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto]"
+                                        >
+                                            <div className="space-y-2">
+                                                <Label
+                                                    htmlFor={`external-link-label-${index}`}
+                                                >
+                                                    Libellé
+                                                </Label>
+                                                <Input
+                                                    id={`external-link-label-${index}`}
+                                                    value={link.label}
+                                                    onChange={(event) =>
+                                                        updateExternalLink(
+                                                            index,
+                                                            "label",
+                                                            event.target.value,
+                                                        )
+                                                    }
+                                                    placeholder="Google Slides, Canva..."
+                                                />
+                                                <InputError
+                                                    message={
+                                                        fieldErrors[
+                                                            `external_links.${index}.label`
+                                                        ]
+                                                    }
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label
+                                                    htmlFor={`external-link-url-${index}`}
+                                                >
+                                                    URL
+                                                </Label>
+                                                <Input
+                                                    id={`external-link-url-${index}`}
+                                                    value={link.url}
+                                                    onChange={(event) =>
+                                                        updateExternalLink(
+                                                            index,
+                                                            "url",
+                                                            event.target.value,
+                                                        )
+                                                    }
+                                                    placeholder="https://..."
+                                                />
+                                                <InputError
+                                                    message={
+                                                        fieldErrors[
+                                                            `external_links.${index}.url`
+                                                        ]
+                                                    }
+                                                />
+                                            </div>
+                                            <div className="flex items-end justify-end">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="icon"
+                                                    title="Retirer le lien"
+                                                    onClick={() =>
+                                                        removeExternalLink(index)
+                                                    }
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            <InputError message={errors.external_links} />
                         </CardContent>
                     </Card>
 

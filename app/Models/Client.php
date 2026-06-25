@@ -30,4 +30,9 @@ class Client extends Model
     {
         return $this->hasMany(Image::class);
     }
+
+    public function blogPosts(): HasMany
+    {
+        return $this->hasMany(BlogPost::class);
+    }
 }

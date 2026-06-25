@@ -23,14 +23,14 @@ class BlogPostController extends Controller
         private readonly ImageUrlResolver $imageUrls,
     ) {}
 
-    public function resources(): Response
+    public function resources(Request $request): Response
     {
-        return $this->publicIndex('resource', 'Ressources', 'Découvrez nos ressources et guides pratiques.');
+        return $this->publicIndex($request, 'resource', 'Ressources', 'Découvrez nos ressources et guides pratiques.');
     }
 
-    public function ensemble(): Response
+    public function ensemble(Request $request): Response
     {
-        return $this->publicIndex('ensemble', 'Ensemble', 'Retrouvez les actualités, projets et conseils Stimergie.');
+        return $this->publicIndex($request, 'ensemble', 'Ensemble', 'Retrouvez les actualités, projets et conseils Stimergie.');
     }
 
     public function show(Request $request, BlogPost $blogPost): Response
@@ -118,6 +118,7 @@ class BlogPostController extends Controller
             'content_type' => $data['content_type'],
             'category' => $data['content_type'] === 'ensemble' ? ($data['category'] ?? null) : null,
             'featured_image_object_key' => $featuredImageObjectKey,
+            'external_links' => $this->externalLinksPayload($data),
             'is_published' => $isPublished,
             'published_at' => $isPublished ? now() : null,
         ]);
@@ -148,6 +149,7 @@ class BlogPostController extends Controller
             'content_type' => $data['content_type'],
             'category' => $data['content_type'] === 'ensemble' ? ($data['category'] ?? null) : null,
             'featured_image_object_key' => $featuredImageObjectKey,
+            'external_links' => $this->externalLinksPayload($data),
             'is_published' => $isPublished,
             'published_at' => $isPublished ? ($blogPost->published_at ?: now()) : null,
         ]);
@@ -166,12 +168,15 @@ class BlogPostController extends Controller
         return back()->with('success', 'Article supprimé.');
     }
 
-    private function publicIndex(string $contentType, string $title, string $description): Response
+    private function publicIndex(Request $request, string $contentType, string $title, string $description): Response
     {
+        $activeClientId = $request->query('client_id') ? max(1, (int) $request->query('client_id')) : null;
+
         $posts = BlogPost::query()
             ->with('client:id,name')
             ->where('content_type', $contentType)
             ->where('is_published', true)
+            ->when($activeClientId !== null, fn ($query) => $query->where('client_id', $activeClientId))
             ->latest('published_at')
             ->latest()
             ->get()
@@ -182,6 +187,12 @@ class BlogPostController extends Controller
             'title' => $title,
             'description' => $description,
             'contentType' => $contentType,
+            'filters' => [
+                'clients' => $this->publicClientOptions($contentType),
+            ],
+            'activeFilters' => [
+                'clientId' => $activeClientId ? (string) $activeClientId : '',
+            ],
         ]);
     }
 
@@ -204,11 +215,51 @@ class BlogPostController extends Controller
             'clientName' => $post->client?->name,
             'featuredImageUrl' => $this->featuredImageUrl($post->featured_image_object_key),
             'featuredImageObjectKey' => $post->featured_image_object_key,
+            'externalLinks' => $this->externalLinksSummary($post),
             'isPublished' => $post->is_published,
             'publishedAt' => $post->published_at?->toIso8601String(),
             'createdAt' => $post->created_at->toIso8601String(),
             'updatedAt' => $post->updated_at->toIso8601String(),
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<int, array{label: string|null, url: string}>|null
+     */
+    private function externalLinksPayload(array $data): ?array
+    {
+        $links = collect($data['external_links'] ?? [])
+            ->filter(fn ($link) => is_array($link) && filled($link['url'] ?? null))
+            ->map(fn (array $link) => [
+                'label' => filled($link['label'] ?? null) ? trim((string) $link['label']) : null,
+                'url' => trim((string) $link['url']),
+            ])
+            ->values()
+            ->all();
+
+        return $links === [] ? null : $links;
+    }
+
+    /**
+     * @return array<int, array{label: string, url: string, host: string|null}>
+     */
+    private function externalLinksSummary(BlogPost $post): array
+    {
+        return collect($post->external_links ?? [])
+            ->filter(fn ($link) => is_array($link) && filled($link['url'] ?? null))
+            ->map(function (array $link): array {
+                $url = trim((string) $link['url']);
+                $host = parse_url($url, PHP_URL_HOST);
+
+                return [
+                    'label' => filled($link['label'] ?? null) ? trim((string) $link['label']) : ($host ?: $url),
+                    'url' => $url,
+                    'host' => is_string($host) ? $host : null,
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     private function categoryLabel(?string $category): ?string
@@ -314,6 +365,20 @@ class BlogPostController extends Controller
     {
         return Client::query()
             ->when($clientIds !== null, fn ($query) => $query->whereIn('id', $clientIds))
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (Client $client) => [
+                'id' => $client->id,
+                'name' => $client->name,
+            ]);
+    }
+
+    private function publicClientOptions(string $contentType): mixed
+    {
+        return Client::query()
+            ->whereHas('blogPosts', fn ($query) => $query
+                ->where('content_type', $contentType)
+                ->where('is_published', true))
             ->orderBy('name')
             ->get(['id', 'name'])
             ->map(fn (Client $client) => [

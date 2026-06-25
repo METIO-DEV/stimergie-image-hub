@@ -12,10 +12,22 @@ export type BlogPost = {
     clientName: string | null;
     featuredImageUrl: string | null;
     featuredImageObjectKey: string | null;
+    externalLinks: BlogExternalLink[];
     isPublished: boolean;
     publishedAt: string | null;
     createdAt: string;
     updatedAt: string;
+};
+
+export type BlogExternalLink = {
+    label: string;
+    url: string;
+    host?: string | null;
+};
+
+export type BlogExternalLinkFormData = {
+    label: string;
+    url: string;
 };
 
 export type BlogClientOption = {
@@ -40,5 +52,6 @@ export type BlogFormData = {
     category: "actualites" | "projets" | "conseils" | null;
     featured_image_id: number | null;
     remove_featured_image: boolean;
+    external_links: BlogExternalLinkFormData[];
     is_published: boolean;
 };

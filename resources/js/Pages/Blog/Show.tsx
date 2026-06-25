@@ -2,7 +2,7 @@ import { Badge } from "@/Components/ui/badge";
 import { Button } from "@/Components/ui/button";
 import { Card, CardContent } from "@/Components/ui/card";
 import { Head, Link } from "@inertiajs/react";
-import { ArrowLeft, Pencil } from "lucide-react";
+import { ArrowLeft, ExternalLink, Pencil } from "lucide-react";
 import PublicBlogLayout from "./PublicLayout";
 import { BlogPost } from "./types";
 
@@ -76,6 +76,37 @@ export default function Show({ post, canEdit }: Props) {
                             </div>
                         </CardContent>
                     </Card>
+
+                    {post.externalLinks.length > 0 && (
+                        <section className="mt-8 rounded-lg border bg-card p-6 md:p-8">
+                            <h2 className="text-lg font-semibold">
+                                Supports externes
+                            </h2>
+                            <div className="mt-4 grid gap-3">
+                                {post.externalLinks.map((link) => (
+                                    <a
+                                        key={link.url}
+                                        href={link.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="flex min-w-0 items-center justify-between gap-4 rounded-md border px-4 py-3 text-sm font-medium transition-colors hover:border-primary hover:text-primary"
+                                    >
+                                        <span className="min-w-0">
+                                            <span className="block truncate">
+                                                {link.label}
+                                            </span>
+                                            {link.host && (
+                                                <span className="mt-1 block truncate text-xs font-normal text-muted-foreground">
+                                                    {link.host}
+                                                </span>
+                                            )}
+                                        </span>
+                                        <ExternalLink className="h-4 w-4 shrink-0" />
+                                    </a>
+                                ))}
+                            </div>
+                        </section>
+                    )}
                 </div>
             </article>
         </PublicBlogLayout>

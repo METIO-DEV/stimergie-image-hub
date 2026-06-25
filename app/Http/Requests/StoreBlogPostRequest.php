@@ -9,6 +9,13 @@ use Illuminate\Validation\Rule;
 
 class StoreBlogPostRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'external_links' => $this->normalizedExternalLinks(),
+        ]);
+    }
+
     public function authorize(): bool
     {
         $user = $this->user();
@@ -48,7 +55,26 @@ class StoreBlogPostRequest extends FormRequest
             'category' => ['nullable', 'string', Rule::in(['actualites', 'projets', 'conseils'])],
             'featured_image_id' => ['nullable', 'integer', $featuredImageRule],
             'remove_featured_image' => ['boolean'],
+            'external_links' => ['nullable', 'array', 'max:10'],
+            'external_links.*.label' => ['nullable', 'string', 'max:120'],
+            'external_links.*.url' => ['required', 'url', 'max:2048'],
             'is_published' => ['boolean'],
         ];
+    }
+
+    /**
+     * @return array<int, array{label: string|null, url: string}>
+     */
+    private function normalizedExternalLinks(): array
+    {
+        return collect($this->input('external_links', []))
+            ->filter(fn ($link) => is_array($link))
+            ->map(fn (array $link) => [
+                'label' => trim((string) ($link['label'] ?? '')) ?: null,
+                'url' => trim((string) ($link['url'] ?? '')),
+            ])
+            ->filter(fn (array $link) => $link['label'] !== null || $link['url'] !== '')
+            ->values()
+            ->all();
     }
 }
