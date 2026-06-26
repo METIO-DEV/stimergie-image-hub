@@ -127,12 +127,38 @@ export default function Authenticated({
         return null;
     }
 
+    const blogPostForNav =
+        "post" in page.props
+            ? (page.props.post as BlogBreadcrumbPost | undefined)
+            : undefined;
+    const isResourceSection =
+        route().current("blog.resources") ||
+        route().current("blog.resources.fr") ||
+        (route().current("blog.show") &&
+            blogPostForNav?.contentType !== "ensemble");
+    const isBlogSection =
+        route().current("blog.ensemble") ||
+        (route().current("blog.show") &&
+            blogPostForNav?.contentType === "ensemble");
+
     const primaryNav: MenuItem[] = [
         {
             href: route("gallery.index"),
             label: "Banque d'images",
             icon: Image,
             active: route().current("gallery.index"),
+        },
+        {
+            href: route("blog.resources"),
+            label: "Ressources",
+            icon: BookOpenText,
+            active: isResourceSection,
+        },
+        {
+            href: route("blog.ensemble"),
+            label: "Blog",
+            icon: BookOpenText,
+            active: isBlogSection,
         },
         {
             href: route("contact.index"),
