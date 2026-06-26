@@ -1,6 +1,6 @@
 # Fonctionnalites et user stories
 
-Date : 2026-06-01
+Date : 2026-06-26
 
 Ce document recense les fonctionnalites du projet Stimergie Image Hub en prenant en compte :
 
@@ -75,7 +75,10 @@ Il complete le fichier de cadrage de migration.
 - Remplacement du fichier original.
 - Modification titre, description, projet, orientation, statut, tags.
 - Synchronisation des tags cote Laravel.
-- Stockage actuel du fichier original sur le disque public Laravel.
+- Stockage du fichier original et des variantes sur le disque image configure, par defaut `scaleway`.
+- Generation des variantes image via `ImageVariantGenerator`.
+- Analyse IA ponctuelle ou par lot des tags des images pretes.
+- Saisie et suivi des dates de cession de droits.
 
 ### Projets
 
@@ -157,18 +160,19 @@ Etat repris dans Laravel/Inertia :
 - cartes de statistiques : total des periodes, periodes actives, clients concernes ;
 - recherche par client/projet ;
 - filtre actif/inactif ;
-- bouton `Nouvelle periode` present cote interface.
+- bouton `Nouvelle periode` present cote interface ;
+- creation persistante d'une periode ;
+- modification persistante ;
+- activation/desactivation via le champ `is_active` ;
+- suppression ;
+- calcul des statuts `active`, `inactive`, `upcoming`, `expired` ;
+- application des periodes dans les requetes galerie et projets ;
+- policies dediees pour encadrer l'administration des periodes.
 
 Reste a completer cote Laravel/Inertia :
 
-- creation persistante d'une periode ;
-- modification persistante ;
-- activation/desactivation ;
-- suppression ;
 - filtres complets client/projet/statut/date ;
-- calcul fin des statuts `A venir` et `Expiree` ;
-- application stricte des periodes dans toutes les requetes galerie/projets/telechargements ;
-- policies dediees pour savoir qui peut administrer les periodes.
+- revue UX des statuts et filtres si le volume de periodes augmente.
 
 ### Vos telechargements
 
@@ -216,17 +220,18 @@ Etat repris dans Laravel/Inertia :
 - affichage des demandes creees depuis la Banque d'images ;
 - distinction visuelle des demandes HD avec badge `HD` ;
 - stockage de l'archive ZIP sur le disque image configure, par defaut Scaleway ;
-- acces au ZIP depuis la page `Vos telechargements`.
+- acces au ZIP depuis la page `Vos telechargements` ;
+- telechargement d'une image seule via controle Laravel puis URL temporaire S3 quand disponible ;
+- controle d'autorisation par projet/periode avant telechargement ;
+- choix de variante web ou HD dans la demande de telechargement.
 
 Reste a completer cote Laravel/Inertia :
 
-- streaming protege des images seules via Laravel plutot qu'URL publique directe ;
 - seuils de bascule SD 10 images / HD 3 images ;
 - decoupage en lots de 50 images maximum ;
 - progression de preparation ;
 - recuperation ou renouvellement d'URL expiree ;
-- controle d'autorisation par projet/periode avant telechargement ;
-- choix visible dans l'interface entre `Version web & reseaux sociaux` et `Version HD impression`.
+- UX plus fine sur les telechargements partiels.
 
 ### Profil
 
@@ -236,11 +241,10 @@ Reste a completer cote Laravel/Inertia :
 
 ### Backend et tests
 
-- Controllers metier : pages app, clients, membres client, projets, utilisateurs, images.
-- Form Requests pour validation et autorisation : clients, membres, projets, utilisateurs, images, assignation groupee.
+- Controllers metier : pages app, clients, membres client, projets, utilisateurs, images, imports, downloads, albums partages, blog, pages legales, cessions de droits, transferts d'assets.
+- Form Requests pour validation et autorisation : clients, membres, projets, utilisateurs, images, assignation groupee, imports, partages, periodes d'acces, blog.
 - Permissions cote serveur sur les mutations sensibles.
-- Tests feature pour pages, clients, projets, utilisateurs, images et assignation groupee.
-- Derniere verification connue : `37` tests, `110` assertions.
+- Tests feature pour pages, clients, projets, utilisateurs, images, assignation groupee, imports, telechargements, partages, mails, blog et smoke tests de scalabilite.
 - Build frontend valide via `npm run build`.
 
 ## User stories metier synthetiques
@@ -425,10 +429,11 @@ Reste a completer cote Laravel/Inertia :
 Etat actuel des variantes :
 
 - Le schema prevoit deja les champs original, thumb, web et HD.
-- La creation/modification actuelle stocke le fichier original.
-- En attendant le pipeline final, les quatre champs de variantes pointent vers le meme fichier stocke localement.
-- La generation reelle des variantes Web/thumbnail/HD reste a finaliser.
-- Le stockage cible objet S3/Scaleway reste a finaliser pour les nouveaux uploads.
+- La creation/modification stocke le fichier original et genere les variantes via `ImageVariantGenerator`.
+- Les objets sont stockes sur le disque image configure, par defaut `scaleway`.
+- Des commandes Artisan permettent d'auditer, generer, migrer ou deplacer les variantes de projets existants.
+- La convention cible projet est `photos/<projet>/web/`, `photos/<projet>/hd/` et `photos/<projet>/miniatures/`.
+- Les commandes de migration doivent rester executees en dry-run avant toute option `--execute` ou `--force`.
 
 ### Telechargements
 
@@ -453,7 +458,9 @@ Etat actuel des variantes :
 Etat actuel :
 
 - La page et l'affichage des jobs sont disponibles.
-- Le workflow ZIP/HD complet reste a finaliser cote Laravel/Inertia.
+- Le workflow ZIP web/HD est traite cote Laravel, stocke les archives sur le disque image configure et applique les droits via les images accessibles.
+- Les liens de telechargement d'image seule passent par le backend puis par URL temporaire quand le stockage le permet.
+- Les raffinements restants concernent surtout la progression fine, les seuils historiques et le renouvellement d'URL expiree.
 
 ### Droits d'acces
 
@@ -475,7 +482,10 @@ Etat actuel :
 Etat actuel :
 
 - La page de consultation est disponible.
-- La creation/modification des periodes et leur application fine a tous les flux restent a renforcer.
+- La creation, modification, activation/desactivation et suppression sont branchees cote Laravel.
+- Les policies dediees encadrent les droits d'administration.
+- Les periodes sont appliquees aux requetes galerie/projets et aux controles de visibilite image.
+- Les filtres avances et la lisibilite UX des statuts restent a renforcer.
 
 ### Contact
 

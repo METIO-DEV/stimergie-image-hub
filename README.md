@@ -1,14 +1,24 @@
 # Stimergie Image Hub
 
-Application Laravel + React/Inertia pour la gestion metier Stimergie Image Hub.
+Application Laravel + React/Inertia pour la gestion metier Stimergie Image Hub : phototheque client, projets, droits d'acces, cessions de droits, imports, telechargements ZIP et traitements de migration des assets.
 
 ## Stack
 
-- Backend : Laravel
-- Frontend : React + Inertia
+- Backend : Laravel 13, PHP 8.3
+- Frontend : React + Inertia, TypeScript, Vite, Tailwind
 - Base de donnees : PostgreSQL
 - Queue : driver `database`
 - Stockage images : disque S3-compatible `scaleway`
+- Email : Mailpit en local, SMTP Brevo attendu en dev/pre-prod/prod
+
+## Perimetre applicatif
+
+- Galerie et gestion des images par client/projet, avec recherche, tags, variantes web/HD et telechargement.
+- Gestion clients, projets, membres, utilisateurs et periodes d'acces.
+- Cessions de droits image, demandes d'extension et suivi operationnel.
+- Imports par lots, rapprochement des objets Scaleway et transfert o2switch vers le bucket.
+- Albums partages publics temporaires et partage d'images entre clients.
+- Blog/ressources, pages legales, contact et emails transactionnels.
 
 ## Lancer en Docker
 
@@ -29,6 +39,7 @@ Services exposes :
 - App Laravel : http://localhost:8100
 - Vite : http://localhost:5174
 - PostgreSQL : localhost:55432
+- Mailpit : http://localhost:8025
 
 Le compose lance aussi deux workers :
 
@@ -36,6 +47,56 @@ Le compose lance aussi deux workers :
 php artisan queue:work --sleep=1 --tries=3 --timeout=900
 php artisan queue:work --queue=sync --sleep=1 --tries=1 --timeout=0
 ```
+
+## Commandes utiles
+
+Installer et construire hors Docker :
+
+```sh
+composer setup
+composer dev
+npm run build
+```
+
+Tests :
+
+```sh
+composer test
+php artisan test tests/Feature/ScalabilitySmokeTest.php
+```
+
+Maintenance et diagnostics :
+
+```sh
+php artisan downloads:cleanup-expired
+php artisan downloads:retry-failed
+php artisan mail:diagnose-brevo
+php artisan images:send-monthly-digest --dry-run
+```
+
+Commandes d'assets et migration a manier avec prudence :
+
+```sh
+php artisan legacy:import-dump --fresh
+php artisan images:sync-project-bucket-assets --dry-run
+php artisan images:generate-variants --dry-run
+php artisan images:reconcile-scaleway-assets --dry-run
+php artisan clients:reconcile-logos --dry-run
+```
+
+Les commandes avec `--execute`, `--force`, suppression d'objets ou import `--fresh` peuvent modifier fortement la base ou le bucket. Toujours lancer le mode dry-run quand il existe.
+
+## Variables d'environnement principales
+
+Voir `.env.example` pour les valeurs locales. Les noms importants sont :
+
+- Application : `APP_KEY`, `APP_URL`, `APP_ENV`, `APP_DEBUG`
+- Ports Docker locaux : `APP_HOST_PORT`, `VITE_HOST_PORT`, `POSTGRES_HOST_PORT`, `MAILPIT_UI_HOST_PORT`
+- Base : `DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`
+- Queue/session/cache : `QUEUE_CONNECTION`, `DB_QUEUE_RETRY_AFTER`, `SESSION_DRIVER`, `CACHE_STORE`
+- Stockage : `IMAGE_STORAGE_DISK`, `SCALEWAY_ACCESS_KEY_ID`, `SCALEWAY_SECRET_KEY`, `SCALEWAY_OBJECT_STORAGE_BUCKET`, `SCALEWAY_OBJECT_STORAGE_REGION`, `SCALEWAY_OBJECT_STORAGE_ENDPOINT`
+- Email : `MAIL_MAILER`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS`
+- IA : `OPENAI_API_KEY`, `OPENAI_IMAGE_TAG_MODEL`
 
 ## Deploiement Dokploy
 
@@ -64,8 +125,10 @@ SCALEWAY_SECRET_KEY=...
 SCALEWAY_OBJECT_STORAGE_BUCKET=...
 SCALEWAY_OBJECT_STORAGE_REGION=fr-par
 SCALEWAY_OBJECT_STORAGE_ENDPOINT=https://s3.fr-par.scw.cloud
-BREVO_TEMPLATE_MAILER=brevo
-BREVO_API_KEY=...
+MAIL_HOST=smtp-relay.brevo.com
+MAIL_PORT=587
+MAIL_USERNAME=...
+MAIL_PASSWORD=...
 MAIL_FROM_ADDRESS=...
 ```
 
@@ -87,6 +150,14 @@ php artisan legacy:import-dump --with-assets --asset-concurrency=12 --skip-exist
 ```
 
 Le dump attendu est `dumps/prod-public-data.sql` a la racine du depot.
+
+## Documentation
+
+- `docs/etat-technique-laravel-inertia.md` : etat technique courant du depot Laravel/Inertia.
+- `docs/fonctionnalites-et-user-stories.md` : couverture fonctionnelle et user stories.
+- `docs/tests-scalabilite.md` : smoke tests de scalabilite legers.
+- `scripts/README-o2switch-rclone-transfer.md` : transfert o2switch vers Scaleway avec `rclone`.
+- `docs/audit-technique.md` et documents de cadrage : references historiques de migration, a verifier contre le code courant avant decision technique.
 
 ## Ancien projet
 
