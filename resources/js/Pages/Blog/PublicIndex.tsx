@@ -10,7 +10,7 @@ type Props = {
     posts: BlogPost[];
     title: string;
     description: string;
-    contentType: "resource" | "ensemble";
+    contentType: "resource" | "blog";
     filters: {
         clients: BlogClientOption[];
     };
@@ -29,7 +29,7 @@ export default function PublicIndex({
 }: Props) {
     const changeClient = (clientId: string) => {
         const routeName =
-            contentType === "ensemble" ? "blog.ensemble" : "blog.resources";
+            contentType === "blog" ? "blog.index" : "blog.resources";
 
         router.get(
             route(routeName),
@@ -43,7 +43,7 @@ export default function PublicIndex({
 
     return (
         <PublicBlogLayout
-            section={contentType === "ensemble" ? "blog" : "resources"}
+            section={contentType === "blog" ? "blog" : "resources"}
         >
             <Head title={title} />
 

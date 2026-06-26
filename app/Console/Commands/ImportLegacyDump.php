@@ -380,7 +380,9 @@ class ImportLegacyDump extends Command
                     'title' => $row['title'],
                     'slug' => $row['slug'],
                     'content' => $row['content'],
-                    'content_type' => $row['content_type'] ?? 'resource',
+                    'content_type' => ($row['content_type'] ?? 'resource') === 'ensemble'
+                        ? 'blog'
+                        : ($row['content_type'] ?? 'resource'),
                     'category' => $row['category'] ?? null,
                     'is_published' => (bool) $row['published'],
                     'featured_image_object_key' => null,

@@ -4,7 +4,7 @@ export type BlogPost = {
     slug: string;
     content: string;
     excerpt: string;
-    contentType: "resource" | "ensemble";
+    contentType: "resource" | "blog";
     contentTypeLabel: string;
     category: string | null;
     categoryLabel: string | null;
@@ -48,7 +48,7 @@ export type BlogFormData = {
     title: string;
     content: string;
     client_id: number | null;
-    content_type: "resource" | "ensemble";
+    content_type: "resource" | "blog";
     category: "actualites" | "projets" | "conseils" | null;
     featured_image_id: number | null;
     remove_featured_image: boolean;

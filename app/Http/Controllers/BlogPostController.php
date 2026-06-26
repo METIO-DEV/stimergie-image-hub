@@ -28,9 +28,9 @@ class BlogPostController extends Controller
         return $this->publicIndex($request, 'resource', 'Ressources', 'Découvrez nos ressources et guides pratiques.');
     }
 
-    public function ensemble(Request $request): Response
+    public function blog(Request $request): Response
     {
-        return $this->publicIndex($request, 'ensemble', 'Blog', 'Retrouvez les actualités, projets et conseils Stimergie.');
+        return $this->publicIndex($request, 'blog', 'Blog', 'Retrouvez les actualités, projets et conseils Stimergie.');
     }
 
     public function show(Request $request, BlogPost $blogPost): Response
@@ -110,13 +110,13 @@ class BlogPostController extends Controller
         $featuredImageObjectKey = $featuredImage?->object_key_web ?: $featuredImage?->object_key_original;
 
         BlogPost::create([
-            'client_id' => $data['content_type'] === 'ensemble' ? null : ($data['client_id'] ?? null),
+            'client_id' => $data['content_type'] === 'blog' ? null : ($data['client_id'] ?? null),
             'author_id' => $request->user()->id,
             'title' => $data['title'],
             'slug' => $this->uniqueSlug($data['title']),
             'content' => $data['content'],
             'content_type' => $data['content_type'],
-            'category' => $data['content_type'] === 'ensemble' ? ($data['category'] ?? null) : null,
+            'category' => $data['content_type'] === 'blog' ? ($data['category'] ?? null) : null,
             'featured_image_object_key' => $featuredImageObjectKey,
             'external_links' => $this->externalLinksPayload($data),
             'is_published' => $isPublished,
@@ -142,12 +142,12 @@ class BlogPostController extends Controller
         }
 
         $blogPost->update([
-            'client_id' => $data['content_type'] === 'ensemble' ? null : ($data['client_id'] ?? null),
+            'client_id' => $data['content_type'] === 'blog' ? null : ($data['client_id'] ?? null),
             'title' => $data['title'],
             'slug' => $this->uniqueSlug($data['title'], $blogPost),
             'content' => $data['content'],
             'content_type' => $data['content_type'],
-            'category' => $data['content_type'] === 'ensemble' ? ($data['category'] ?? null) : null,
+            'category' => $data['content_type'] === 'blog' ? ($data['category'] ?? null) : null,
             'featured_image_object_key' => $featuredImageObjectKey,
             'external_links' => $this->externalLinksPayload($data),
             'is_published' => $isPublished,
@@ -178,7 +178,7 @@ class BlogPostController extends Controller
 
         $posts = BlogPost::query()
             ->with('client:id,name')
-            ->where('content_type', $contentType)
+            ->whereIn('content_type', $this->contentTypeValues($contentType))
             ->where('is_published', true)
             ->tap(fn ($query) => $this->applyViewablePostScope($query, $contentType, $viewableClientIds))
             ->when($activeClientId !== null, fn ($query) => $query->where('client_id', $activeClientId))
@@ -214,8 +214,8 @@ class BlogPostController extends Controller
             'slug' => $post->slug,
             'content' => $post->content,
             'excerpt' => Str::limit(trim(strip_tags($post->content)), 180),
-            'contentType' => $post->content_type,
-            'contentTypeLabel' => $post->content_type === 'ensemble' ? 'Blog' : 'Ressource',
+            'contentType' => $this->canonicalContentType($post->content_type),
+            'contentTypeLabel' => $this->canonicalContentType($post->content_type) === 'blog' ? 'Blog' : 'Ressource',
             'category' => $post->category,
             'categoryLabel' => $this->categoryLabel($post->category),
             'clientId' => $post->client_id,
@@ -353,7 +353,7 @@ class BlogPostController extends Controller
             return false;
         }
 
-        if ($post->content_type === 'ensemble') {
+        if (in_array($post->content_type, ['blog', 'ensemble'], true)) {
             return true;
         }
 
@@ -447,7 +447,7 @@ class BlogPostController extends Controller
         return Client::query()
             ->when($viewableClientIds !== null, fn ($query) => $query->whereIn('id', $viewableClientIds))
             ->whereHas('blogPosts', fn ($query) => $query
-                ->where('content_type', $contentType)
+                ->whereIn('content_type', $this->contentTypeValues($contentType))
                 ->where('is_published', true))
             ->orderBy('name')
             ->get(['id', 'name'])
@@ -474,5 +474,18 @@ class BlogPostController extends Controller
                 'thumbUrl' => $this->imageUrls->temporaryThumbnailUrl($image),
                 'objectKey' => $image->object_key_web ?: $image->object_key_original,
             ]);
+    }
+
+    private function canonicalContentType(string $contentType): string
+    {
+        return $contentType === 'ensemble' ? 'blog' : $contentType;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function contentTypeValues(string $contentType): array
+    {
+        return $contentType === 'blog' ? ['blog', 'ensemble'] : [$contentType];
     }
 }

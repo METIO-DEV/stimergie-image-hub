@@ -34,7 +34,7 @@ export default function PublicBlogLayout({ children, section }: Props) {
                             Ressources
                         </PublicNavLink>
                         <PublicNavLink
-                            href={route("blog.ensemble")}
+                            href={route("blog.index")}
                             active={section === "blog"}
                         >
                             Blog

@@ -28,17 +28,17 @@ class BlogPostManagementTest extends TestCase
             'title' => 'Guide publié',
             'slug' => 'guide-publie',
             'content' => 'Contenu visible',
-            'content_type' => 'ensemble',
+            'content_type' => 'blog',
             'is_published' => true,
             'published_at' => now(),
         ]);
 
         $this->get(route('blog.resources'))->assertRedirect(route('login'));
-        $this->get(route('blog.ensemble'))->assertRedirect(route('login'));
+        $this->get(route('blog.index'))->assertRedirect(route('login'));
         $this->get(route('blog.show', $post->slug))->assertRedirect(route('login'));
     }
 
-    public function test_ensemble_posts_are_visible_to_any_authenticated_user(): void
+    public function test_blog_posts_are_visible_to_any_authenticated_user(): void
     {
         $author = User::factory()->create([
             'platform_role' => 'super_admin',
@@ -54,7 +54,7 @@ class BlogPostManagementTest extends TestCase
             'title' => 'Information agence',
             'slug' => 'information-agence',
             'content' => 'Contenu visible par tous les clients connectes',
-            'content_type' => 'ensemble',
+            'content_type' => 'blog',
             'category' => 'actualites',
             'external_links' => [
                 ['label' => 'Direction artistique', 'url' => 'https://docs.google.com/presentation/d/example'],
@@ -68,17 +68,18 @@ class BlogPostManagementTest extends TestCase
             'title' => 'Information agence brouillon',
             'slug' => 'information-agence-brouillon',
             'content' => 'Contenu cache',
-            'content_type' => 'ensemble',
+            'content_type' => 'blog',
             'is_published' => false,
         ]);
 
         $this->actingAs($viewer)
-            ->get(route('blog.ensemble'))
+            ->get(route('blog.index'))
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->component('Blog/PublicIndex')
                 ->has('posts', 1)
                 ->where('posts.0.id', $published->id)
+                ->where('posts.0.contentType', 'blog')
                 ->where('posts.0.contentTypeLabel', 'Blog')
             );
 
@@ -90,6 +91,18 @@ class BlogPostManagementTest extends TestCase
                 ->where('post.externalLinks.0.url', 'https://docs.google.com/presentation/d/example')
                 ->where('post.externalLinks.0.host', 'docs.google.com')
             );
+    }
+
+    public function test_legacy_ensemble_url_redirects_to_blog_index(): void
+    {
+        $viewer = User::factory()->create([
+            'platform_role' => 'user',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($viewer)
+            ->get(route('blog.ensemble'))
+            ->assertRedirect(route('blog.index'));
     }
 
     public function test_resource_posts_are_limited_to_authenticated_users_clients(): void
@@ -234,6 +247,10 @@ class BlogPostManagementTest extends TestCase
                 ->has('posts', 1)
                 ->where('posts.0.id', $firstPost->id)
             );
+
+        $this->actingAs($admin)
+            ->get(route('blog.show', $firstPost->slug))
+            ->assertOk();
     }
 
     public function test_super_admin_can_create_update_and_delete_a_blog_post(): void
@@ -297,10 +314,10 @@ class BlogPostManagementTest extends TestCase
 
         $this->actingAs($admin)
             ->patch(route('blog.update', $post), [
-                'title' => 'Article Ensemble',
+                'title' => 'Article Blog',
                 'content' => 'Un contenu mis a jour',
                 'client_id' => null,
-                'content_type' => 'ensemble',
+                'content_type' => 'blog',
                 'category' => 'projets',
                 'featured_image_id' => null,
                 'remove_featured_image' => true,
@@ -314,8 +331,8 @@ class BlogPostManagementTest extends TestCase
         $this->assertDatabaseHas('blog_posts', [
             'id' => $post->id,
             'client_id' => null,
-            'slug' => 'article-ensemble',
-            'content_type' => 'ensemble',
+            'slug' => 'article-blog',
+            'content_type' => 'blog',
             'category' => 'projets',
             'featured_image_object_key' => null,
             'is_published' => false,
@@ -381,10 +398,10 @@ class BlogPostManagementTest extends TestCase
 
         $this->actingAs($manager)
             ->post(route('blog.store'), [
-                'title' => 'Info Ensemble refusee',
+                'title' => 'Info Blog refusee',
                 'content' => 'Contenu',
                 'client_id' => $managedClient->id,
-                'content_type' => 'ensemble',
+                'content_type' => 'blog',
                 'category' => 'actualites',
                 'featured_image_id' => null,
                 'is_published' => false,

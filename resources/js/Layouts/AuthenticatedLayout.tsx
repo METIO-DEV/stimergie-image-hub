@@ -48,7 +48,7 @@ type BreadcrumbItem = {
 
 type BlogBreadcrumbPost = {
     title?: string;
-    contentType?: "resource" | "ensemble";
+    contentType?: "resource" | "blog";
 };
 
 export default function Authenticated({
@@ -135,11 +135,11 @@ export default function Authenticated({
         route().current("blog.resources") ||
         route().current("blog.resources.fr") ||
         (route().current("blog.show") &&
-            blogPostForNav?.contentType !== "ensemble");
+            blogPostForNav?.contentType !== "blog");
     const isBlogSection =
-        route().current("blog.ensemble") ||
+        route().current("blog.index") ||
         (route().current("blog.show") &&
-            blogPostForNav?.contentType === "ensemble");
+            blogPostForNav?.contentType === "blog");
 
     const primaryNav: MenuItem[] = [
         {
@@ -155,7 +155,7 @@ export default function Authenticated({
             active: isResourceSection,
         },
         {
-            href: route("blog.ensemble"),
+            href: route("blog.index"),
             label: "Blog",
             icon: BookOpenText,
             active: isBlogSection,
@@ -660,14 +660,14 @@ function breadcrumbItems(props?: object): BreadcrumbItem[] {
         return [home, { label: "Ressources" }];
     }
 
-    if (route().current("blog.ensemble")) {
+    if (route().current("blog.index")) {
         return [home, { label: "Blog" }];
     }
 
     if (route().current("blog.show")) {
         const section =
-            post?.contentType === "ensemble"
-                ? { label: "Blog", href: route("blog.ensemble") }
+            post?.contentType === "blog"
+                ? { label: "Blog", href: route("blog.index") }
                 : { label: "Ressources", href: route("blog.resources") };
 
         return [home, section, { label: post?.title || "Article" }];

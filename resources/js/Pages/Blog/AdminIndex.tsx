@@ -92,7 +92,7 @@ export default function AdminIndex({
                     >
                         <option value="">Tous les types</option>
                         <option value="resource">Ressource</option>
-                        <option value="ensemble">Blog</option>
+                        <option value="blog">Blog</option>
                     </select>
                 </div>
 

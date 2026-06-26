@@ -53,7 +53,7 @@ export default function Edit({
 
     const initialContentType = existingPost?.contentType ?? "resource";
     const fallbackClientId =
-        initialContentType === "ensemble"
+        initialContentType === "blog"
             ? null
             : existingPost?.clientId ?? clients[0]?.id ?? null;
 
@@ -100,9 +100,9 @@ export default function Edit({
         setData((values) => ({
             ...values,
             content_type: contentType,
-            category: contentType === "ensemble" ? values.category : null,
+            category: contentType === "blog" ? values.category : null,
             client_id:
-                contentType === "ensemble"
+                contentType === "blog"
                     ? null
                     : values.client_id ?? clients[0]?.id ?? null,
         }));
@@ -199,7 +199,7 @@ export default function Edit({
                                     >
                                         <option value="resource">Ressource</option>
                                         {canCreateGlobalPost && (
-                                            <option value="ensemble">Blog</option>
+                                            <option value="blog">Blog</option>
                                         )}
                                     </select>
                                     <InputError message={errors.content_type} />
@@ -238,7 +238,7 @@ export default function Edit({
                                     </div>
                                 )}
 
-                                {data.content_type === "ensemble" && (
+                                {data.content_type === "blog" && (
                                     <div className="space-y-2">
                                         <Label htmlFor="blog-category">
                                             Catégorie

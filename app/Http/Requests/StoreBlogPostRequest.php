@@ -12,6 +12,7 @@ class StoreBlogPostRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
+            'content_type' => $this->input('content_type') === 'ensemble' ? 'blog' : $this->input('content_type'),
             'external_links' => $this->normalizedExternalLinks(),
         ]);
     }
@@ -24,7 +25,7 @@ class StoreBlogPostRequest extends FormRequest
             return false;
         }
 
-        if ($this->input('content_type') === 'ensemble') {
+        if ($this->input('content_type') === 'blog') {
             return $user->isSuperAdmin();
         }
 
@@ -60,7 +61,7 @@ class StoreBlogPostRequest extends FormRequest
                 'integer',
                 Rule::exists('clients', 'id'),
             ],
-            'content_type' => ['required', 'string', Rule::in(['resource', 'ensemble'])],
+            'content_type' => ['required', 'string', Rule::in(['resource', 'blog'])],
             'category' => ['nullable', 'string', Rule::in(['actualites', 'projets', 'conseils'])],
             'featured_image_id' => ['nullable', 'integer', $featuredImageRule],
             'remove_featured_image' => ['boolean'],

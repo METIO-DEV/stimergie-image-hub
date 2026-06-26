@@ -13,11 +13,11 @@ type Props = {
 
 export default function Show({ post, canEdit }: Props) {
     const backRoute =
-        post.contentType === "ensemble" ? "blog.ensemble" : "blog.resources";
+        post.contentType === "blog" ? "blog.index" : "blog.resources";
 
     return (
         <PublicBlogLayout
-            section={post.contentType === "ensemble" ? "blog" : "resources"}
+            section={post.contentType === "blog" ? "blog" : "resources"}
         >
             <Head title={post.title} />
 

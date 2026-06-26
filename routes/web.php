@@ -84,7 +84,8 @@ Route::get('/dashboard', function (Request $request) {
 Route::middleware('auth')->group(function () {
     Route::get('/resources', [BlogPostController::class, 'resources'])->name('blog.resources');
     Route::get('/ressources', [BlogPostController::class, 'resources'])->name('blog.resources.fr');
-    Route::get('/ensemble', [BlogPostController::class, 'ensemble'])->name('blog.ensemble');
+    Route::get('/blog', [BlogPostController::class, 'blog'])->name('blog.index');
+    Route::redirect('/ensemble', '/blog')->name('blog.ensemble');
     Route::get('/gallery', [AppPageController::class, 'gallery'])->name('gallery.index');
     Route::get('/contact', [AppPageController::class, 'contact'])->name('contact.index');
     Route::post('/contact', [AppPageController::class, 'sendContact'])->name('contact.send');
