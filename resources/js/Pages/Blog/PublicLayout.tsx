@@ -1,6 +1,7 @@
 import AppFooter from "@/Components/AppFooter";
+import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { cn } from "@/lib/utils";
-import { Link } from "@inertiajs/react";
+import { Link, usePage } from "@inertiajs/react";
 import { PropsWithChildren } from "react";
 
 type Props = PropsWithChildren<{
@@ -8,9 +9,15 @@ type Props = PropsWithChildren<{
 }>;
 
 export default function PublicBlogLayout({ children, section }: Props) {
+    const { auth } = usePage().props;
+
+    if (auth.user) {
+        return <AuthenticatedLayout>{children}</AuthenticatedLayout>;
+    }
+
     return (
         <div className="flex min-h-screen flex-col bg-background text-foreground">
-            <header className="border-b border-border/80 bg-[#F2F0F0]">
+            <header className="sticky top-0 z-50 border-b border-border/80 bg-[#F2F0F0]/95 backdrop-blur">
                 <div className="container flex min-h-16 items-center justify-between gap-3 py-3">
                     <Link href={route("gallery.index")} className="shrink-0">
                         <img

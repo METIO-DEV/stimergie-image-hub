@@ -46,6 +46,11 @@ type BreadcrumbItem = {
     href?: string;
 };
 
+type BlogBreadcrumbPost = {
+    title?: string;
+    contentType?: "resource" | "ensemble";
+};
+
 export default function Authenticated({
     header,
     basketAction,
@@ -262,7 +267,7 @@ export default function Authenticated({
         ...visibleUserMenu.filter((item) => item.href !== route("gallery.index")),
         ...visibleAdminMenu,
     ];
-    const breadcrumbs = breadcrumbItems();
+    const breadcrumbs = breadcrumbItems(page.props);
 
     return (
         <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -572,7 +577,12 @@ function gallerySelectionStorageKey(userId: number | string): string {
     return `stimergie.gallery.selection.${userId}`;
 }
 
-function breadcrumbItems(): BreadcrumbItem[] {
+function breadcrumbItems(props?: object): BreadcrumbItem[] {
+    const post =
+        props && "post" in props
+            ? (props.post as BlogBreadcrumbPost | undefined)
+            : undefined;
+
     const home: BreadcrumbItem = {
         label: "Galerie",
         href: route("gallery.index"),
@@ -618,6 +628,23 @@ function breadcrumbItems(): BreadcrumbItem[] {
         route().current("blog.edit")
     ) {
         return [home, { label: "Blog et ressources" }];
+    }
+
+    if (route().current("blog.resources") || route().current("blog.resources.fr")) {
+        return [home, { label: "Ressources" }];
+    }
+
+    if (route().current("blog.ensemble")) {
+        return [home, { label: "Blog" }];
+    }
+
+    if (route().current("blog.show")) {
+        const section =
+            post?.contentType === "ensemble"
+                ? { label: "Blog", href: route("blog.ensemble") }
+                : { label: "Ressources", href: route("blog.resources") };
+
+        return [home, section, { label: post?.title || "Article" }];
     }
 
     if (route().current("imports.index")) {
