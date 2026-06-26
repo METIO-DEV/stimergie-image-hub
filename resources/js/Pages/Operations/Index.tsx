@@ -1,5 +1,12 @@
 import { Badge } from "@/Components/ui/badge";
 import { Button } from "@/Components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/Components/ui/dialog";
 import { Input } from "@/Components/ui/input";
 import {
     Table,
@@ -9,21 +16,24 @@ import {
     TableHeader,
     TableRow,
 } from "@/Components/ui/table";
+import {
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger,
+} from "@/Components/ui/tabs";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { cn } from "@/lib/utils";
 import { Head, Link, router } from "@inertiajs/react";
 import {
-    AlertTriangle,
-    CheckCircle2,
-    Clock,
-    DatabaseZap,
+    Download,
     ExternalLink,
-    FileWarning,
-    History,
     RefreshCw,
     Search,
-    ServerCrash,
-    ShieldAlert,
+    ShieldCheck,
+    ShieldQuestion,
+    TimerReset,
+    UserRound,
 } from "lucide-react";
 import { FormEvent, ReactNode, useMemo, useState } from "react";
 
@@ -32,6 +42,7 @@ type Option = {
     name: string;
     clientId?: number;
     clientName?: string | null;
+    email?: string;
 };
 
 type SelectOption = {
@@ -39,88 +50,170 @@ type SelectOption = {
     label: string;
 };
 
-type OperationView =
-    | ""
-    | "audit_traces"
-    | "open_rights_requests"
-    | "failed_downloads"
-    | "failed_imports"
-    | "failed_transfers"
-    | "failed_jobs";
-
-type OperationEvent = {
-    id: string;
-    sourceId: number;
-    type:
-        | "audit"
-        | "telechargement"
-        | "import"
-        | "transfert"
-        | "job"
-        | "demande_extension";
-    typeLabel: string;
-    date: string | null;
-    status: string;
-    statusLabel: string;
-    severity: "info" | "warning" | "error";
-    title: string;
-    description: string;
-    clientName: string | null;
-    projectName: string | null;
-    actorName: string | null;
-    targetUrl: string | null;
-    metadata: Record<string, string | number | boolean | null>;
+type Summary = {
+    downloadsLast30Days: number;
+    downloadedImagesLast30Days: number;
+    openExtensionRequests: number;
+    expiredRights: number;
+    expiringRights: number;
+    activeAccessPeriods: number;
+    expiringAccessPeriods: number;
 };
 
-type OperationStats = {
-    auditLogs: number;
-    openRightsRequests: number;
-    failedDownloads: number;
-    failedImports: number;
-    failedTransfers: number;
-    failedJobs: number;
+type ImageChip = {
+    id: number;
+    title: string;
+    clientName: string | null;
+    clientId: number;
+    projectName: string | null;
+    projectId: number;
+    rightsEndsAt: string | null;
+    rightsStatus: string;
+};
+
+type DownloadRow = {
+    id: number;
+    createdAt: string | null;
+    processedAt: string | null;
+    expiresAt: string | null;
+    title: string;
+    status: string;
+    statusLabel: string;
+    format: string;
+    imageCount: number;
+    actorName: string | null;
+    actorId: number;
+    clientName: string | null;
+    clientIds: number[];
+    projectName: string | null;
+    projectIds: number[];
+    images: ImageChip[];
+    skippedImages: Array<{ id: number; title: string }>;
+    errorDetails: string | null;
+    targetUrl: string;
+};
+
+type RightsRow = {
+    id: number;
+    title: string;
+    clientId: number;
+    clientName: string | null;
+    projectId: number;
+    projectName: string | null;
+    startsAt: string | null;
+    endsAt: string | null;
+    status: string;
+    statusLabel: string;
+    latestRequest: {
+        id: number;
+        status: string;
+        statusLabel: string;
+        requestedBy: string | null;
+        resolvedBy: string | null;
+        createdAt: string | null;
+        resolvedAt: string | null;
+        extendedRightsEndsAt: string | null;
+    } | null;
+    targetUrl: string;
+};
+
+type ExtensionRequestRow = {
+    id: number;
+    createdAt: string | null;
+    resolvedAt: string | null;
+    imageTitle: string | null;
+    imageId: number;
+    clientName: string | null;
+    clientId: number;
+    projectName: string | null;
+    projectId: number;
+    requestedBy: string | null;
+    resolvedBy: string | null;
+    status: string;
+    statusLabel: string;
+    rightsEndsAt: string | null;
+    extendedRightsEndsAt: string | null;
+    targetUrl: string;
+};
+
+type AccessPeriodRow = {
+    id: number;
+    clientId: number;
+    clientName: string | null;
+    projectId: number;
+    projectName: string | null;
+    startsAt: string | null;
+    endsAt: string | null;
+    isActive: boolean;
+    status: string;
+    statusLabel: string;
+    imagesCount: number;
+    createdAt: string | null;
+    updatedAt: string | null;
+    targetUrl: string;
+};
+
+type Dataset<T> = {
+    items: T[];
+    total: number;
 };
 
 type ActiveFilters = {
     search: string;
     clientId: string;
     projectId: string;
-    type: string;
+    userId: string;
     status: string;
-    view: OperationView;
     dateFrom: string;
     dateTo: string;
-    perPage: string;
 };
 
-type Pagination = {
-    currentPage: number;
-    perPage: number;
-    total: number;
-    lastPage: number;
-};
+type TabValue =
+    | "overview"
+    | "downloads"
+    | "rights"
+    | "extensions"
+    | "access";
+
+type DetailItem =
+    | { type: "download"; item: DownloadRow }
+    | { type: "rights"; item: RightsRow }
+    | { type: "extension"; item: ExtensionRequestRow }
+    | { type: "access"; item: AccessPeriodRow }
+    | null;
 
 export default function OperationsIndex({
-    events,
-    pagination,
-    stats,
+    summary,
+    downloads,
+    rights,
+    extensionRequests,
+    accessPeriods,
     filters,
     activeFilters,
-    canViewSensitiveAuditData,
+    limits,
 }: {
-    events: OperationEvent[];
-    pagination: Pagination;
-    stats: OperationStats;
+    summary: Summary;
+    downloads: Dataset<DownloadRow>;
+    rights: Dataset<RightsRow>;
+    extensionRequests: Dataset<ExtensionRequestRow>;
+    accessPeriods: Dataset<AccessPeriodRow>;
     filters: {
         clients: Option[];
         projects: Option[];
-        types: SelectOption[];
-        statuses: SelectOption[];
+        users: Option[];
+        downloadStatuses: SelectOption[];
+        rightsStatuses: SelectOption[];
+        extensionStatuses: SelectOption[];
+        accessStatuses: SelectOption[];
     };
     activeFilters: ActiveFilters;
-    canViewSensitiveAuditData: boolean;
+    limits: {
+        maxRows: number;
+    };
 }) {
+    const [tab, setTab] = useState<TabValue>("overview");
     const [form, setForm] = useState(activeFilters);
+    const [detail, setDetail] = useState<DetailItem>(null);
     const visibleProjects = useMemo(
         () =>
             form.clientId
@@ -131,121 +224,70 @@ export default function OperationsIndex({
         [filters.projects, form.clientId],
     );
 
-    const visit = (page = 1) => {
-        router.get(
-            route("operations.index"),
-            queryParams(form, page),
-            {
-                preserveState: true,
-                replace: true,
-            },
-        );
-    };
-
-    const selectView = (view: OperationView) => {
-        const nextForm = {
-            ...form,
-            type: "",
-            status: "",
-            view,
-        };
-
-        setForm(nextForm);
-        router.get(route("operations.index"), queryParams(nextForm, 1), {
-            preserveState: true,
-            replace: true,
-        });
-    };
-
     const applyFilters = (event: FormEvent) => {
         event.preventDefault();
-        visit(1);
+        visit(form);
     };
 
     const resetFilters = () => {
-        router.get(route("operations.index"), {}, { replace: true });
+        const reset = {
+            search: "",
+            clientId: "",
+            projectId: "",
+            userId: "",
+            status: "",
+            dateFrom: "",
+            dateTo: "",
+        };
+
+        setForm(reset);
+        visit(reset);
     };
 
     return (
         <AuthenticatedLayout>
-            <Head title="Suivi technique" />
+            <Head title="Suivi opérationnel" />
 
-            <main className="container mx-auto max-w-7xl px-4 py-8">
-                <div className="space-y-8">
+            <main className="mx-auto max-w-7xl px-4 py-8">
+                <div className="space-y-7">
                     <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                         <div className="min-w-0">
                             <h1 className="break-words text-2xl font-bold leading-tight sm:text-3xl">
-                                Suivi technique
+                                Suivi opérationnel
                             </h1>
-                            <p className="mt-2 max-w-3xl text-muted-foreground">
-                                Journal paginé des actions, erreurs de traitement,
-                                téléchargements, imports, jobs et demandes de
-                                cession.
+                            <p className="mt-2 max-w-3xl text-sm text-muted-foreground sm:text-base">
+                                Consultation super-admin des téléchargements,
+                                cessions d’images, demandes d’extension et droits
+                                d’accès projet.
                             </p>
                         </div>
-                        <Button
-                            variant="outline"
-                            className="w-full gap-2 sm:w-auto"
-                            onClick={() => router.reload()}
-                        >
-                            <RefreshCw className="h-4 w-4" />
-                            Actualiser
-                        </Button>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                            <Button
+                                asChild
+                                variant="outline"
+                                className="gap-2"
+                            >
+                                <Link href={route("access-periods.index")}>
+                                    <ShieldCheck className="h-4 w-4" />
+                                    Gérer les droits
+                                </Link>
+                            </Button>
+                            <Button
+                                variant="outline"
+                                className="gap-2"
+                                onClick={() => router.reload()}
+                            >
+                                <RefreshCw className="h-4 w-4" />
+                                Actualiser
+                            </Button>
+                        </div>
                     </div>
 
-                    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        <MetricCard
-                            title="Traces audit"
-                            value={stats.auditLogs}
-                            icon={<History className="h-4 w-4" />}
-                            active={form.view === "audit_traces"}
-                            onClick={() => selectView("audit_traces")}
-                        />
-                        <MetricCard
-                            title="Demandes ouvertes"
-                            value={stats.openRightsRequests}
-                            icon={<ShieldAlert className="h-4 w-4" />}
-                            tone="warning"
-                            active={form.view === "open_rights_requests"}
-                            onClick={() => selectView("open_rights_requests")}
-                        />
-                        <MetricCard
-                            title="Téléchargements en échec"
-                            value={stats.failedDownloads}
-                            icon={<AlertTriangle className="h-4 w-4" />}
-                            tone="danger"
-                            active={form.view === "failed_downloads"}
-                            onClick={() => selectView("failed_downloads")}
-                        />
-                        <MetricCard
-                            title="Imports avec erreurs"
-                            value={stats.failedImports}
-                            icon={<FileWarning className="h-4 w-4" />}
-                            tone="danger"
-                            active={form.view === "failed_imports"}
-                            onClick={() => selectView("failed_imports")}
-                        />
-                        <MetricCard
-                            title="Transferts avec erreurs"
-                            value={stats.failedTransfers}
-                            icon={<DatabaseZap className="h-4 w-4" />}
-                            tone="danger"
-                            active={form.view === "failed_transfers"}
-                            onClick={() => selectView("failed_transfers")}
-                        />
-                        <MetricCard
-                            title="Jobs échoués"
-                            value={stats.failedJobs}
-                            icon={<ServerCrash className="h-4 w-4" />}
-                            tone="danger"
-                            active={form.view === "failed_jobs"}
-                            onClick={() => selectView("failed_jobs")}
-                        />
-                    </section>
+                    <SummaryGrid summary={summary} />
 
                     <form
                         onSubmit={applyFilters}
-                        className="grid gap-3 rounded-md border bg-card p-4 lg:grid-cols-[1fr_180px_180px_180px_180px] xl:grid-cols-[1.2fr_180px_180px_170px_170px_150px_150px_110px_auto]"
+                        className="grid gap-3 border-y bg-background py-4 lg:grid-cols-[1.4fr_180px_180px_180px_170px] xl:grid-cols-[1.4fr_170px_170px_170px_160px_150px_150px_auto]"
                     >
                         <div className="relative">
                             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -258,80 +300,46 @@ export default function OperationsIndex({
                                     })
                                 }
                                 className="pl-9"
-                                placeholder="Action, erreur, objet..."
+                                placeholder="Image, compte, entreprise, projet..."
                             />
                         </div>
-                        <select
+                        <SelectControl
                             value={form.clientId}
-                            onChange={(event) =>
-                                setForm({
-                                    ...form,
-                                    clientId: event.target.value,
-                                    projectId: "",
-                                })
+                            onChange={(clientId) =>
+                                setForm({ ...form, clientId, projectId: "" })
                             }
-                            className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        >
-                            <option value="">Tous clients</option>
-                            {filters.clients.map((client) => (
-                                <option key={client.id} value={client.id}>
-                                    {client.name}
-                                </option>
-                            ))}
-                        </select>
-                        <select
+                            placeholder="Toutes entreprises"
+                            options={filters.clients.map((client) => ({
+                                value: String(client.id),
+                                label: client.name,
+                            }))}
+                        />
+                        <SelectControl
                             value={form.projectId}
-                            onChange={(event) =>
-                                setForm({
-                                    ...form,
-                                    projectId: event.target.value,
-                                })
+                            onChange={(projectId) =>
+                                setForm({ ...form, projectId })
                             }
-                            className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        >
-                            <option value="">Tous projets</option>
-                            {visibleProjects.map((project) => (
-                                <option key={project.id} value={project.id}>
-                                    {project.name}
-                                </option>
-                            ))}
-                        </select>
-                        <select
-                            value={form.type}
-                            onChange={(event) =>
-                                setForm({
-                                    ...form,
-                                    type: event.target.value,
-                                    view: "",
-                                })
-                            }
-                            className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        >
-                            <option value="">Toutes sources</option>
-                            {filters.types.map((type) => (
-                                <option key={type.value} value={type.value}>
-                                    {type.label}
-                                </option>
-                            ))}
-                        </select>
-                        <select
+                            placeholder="Tous projets"
+                            options={visibleProjects.map((project) => ({
+                                value: String(project.id),
+                                label: project.name,
+                            }))}
+                        />
+                        <SelectControl
+                            value={form.userId}
+                            onChange={(userId) => setForm({ ...form, userId })}
+                            placeholder="Tous comptes"
+                            options={filters.users.map((user) => ({
+                                value: String(user.id),
+                                label: user.name || user.email || `#${user.id}`,
+                            }))}
+                        />
+                        <StatusSelect
+                            tab={tab}
                             value={form.status}
-                            onChange={(event) =>
-                                setForm({
-                                    ...form,
-                                    status: event.target.value,
-                                    view: "",
-                                })
-                            }
-                            className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        >
-                            <option value="">Tous statuts</option>
-                            {filters.statuses.map((status) => (
-                                <option key={status.value} value={status.value}>
-                                    {status.label}
-                                </option>
-                            ))}
-                        </select>
+                            onChange={(status) => setForm({ ...form, status })}
+                            filters={filters}
+                        />
                         <Input
                             type="date"
                             value={form.dateFrom}
@@ -352,473 +360,518 @@ export default function OperationsIndex({
                                 })
                             }
                         />
-                        <select
-                            value={form.perPage}
-                            onChange={(event) =>
-                                setForm({
-                                    ...form,
-                                    perPage: event.target.value,
-                                })
-                            }
-                            className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        >
-                            <option value="25">25 / page</option>
-                            <option value="50">50 / page</option>
-                            <option value="100">100 / page</option>
-                        </select>
-                        <div className="flex gap-2 lg:col-span-5 xl:col-span-1">
-                            <Button type="submit" className="flex-1 xl:flex-none">
-                                Filtrer
-                            </Button>
+                        <div className="flex gap-2 xl:justify-end">
+                            <Button type="submit">Filtrer</Button>
                             <Button
                                 type="button"
                                 variant="outline"
                                 onClick={resetFilters}
-                                className="flex-1 xl:flex-none"
                             >
                                 Effacer
                             </Button>
                         </div>
                     </form>
 
-                    <section className="rounded-md border bg-card">
-                        <div className="flex flex-col gap-2 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                                <h2 className="text-lg font-semibold">
-                                    {viewTitle(form.view)}
-                                </h2>
-                                <p className="text-sm text-muted-foreground">
-                                    {pagination.total} élément
-                                    {pagination.total > 1 ? "s" : ""} au total,
-                                    page {pagination.currentPage} sur{" "}
-                                    {pagination.lastPage || 1}.
-                                </p>
-                            </div>
-                            <PaginationControls
-                                pagination={pagination}
-                                onPageChange={visit}
-                            />
-                        </div>
-                        <OperationsTable
-                            events={events}
-                            view={form.view}
-                            canViewSensitiveAuditData={
-                                canViewSensitiveAuditData
+                    <Tabs
+                        value={tab}
+                        onValueChange={(value) => {
+                            setTab(value as TabValue);
+                            if (form.status) {
+                                const nextForm = { ...form, status: "" };
+
+                                setForm(nextForm);
+                                visit(nextForm);
                             }
-                        />
-                        <div className="border-t p-4">
-                            <PaginationControls
-                                pagination={pagination}
-                                onPageChange={visit}
-                                alignEnd
+                        }}
+                    >
+                        <TabsList>
+                            <TabsTrigger value="overview">Vue d’ensemble</TabsTrigger>
+                            <TabsTrigger value="downloads">
+                                Téléchargements
+                            </TabsTrigger>
+                            <TabsTrigger value="rights">Cessions</TabsTrigger>
+                            <TabsTrigger value="extensions">
+                                Demandes d’extension
+                            </TabsTrigger>
+                            <TabsTrigger value="access">
+                                Droits d’accès
+                            </TabsTrigger>
+                        </TabsList>
+
+                        <TabsContent value="overview">
+                            <OverviewSection
+                                downloads={downloads.items.slice(0, 6)}
+                                rights={rights.items.slice(0, 6)}
+                                extensionRequests={extensionRequests.items.slice(
+                                    0,
+                                    6,
+                                )}
+                                accessPeriods={accessPeriods.items.slice(0, 6)}
+                                onOpenDetail={setDetail}
                             />
-                        </div>
-                    </section>
+                        </TabsContent>
+                        <TabsContent value="downloads">
+                            <SectionHeader
+                                title="Téléchargements demandés"
+                                total={downloads.total}
+                                shown={downloads.items.length}
+                                maxRows={limits.maxRows}
+                            />
+                            <DownloadsTable
+                                rows={downloads.items}
+                                onOpen={(item) =>
+                                    setDetail({ type: "download", item })
+                                }
+                            />
+                        </TabsContent>
+                        <TabsContent value="rights">
+                            <SectionHeader
+                                title="Cessions images"
+                                total={rights.total}
+                                shown={rights.items.length}
+                                maxRows={limits.maxRows}
+                            />
+                            <RightsTable
+                                rows={rights.items}
+                                onOpen={(item) =>
+                                    setDetail({ type: "rights", item })
+                                }
+                            />
+                        </TabsContent>
+                        <TabsContent value="extensions">
+                            <SectionHeader
+                                title="Demandes d’extension de cession"
+                                total={extensionRequests.total}
+                                shown={extensionRequests.items.length}
+                                maxRows={limits.maxRows}
+                            />
+                            <ExtensionRequestsTable
+                                rows={extensionRequests.items}
+                                onOpen={(item) =>
+                                    setDetail({ type: "extension", item })
+                                }
+                            />
+                        </TabsContent>
+                        <TabsContent value="access">
+                            <SectionHeader
+                                title="Droits d’accès projet"
+                                total={accessPeriods.total}
+                                shown={accessPeriods.items.length}
+                                maxRows={limits.maxRows}
+                            />
+                            <AccessPeriodsTable
+                                rows={accessPeriods.items}
+                                onOpen={(item) =>
+                                    setDetail({ type: "access", item })
+                                }
+                            />
+                        </TabsContent>
+                    </Tabs>
                 </div>
             </main>
+
+            <DetailDialog detail={detail} onOpenChange={setDetail} />
         </AuthenticatedLayout>
     );
 }
 
-function queryParams(form: ActiveFilters, page: number) {
-    return {
-        search: form.search || undefined,
-        client_id: form.clientId || undefined,
-        project_id: form.projectId || undefined,
-        type: form.type || undefined,
-        status: form.status || undefined,
-        view: form.view || undefined,
-        date_from: form.dateFrom || undefined,
-        date_to: form.dateTo || undefined,
-        per_page: form.perPage || undefined,
-        page: page > 1 ? page : undefined,
-    };
-}
-
-function viewTitle(view: OperationView) {
-    const titles: Record<Exclude<OperationView, "">, string> = {
-        audit_traces: "Traces audit",
-        open_rights_requests: "Demandes de cession ouvertes",
-        failed_downloads: "Téléchargements en échec",
-        failed_imports: "Imports avec erreurs",
-        failed_transfers: "Transferts avec erreurs",
-        failed_jobs: "Jobs échoués",
-    };
-
-    return view ? titles[view] : "Traces techniques";
-}
-
-function PaginationControls({
-    pagination,
-    onPageChange,
-    alignEnd = false,
-}: {
-    pagination: Pagination;
-    onPageChange: (page: number) => void;
-    alignEnd?: boolean;
-}) {
-    if (pagination.total === 0) {
-        return null;
-    }
-
+function SummaryGrid({ summary }: { summary: Summary }) {
     return (
-        <div
-            className={cn(
-                "flex flex-wrap items-center gap-2",
-                alignEnd && "justify-end",
-            )}
-        >
-            <span className="text-sm text-muted-foreground">
-                {(pagination.currentPage - 1) * pagination.perPage + 1}-
-                {Math.min(
-                    pagination.currentPage * pagination.perPage,
-                    pagination.total,
-                )}{" "}
-                / {pagination.total}
-            </span>
-            <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={pagination.currentPage <= 1}
-                onClick={() => onPageChange(pagination.currentPage - 1)}
-            >
-                Précédent
-            </Button>
-            <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={pagination.currentPage >= pagination.lastPage}
-                onClick={() => onPageChange(pagination.currentPage + 1)}
-            >
-                Suivant
-            </Button>
-        </div>
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <MetricCard
+                title="Téléchargements"
+                value={summary.downloadsLast30Days}
+                detail={`${summary.downloadedImagesLast30Days} images sur 30 jours`}
+                icon={<Download className="h-4 w-4" />}
+            />
+            <MetricCard
+                title="Extensions ouvertes"
+                value={summary.openExtensionRequests}
+                detail="Demandes à traiter ou en cours"
+                icon={<ShieldQuestion className="h-4 w-4" />}
+                tone="warning"
+            />
+            <MetricCard
+                title="Cessions à surveiller"
+                value={summary.expiredRights + summary.expiringRights}
+                detail={`${summary.expiredRights} expirées, ${summary.expiringRights} bientôt`}
+                icon={<TimerReset className="h-4 w-4" />}
+                tone="danger"
+            />
+            <MetricCard
+                title="Accès actifs"
+                value={summary.activeAccessPeriods}
+                detail={`${summary.expiringAccessPeriods} expirent sous 30 jours`}
+                icon={<ShieldCheck className="h-4 w-4" />}
+                tone="success"
+            />
+        </section>
     );
 }
 
 function MetricCard({
     title,
     value,
+    detail,
     icon,
     tone = "neutral",
-    active = false,
-    onClick,
 }: {
     title: string;
     value: number;
+    detail: string;
     icon: ReactNode;
-    tone?: "neutral" | "danger" | "warning" | "success";
-    active?: boolean;
+    tone?: "neutral" | "warning" | "danger" | "success";
+}) {
+    return (
+        <div className="rounded-md border bg-card p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+                <div>
+                    <p className="text-sm font-medium text-muted-foreground">
+                        {title}
+                    </p>
+                    <p className="mt-2 text-2xl font-semibold leading-none">
+                        {value}
+                    </p>
+                </div>
+                <span
+                    className={cn(
+                        "rounded-md border p-2",
+                        tone === "neutral" &&
+                            "border-slate-200 bg-slate-50 text-slate-700",
+                        tone === "warning" &&
+                            "border-amber-200 bg-amber-50 text-amber-700",
+                        tone === "danger" &&
+                            "border-red-200 bg-red-50 text-red-700",
+                        tone === "success" &&
+                            "border-emerald-200 bg-emerald-50 text-emerald-700",
+                    )}
+                >
+                    {icon}
+                </span>
+            </div>
+            <p className="mt-3 text-sm text-muted-foreground">{detail}</p>
+        </div>
+    );
+}
+
+function OverviewSection({
+    downloads,
+    rights,
+    extensionRequests,
+    accessPeriods,
+    onOpenDetail,
+}: {
+    downloads: DownloadRow[];
+    rights: RightsRow[];
+    extensionRequests: ExtensionRequestRow[];
+    accessPeriods: AccessPeriodRow[];
+    onOpenDetail: (detail: DetailItem) => void;
+}) {
+    return (
+        <div className="grid gap-5 xl:grid-cols-2">
+            <OverviewList
+                title="Derniers téléchargements"
+                emptyLabel="Aucun téléchargement dans les filtres."
+                items={downloads}
+                renderItem={(item) => (
+                    <OverviewButton
+                        key={item.id}
+                        title={item.title}
+                        meta={`${item.actorName || "Compte inconnu"} · ${item.format}`}
+                        right={<StatusBadge status={item.status} label={item.statusLabel} />}
+                        onClick={() => onOpenDetail({ type: "download", item })}
+                    />
+                )}
+            />
+            <OverviewList
+                title="Cessions à suivre"
+                emptyLabel="Aucune cession dans les filtres."
+                items={rights}
+                renderItem={(item) => (
+                    <OverviewButton
+                        key={item.id}
+                        title={item.title}
+                        meta={`${item.clientName || "-"} · ${item.projectName || "-"}`}
+                        right={<StatusBadge status={item.status} label={item.statusLabel} />}
+                        onClick={() => onOpenDetail({ type: "rights", item })}
+                    />
+                )}
+            />
+            <OverviewList
+                title="Demandes d’extension"
+                emptyLabel="Aucune demande dans les filtres."
+                items={extensionRequests}
+                renderItem={(item) => (
+                    <OverviewButton
+                        key={item.id}
+                        title={item.imageTitle || `Demande #${item.id}`}
+                        meta={`${item.requestedBy || "Compte inconnu"} · ${formatDate(item.createdAt)}`}
+                        right={<StatusBadge status={item.status} label={item.statusLabel} />}
+                        onClick={() =>
+                            onOpenDetail({ type: "extension", item })
+                        }
+                    />
+                )}
+            />
+            <OverviewList
+                title="Droits d’accès projet"
+                emptyLabel="Aucun droit d’accès dans les filtres."
+                items={accessPeriods}
+                renderItem={(item) => (
+                    <OverviewButton
+                        key={item.id}
+                        title={`${item.clientName || "-"} / ${item.projectName || "-"}`}
+                        meta={`${item.imagesCount} image${item.imagesCount > 1 ? "s" : ""} concernée${item.imagesCount > 1 ? "s" : ""}`}
+                        right={<StatusBadge status={item.status} label={item.statusLabel} />}
+                        onClick={() => onOpenDetail({ type: "access", item })}
+                    />
+                )}
+            />
+        </div>
+    );
+}
+
+function OverviewList<T>({
+    title,
+    emptyLabel,
+    items,
+    renderItem,
+}: {
+    title: string;
+    emptyLabel: string;
+    items: T[];
+    renderItem: (item: T) => ReactNode;
+}) {
+    return (
+        <section className="rounded-md border bg-card">
+            <div className="border-b px-4 py-3">
+                <h2 className="font-semibold">{title}</h2>
+            </div>
+            <div className="divide-y">
+                {items.length > 0 ? (
+                    items.map(renderItem)
+                ) : (
+                    <p className="px-4 py-6 text-sm text-muted-foreground">
+                        {emptyLabel}
+                    </p>
+                )}
+            </div>
+        </section>
+    );
+}
+
+function OverviewButton({
+    title,
+    meta,
+    right,
+    onClick,
+}: {
+    title: string;
+    meta: string;
+    right: ReactNode;
     onClick: () => void;
 }) {
     return (
         <button
             type="button"
             onClick={onClick}
-            className={cn(
-                "rounded-lg border bg-card p-6 text-left shadow-sm transition hover:border-primary/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                active && "border-primary ring-2 ring-primary/20",
-            )}
+            className="grid w-full grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 text-left transition hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-            <div className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <div className="text-sm font-medium text-muted-foreground">
+            <span className="min-w-0">
+                <span className="block truncate text-sm font-medium">
                     {title}
-                </div>
-                <span
-                    className={cn(
-                        "rounded-md border p-2",
-                        tone === "danger" &&
-                            "border-red-200 bg-red-50 text-red-700",
-                        tone === "warning" &&
-                            "border-amber-200 bg-amber-50 text-amber-700",
-                        tone === "success" &&
-                            "border-emerald-200 bg-emerald-50 text-emerald-700",
-                        tone === "neutral" &&
-                            "border-slate-200 bg-slate-50 text-slate-700",
-                    )}
-                >
-                    {icon}
                 </span>
-            </div>
-            <div className="text-2xl font-bold">{value}</div>
+                <span className="mt-1 block truncate text-xs text-muted-foreground">
+                    {meta}
+                </span>
+            </span>
+            {right}
         </button>
     );
 }
 
-function OperationsTable({
-    events,
-    view,
-    canViewSensitiveAuditData,
+function SectionHeader({
+    title,
+    total,
+    shown,
+    maxRows,
 }: {
-    events: OperationEvent[];
-    view: OperationView;
-    canViewSensitiveAuditData: boolean;
+    title: string;
+    total: number;
+    shown: number;
+    maxRows: number;
 }) {
-    if (events.length === 0) {
-        return (
-            <div className="flex flex-col items-center justify-center gap-2 px-4 py-12 text-center text-muted-foreground">
-                <History className="h-10 w-10" />
-                <p>Aucune trace ne correspond aux filtres.</p>
-            </div>
-        );
-    }
-
-    if (view === "open_rights_requests") {
-        return (
-            <SpecializedTable
-                headers={[
-                    "Date demande",
-                    "Image",
-                    "Client / projet",
-                    "Demandé par",
-                    "Fin cession",
-                    "Statut",
-                    "Lien",
-                ]}
-                events={events}
-                renderRow={(event) => [
-                    event.date ? formatDate(event.date) : "Sans date",
-                    event.title,
-                    <ContextCell event={event} hideActor />,
-                    event.actorName || "-",
-                    metadataValue(event, "rightsEndsAt") || "-",
-                    <StatusBadge status={event.status}>
-                        {event.statusLabel}
-                    </StatusBadge>,
-                    <EventLink event={event} />,
-                ]}
-            />
-        );
-    }
-
-    if (view === "failed_downloads") {
-        return (
-            <SpecializedTable
-                headers={[
-                    "Date",
-                    "Téléchargement",
-                    "Images",
-                    "Format",
-                    "Demandé par",
-                    "Erreur",
-                    "Lien",
-                ]}
-                events={events}
-                renderRow={(event) => [
-                    event.date ? formatDate(event.date) : "Sans date",
-                    <TitleStatusCell event={event} />,
-                    metadataValue(event, "requestedImages") ||
-                        metadataValue(event, "skippedImages") ||
-                        `${metadataValue(event, "imageCount") || 0} image(s)`,
-                    metadataValue(event, "format") || "-",
-                    <ContextCell event={event} hideProject />,
-                    metadataValue(event, "errorDetails") || event.description,
-                    <EventLink event={event} />,
-                ]}
-            />
-        );
-    }
-
-    if (view === "failed_imports") {
-        return (
-            <SpecializedTable
-                headers={[
-                    "Date",
-                    "Import",
-                    "Client / projet",
-                    "Progression",
-                    "Échecs",
-                    "Détails",
-                    "Lien",
-                ]}
-                events={events}
-                renderRow={(event) => [
-                    event.date ? formatDate(event.date) : "Sans date",
-                    <TitleStatusCell event={event} />,
-                    <ContextCell event={event} hideActor />,
-                    `${metadataValue(event, "processedItems") || 0}/${metadataValue(event, "totalItems") || 0}`,
-                    metadataValue(event, "failedItems") || 0,
-                    metadataValue(event, "failedItemDetails") ||
-                        metadataValue(event, "metadata") ||
-                        "-",
-                    <EventLink event={event} />,
-                ]}
-            />
-        );
-    }
-
-    if (view === "failed_transfers") {
-        return (
-            <SpecializedTable
-                headers={[
-                    "Date",
-                    "Transfert",
-                    "Mode",
-                    "Lancé par",
-                    "Progression",
-                    "Dossiers en erreur",
-                    "Lien",
-                ]}
-                events={events}
-                renderRow={(event) => [
-                    event.date ? formatDate(event.date) : "Sans date",
-                    <TitleStatusCell event={event} />,
-                    metadataValue(event, "mode") || "-",
-                    event.actorName || "Global",
-                    `${metadataValue(event, "processedFolders") || 0}/${metadataValue(event, "totalFolders") || 0}`,
-                    metadataValue(event, "failedFolderDetails") ||
-                        metadataValue(event, "failedFolders") ||
-                        "-",
-                    <EventLink event={event} />,
-                ]}
-            />
-        );
-    }
-
-    if (view === "failed_jobs") {
-        return (
-            <SpecializedTable
-                headers={["Date", "Queue", "Connexion", "UUID", "Exception"]}
-                events={events}
-                renderRow={(event) => [
-                    event.date ? formatDate(event.date) : "Sans date",
-                    metadataValue(event, "queue") || event.title,
-                    metadataValue(event, "connection") || "-",
-                    metadataValue(event, "uuid") || "-",
-                    metadataValue(event, "exception") || event.description,
-                ]}
-            />
-        );
-    }
-
     return (
-        <div className="mobile-card-table-wrapper overflow-x-auto">
-            <Table className="mobile-card-table">
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Source</TableHead>
-                        <TableHead>Gravité</TableHead>
-                        <TableHead>Message</TableHead>
-                        <TableHead>Contexte</TableHead>
-                        <TableHead>Détails</TableHead>
-                        <TableHead className="text-right">Lien</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {events.map((event) => (
-                        <TableRow key={event.id}>
-                            <TableCell
-                                data-label="Date"
-                                className="min-w-[160px] align-top"
-                            >
-                                {event.date ? formatDate(event.date) : "Sans date"}
-                            </TableCell>
-                            <TableCell data-label="Source" className="align-top">
-                                <Badge variant="outline">
-                                    {event.typeLabel}
-                                </Badge>
-                                <div className="mt-1 text-xs text-muted-foreground">
-                                    #{event.sourceId}
-                                </div>
-                            </TableCell>
-                            <TableCell
-                                data-label="Gravité"
-                                className="align-top"
-                            >
-                                <SeverityBadge severity={event.severity} />
-                            </TableCell>
-                            <TableCell
-                                data-label="Message"
-                                className="min-w-[260px] align-top"
-                            >
-                                <div className="font-medium">{event.title}</div>
-                                <div className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
-                                    {event.description}
-                                </div>
-                                <StatusBadge status={event.status}>
-                                    {event.statusLabel}
-                                </StatusBadge>
-                            </TableCell>
-                            <TableCell
-                                data-label="Contexte"
-                                className="min-w-[220px] align-top"
-                            >
-                                <div className="space-y-1 text-sm">
-                                    {event.clientName && (
-                                        <div>{event.clientName}</div>
-                                    )}
-                                    {event.projectName && (
-                                        <div className="text-muted-foreground">
-                                            {event.projectName}
-                                        </div>
-                                    )}
-                                    {event.actorName && (
-                                        <div className="text-muted-foreground">
-                                            {event.actorName}
-                                        </div>
-                                    )}
-                                    {!event.clientName &&
-                                        !event.projectName &&
-                                        !event.actorName && (
-                                            <span className="text-muted-foreground">
-                                                Global
-                                            </span>
-                                        )}
-                                </div>
-                            </TableCell>
-                            <TableCell
-                                data-label="Détails"
-                                className="min-w-[300px] max-w-[420px] align-top"
-                            >
-                                <EventMetadata
-                                    event={event}
-                                    canViewSensitiveAuditData={
-                                        canViewSensitiveAuditData
-                                    }
-                                />
-                            </TableCell>
-                            <TableCell
-                                data-label="Lien"
-                                className="text-right align-top"
-                            >
-                                {event.targetUrl ? (
-                                    <Button asChild variant="outline" size="sm">
-                                        <Link
-                                            href={event.targetUrl}
-                                            className="gap-2"
-                                        >
-                                            Ouvrir
-                                            <ExternalLink className="h-4 w-4" />
-                                        </Link>
-                                    </Button>
-                                ) : (
-                                    <span className="text-sm text-muted-foreground">
-                                        Trace
-                                    </span>
-                                )}
-                            </TableCell>
-                        </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
+        <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+                <h2 className="text-lg font-semibold">{title}</h2>
+                <p className="text-sm text-muted-foreground">
+                    {shown} ligne{shown > 1 ? "s" : ""} affichée
+                    {shown > 1 ? "s" : ""} sur {total}.
+                </p>
+            </div>
+            {total > maxRows && (
+                <p className="text-sm text-muted-foreground">
+                    Affichage limité aux {maxRows} premiers résultats.
+                </p>
+            )}
         </div>
     );
 }
 
-function SpecializedTable({
-    headers,
-    events,
-    renderRow,
+function DownloadsTable({
+    rows,
+    onOpen,
 }: {
-    headers: string[];
-    events: OperationEvent[];
-    renderRow: (event: OperationEvent) => ReactNode[];
+    rows: DownloadRow[];
+    onOpen: (row: DownloadRow) => void;
 }) {
     return (
-        <div className="mobile-card-table-wrapper overflow-x-auto">
+        <DataTable
+            emptyLabel="Aucun téléchargement ne correspond aux filtres."
+            headers={[
+                "Date",
+                "Compte",
+                "Entreprise / projet",
+                "Format",
+                "Images",
+                "Statut",
+                "",
+            ]}
+            rows={rows}
+            renderRow={(row) => [
+                formatDate(row.createdAt),
+                <PersonCell name={row.actorName} />,
+                <ContextCell primary={row.clientName} secondary={row.projectName} />,
+                row.format,
+                `${row.imageCount} image${row.imageCount > 1 ? "s" : ""}`,
+                <StatusBadge status={row.status} label={row.statusLabel} />,
+                <RowActions onOpen={() => onOpen(row)} href={row.targetUrl} />,
+            ]}
+        />
+    );
+}
+
+function RightsTable({
+    rows,
+    onOpen,
+}: {
+    rows: RightsRow[];
+    onOpen: (row: RightsRow) => void;
+}) {
+    return (
+        <DataTable
+            emptyLabel="Aucune cession ne correspond aux filtres."
+            headers={[
+                "Image",
+                "Entreprise / projet",
+                "Début",
+                "Fin",
+                "État",
+                "Demande liée",
+                "",
+            ]}
+            rows={rows}
+            renderRow={(row) => [
+                <StrongCell title={row.title} subtitle={`#${row.id}`} />,
+                <ContextCell primary={row.clientName} secondary={row.projectName} />,
+                formatPlainDate(row.startsAt),
+                formatPlainDate(row.endsAt) || "Illimitée",
+                <StatusBadge status={row.status} label={row.statusLabel} />,
+                row.latestRequest ? row.latestRequest.statusLabel : "-",
+                <RowActions onOpen={() => onOpen(row)} href={row.targetUrl} />,
+            ]}
+        />
+    );
+}
+
+function ExtensionRequestsTable({
+    rows,
+    onOpen,
+}: {
+    rows: ExtensionRequestRow[];
+    onOpen: (row: ExtensionRequestRow) => void;
+}) {
+    return (
+        <DataTable
+            emptyLabel="Aucune demande d’extension ne correspond aux filtres."
+            headers={[
+                "Date demande",
+                "Image",
+                "Entreprise / projet",
+                "Demandé par",
+                "Fin actuelle",
+                "Statut",
+                "",
+            ]}
+            rows={rows}
+            renderRow={(row) => [
+                formatDate(row.createdAt),
+                <StrongCell title={row.imageTitle || `#${row.imageId}`} />,
+                <ContextCell primary={row.clientName} secondary={row.projectName} />,
+                <PersonCell name={row.requestedBy} />,
+                formatPlainDate(row.rightsEndsAt),
+                <StatusBadge status={row.status} label={row.statusLabel} />,
+                <RowActions onOpen={() => onOpen(row)} href={row.targetUrl} />,
+            ]}
+        />
+    );
+}
+
+function AccessPeriodsTable({
+    rows,
+    onOpen,
+}: {
+    rows: AccessPeriodRow[];
+    onOpen: (row: AccessPeriodRow) => void;
+}) {
+    return (
+        <DataTable
+            emptyLabel="Aucun droit d’accès ne correspond aux filtres."
+            headers={[
+                "Entreprise",
+                "Projet",
+                "Début",
+                "Fin",
+                "Images",
+                "Statut",
+                "",
+            ]}
+            rows={rows}
+            renderRow={(row) => [
+                row.clientName || "-",
+                row.projectName || "-",
+                formatPlainDate(row.startsAt) || "Immédiat",
+                formatPlainDate(row.endsAt) || "Sans limite",
+                row.imagesCount,
+                <StatusBadge status={row.status} label={row.statusLabel} />,
+                <RowActions onOpen={() => onOpen(row)} href={row.targetUrl} />,
+            ]}
+        />
+    );
+}
+
+function DataTable<T>({
+    headers,
+    rows,
+    renderRow,
+    emptyLabel,
+}: {
+    headers: string[];
+    rows: T[];
+    renderRow: (row: T) => ReactNode[];
+    emptyLabel: string;
+}) {
+    if (rows.length === 0) {
+        return (
+            <div className="rounded-md border px-4 py-10 text-center text-sm text-muted-foreground">
+                {emptyLabel}
+            </div>
+        );
+    }
+
+    return (
+        <div className="mobile-card-table-wrapper overflow-x-auto rounded-md border">
             <Table className="mobile-card-table">
                 <TableHeader>
                     <TableRow>
@@ -828,20 +881,20 @@ function SpecializedTable({
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {events.map((event) => {
-                        const cells = renderRow(event);
+                    {rows.map((row, rowIndex) => {
+                        const cells = renderRow(row);
 
                         return (
-                            <TableRow key={event.id}>
-                                {cells.map((cell, index) => (
+                            <TableRow key={rowIndex}>
+                                {cells.map((cell, cellIndex) => (
                                     <TableCell
-                                        key={`${event.id}-${headers[index]}`}
-                                        data-label={headers[index]}
+                                        key={`${rowIndex}-${headers[cellIndex]}`}
+                                        data-label={headers[cellIndex]}
                                         className={cn(
                                             "align-top",
-                                            index === 1 && "min-w-[220px]",
-                                            index === cells.length - 1 &&
-                                                "max-w-[420px]",
+                                            cellIndex === 0 && "min-w-[160px]",
+                                            cellIndex === cells.length - 1 &&
+                                                "w-[120px] text-right",
                                         )}
                                     >
                                         <div className="break-words text-sm">
@@ -858,155 +911,368 @@ function SpecializedTable({
     );
 }
 
-function TitleStatusCell({ event }: { event: OperationEvent }) {
+function RowActions({ onOpen, href }: { onOpen: () => void; href?: string }) {
     return (
-        <div>
-            <div className="font-medium">{event.title}</div>
-            <div className="mt-1 text-xs text-muted-foreground">
-                #{event.sourceId}
-            </div>
-            <StatusBadge status={event.status}>{event.statusLabel}</StatusBadge>
+        <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={onOpen}>
+                Détail
+            </Button>
+            {href && (
+                <Button asChild variant="ghost" size="sm">
+                    <Link href={href}>
+                        <ExternalLink className="h-4 w-4" />
+                    </Link>
+                </Button>
+            )}
         </div>
     );
 }
 
-function ContextCell({
-    event,
-    hideActor = false,
-    hideProject = false,
+function DetailDialog({
+    detail,
+    onOpenChange,
 }: {
-    event: OperationEvent;
-    hideActor?: boolean;
-    hideProject?: boolean;
+    detail: DetailItem;
+    onOpenChange: (detail: DetailItem) => void;
 }) {
     return (
-        <div className="space-y-1">
-            {event.clientName && <div>{event.clientName}</div>}
-            {!hideProject && event.projectName && (
-                <div className="text-muted-foreground">{event.projectName}</div>
-            )}
-            {!hideActor && event.actorName && (
-                <div className="text-muted-foreground">{event.actorName}</div>
-            )}
-            {!event.clientName &&
-                (hideProject || !event.projectName) &&
-                (hideActor || !event.actorName) && (
-                    <span className="text-muted-foreground">Global</span>
+        <Dialog open={detail !== null} onOpenChange={(open) => !open && onOpenChange(null)}>
+            <DialogContent className="max-w-3xl">
+                {detail && (
+                    <>
+                        <DialogHeader>
+                            <DialogTitle>{detailTitle(detail)}</DialogTitle>
+                            <DialogDescription>
+                                Données actuellement enregistrées par
+                                l’application.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DetailBody detail={detail} />
+                    </>
                 )}
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }
 
-function EventLink({ event }: { event: OperationEvent }) {
-    if (!event.targetUrl) {
-        return <span className="text-sm text-muted-foreground">Trace</span>;
+function DetailBody({ detail }: { detail: NonNullable<DetailItem> }) {
+    if (detail.type === "download") {
+        const item = detail.item;
+
+        return (
+            <div className="space-y-5">
+                <DetailGrid
+                    rows={[
+                        ["Compte", item.actorName || "-"],
+                        ["Date", formatDate(item.createdAt)],
+                        ["Format", item.format],
+                        ["Statut", item.statusLabel],
+                        ["Traitement", formatDate(item.processedAt)],
+                        ["Expiration archive", formatDate(item.expiresAt)],
+                    ]}
+                />
+                <ImageList images={item.images} />
+                {item.skippedImages.length > 0 && (
+                    <DetailSection title="Images ignorées">
+                        <ul className="space-y-1 text-sm">
+                            {item.skippedImages.map((image) => (
+                                <li key={`${image.id}-${image.title}`}>
+                                    #{image.id || "-"} {image.title}
+                                </li>
+                            ))}
+                        </ul>
+                    </DetailSection>
+                )}
+                {item.errorDetails && (
+                    <DetailSection title="Erreur">
+                        <p className="whitespace-pre-wrap text-sm text-red-700">
+                            {item.errorDetails}
+                        </p>
+                    </DetailSection>
+                )}
+            </div>
+        );
     }
 
+    if (detail.type === "rights") {
+        const item = detail.item;
+
+        return (
+            <div className="space-y-5">
+                <DetailGrid
+                    rows={[
+                        ["Image", item.title],
+                        ["Entreprise", item.clientName || "-"],
+                        ["Projet", item.projectName || "-"],
+                        ["Début cession", formatPlainDate(item.startsAt) || "-"],
+                        ["Fin cession", formatPlainDate(item.endsAt) || "Illimitée"],
+                        ["État", item.statusLabel],
+                    ]}
+                />
+                {item.latestRequest && (
+                    <DetailSection title="Dernière demande d’extension">
+                        <DetailGrid
+                            rows={[
+                                ["Statut", item.latestRequest.statusLabel],
+                                ["Demandé par", item.latestRequest.requestedBy || "-"],
+                                ["Demandé le", formatDate(item.latestRequest.createdAt)],
+                                ["Résolu par", item.latestRequest.resolvedBy || "-"],
+                                ["Résolu le", formatDate(item.latestRequest.resolvedAt)],
+                                [
+                                    "Nouvelle fin",
+                                    formatPlainDate(
+                                        item.latestRequest.extendedRightsEndsAt,
+                                    ) || "-",
+                                ],
+                            ]}
+                        />
+                    </DetailSection>
+                )}
+            </div>
+        );
+    }
+
+    if (detail.type === "extension") {
+        const item = detail.item;
+
+        return (
+            <DetailGrid
+                rows={[
+                    ["Image", item.imageTitle || `#${item.imageId}`],
+                    ["Entreprise", item.clientName || "-"],
+                    ["Projet", item.projectName || "-"],
+                    ["Demandé par", item.requestedBy || "-"],
+                    ["Demandé le", formatDate(item.createdAt)],
+                    ["Fin actuelle", formatPlainDate(item.rightsEndsAt) || "-"],
+                    ["Statut", item.statusLabel],
+                    ["Résolu par", item.resolvedBy || "-"],
+                    ["Résolu le", formatDate(item.resolvedAt)],
+                    [
+                        "Nouvelle fin",
+                        formatPlainDate(item.extendedRightsEndsAt) || "-",
+                    ],
+                ]}
+            />
+        );
+    }
+
+    const item = detail.item;
+
     return (
-        <Button asChild variant="outline" size="sm">
-            <Link href={event.targetUrl} className="gap-2">
-                Ouvrir
-                <ExternalLink className="h-4 w-4" />
-            </Link>
-        </Button>
+        <DetailGrid
+            rows={[
+                ["Entreprise", item.clientName || "-"],
+                ["Projet", item.projectName || "-"],
+                ["Début", formatPlainDate(item.startsAt) || "Immédiat"],
+                ["Fin", formatPlainDate(item.endsAt) || "Sans limite"],
+                ["Statut", item.statusLabel],
+                ["Images du projet", String(item.imagesCount)],
+                ["Créé le", formatDate(item.createdAt)],
+                ["Mis à jour le", formatDate(item.updatedAt)],
+            ]}
+        />
     );
 }
 
-function EventMetadata({
-    event,
-    canViewSensitiveAuditData,
-}: {
-    event: OperationEvent;
-    canViewSensitiveAuditData: boolean;
-}) {
-    const rows = Object.entries(event.metadata).filter(([key, value]) => {
-        if (value === null || value === "" || typeof value === "undefined") {
-            return false;
-        }
-
-        if (
-            !canViewSensitiveAuditData &&
-            ["ipAddress", "userAgent"].includes(key)
-        ) {
-            return false;
-        }
-
-        return true;
-    });
-
-    if (rows.length === 0) {
-        return <span className="text-sm text-muted-foreground">-</span>;
-    }
-
+function DetailGrid({ rows }: { rows: Array<[string, ReactNode]> }) {
     return (
-        <dl className="space-y-1 text-xs">
-            {rows.map(([key, value]) => (
-                <div key={key} className="grid gap-1">
-                    <dt className="font-medium text-muted-foreground">
-                        {metadataLabel(key)}
+        <dl className="grid gap-3 sm:grid-cols-2">
+            {rows.map(([label, value]) => (
+                <div key={label} className="rounded-md border bg-muted/30 p-3">
+                    <dt className="text-xs font-medium uppercase text-muted-foreground">
+                        {label}
                     </dt>
-                    <dd className="break-words font-mono text-[0.72rem] leading-relaxed">
-                        {formatMetadataValue(value)}
-                    </dd>
+                    <dd className="mt-1 break-words text-sm">{value || "-"}</dd>
                 </div>
             ))}
         </dl>
     );
 }
 
-function SeverityBadge({
-    severity,
+function DetailSection({
+    title,
+    children,
 }: {
-    severity: OperationEvent["severity"];
+    title: string;
+    children: ReactNode;
 }) {
-    const label =
-        severity === "error"
-            ? "Erreur"
-            : severity === "warning"
-              ? "Attention"
-              : "Info";
-
     return (
-        <Badge
-            variant="secondary"
-            className={cn(
-                "w-fit gap-1",
-                severity === "error" && "bg-red-100 text-red-800",
-                severity === "warning" && "bg-amber-100 text-amber-900",
-                severity === "info" && "bg-slate-100 text-slate-800",
-            )}
-        >
-            {severity === "error" ? (
-                <AlertTriangle className="h-3 w-3" />
-            ) : severity === "warning" ? (
-                <Clock className="h-3 w-3" />
-            ) : (
-                <CheckCircle2 className="h-3 w-3" />
-            )}
-            {label}
-        </Badge>
+        <section>
+            <h3 className="mb-2 text-sm font-semibold">{title}</h3>
+            <div className="rounded-md border bg-muted/30 p-3">{children}</div>
+        </section>
     );
 }
 
-function StatusBadge({
-    status,
-    children,
+function ImageList({ images }: { images: ImageChip[] }) {
+    return (
+        <DetailSection title={`Images concernées (${images.length})`}>
+            {images.length > 0 ? (
+                <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                    {images.map((image) => (
+                        <div
+                            key={image.id}
+                            className="grid gap-1 rounded-md border bg-background p-3 text-sm sm:grid-cols-[1fr_auto]"
+                        >
+                            <div>
+                                <div className="font-medium">
+                                    #{image.id} {image.title}
+                                </div>
+                                <div className="text-muted-foreground">
+                                    {image.clientName || "-"} ·{" "}
+                                    {image.projectName || "-"}
+                                </div>
+                            </div>
+                            <div className="sm:text-right">
+                                <StatusBadge
+                                    status={image.rightsStatus}
+                                    label={rightsStatusLabel(image.rightsStatus)}
+                                />
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                    {formatPlainDate(image.rightsEndsAt) ||
+                                        "Illimitée"}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <p className="text-sm text-muted-foreground">
+                    La liste détaillée des images n’est pas disponible pour cette
+                    demande.
+                </p>
+            )}
+        </DetailSection>
+    );
+}
+
+function StatusSelect({
+    tab,
+    value,
+    onChange,
+    filters,
 }: {
-    status: string;
-    children: ReactNode;
+    tab: TabValue;
+    value: string;
+    onChange: (value: string) => void;
+    filters: {
+        downloadStatuses: SelectOption[];
+        rightsStatuses: SelectOption[];
+        extensionStatuses: SelectOption[];
+        accessStatuses: SelectOption[];
+    };
 }) {
+    const options =
+        tab === "rights"
+            ? filters.rightsStatuses
+            : tab === "extensions"
+              ? filters.extensionStatuses
+              : tab === "access"
+                ? filters.accessStatuses
+                : filters.downloadStatuses;
+
+    return (
+        <SelectControl
+            value={value}
+            onChange={onChange}
+            placeholder="Tous statuts"
+            options={options}
+        />
+    );
+}
+
+function SelectControl({
+    value,
+    onChange,
+    placeholder,
+    options,
+}: {
+    value: string;
+    onChange: (value: string) => void;
+    placeholder: string;
+    options: SelectOption[];
+}) {
+    return (
+        <select
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+        >
+            <option value="">{placeholder}</option>
+            {options.map((option) => (
+                <option key={option.value} value={option.value}>
+                    {option.label}
+                </option>
+            ))}
+        </select>
+    );
+}
+
+function StrongCell({
+    title,
+    subtitle,
+}: {
+    title: string;
+    subtitle?: string;
+}) {
+    return (
+        <div>
+            <div className="font-medium">{title}</div>
+            {subtitle && (
+                <div className="mt-1 text-xs text-muted-foreground">
+                    {subtitle}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function ContextCell({
+    primary,
+    secondary,
+}: {
+    primary?: string | null;
+    secondary?: string | null;
+}) {
+    return (
+        <div>
+            <div>{primary || "-"}</div>
+            {secondary && (
+                <div className="mt-1 text-xs text-muted-foreground">
+                    {secondary}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function PersonCell({ name }: { name?: string | null }) {
+    return (
+        <div className="inline-flex max-w-full items-center gap-2">
+            <UserRound className="h-4 w-4 text-muted-foreground" />
+            <span className="truncate">{name || "Compte inconnu"}</span>
+        </div>
+    );
+}
+
+function StatusBadge({ status, label }: { status: string; label: string }) {
     const tone =
-        status === "failed" || status === "refuse"
+        status === "failed" ||
+        status === "expired" ||
+        status === "refuse" ||
+        status === "inactive"
             ? "danger"
             : status === "pending" ||
+                status === "processing" ||
                 status === "demande" ||
                 status === "en_cours" ||
-                status === "running" ||
-                status === "processing"
+                status === "expiring_soon" ||
+                status === "upcoming"
               ? "warning"
               : status === "ready" ||
                   status === "completed" ||
-                  status === "accepte"
+                  status === "accepte" ||
+                  status === "active"
                 ? "success"
                 : "neutral";
 
@@ -1014,19 +1280,58 @@ function StatusBadge({
         <Badge
             variant="secondary"
             className={cn(
-                "mt-2 w-fit gap-1",
+                "w-fit",
                 tone === "danger" && "bg-red-100 text-red-800",
                 tone === "warning" && "bg-amber-100 text-amber-900",
                 tone === "success" && "bg-emerald-100 text-emerald-800",
                 tone === "neutral" && "bg-slate-100 text-slate-800",
             )}
         >
-            {children}
+            {label}
         </Badge>
     );
 }
 
-function formatDate(value: string) {
+function visit(form: ActiveFilters) {
+    router.get(
+        route("operations.index"),
+        {
+            search: form.search || undefined,
+            client_id: form.clientId || undefined,
+            project_id: form.projectId || undefined,
+            user_id: form.userId || undefined,
+            status: form.status || undefined,
+            date_from: form.dateFrom || undefined,
+            date_to: form.dateTo || undefined,
+        },
+        {
+            preserveState: true,
+            replace: true,
+        },
+    );
+}
+
+function detailTitle(detail: NonNullable<DetailItem>) {
+    if (detail.type === "download") {
+        return `Téléchargement #${detail.item.id}`;
+    }
+
+    if (detail.type === "rights") {
+        return `Cession image #${detail.item.id}`;
+    }
+
+    if (detail.type === "extension") {
+        return `Demande d’extension #${detail.item.id}`;
+    }
+
+    return `Droit d’accès #${detail.item.id}`;
+}
+
+function formatDate(value?: string | null) {
+    if (!value) {
+        return "-";
+    }
+
     return new Intl.DateTimeFormat("fr-FR", {
         day: "2-digit",
         month: "short",
@@ -1036,72 +1341,30 @@ function formatDate(value: string) {
     }).format(new Date(value));
 }
 
-function metadataLabel(key: string) {
-    const labels: Record<string, string> = {
-        subjectType: "Sujet",
-        subjectId: "ID sujet",
-        properties: "Propriétés",
-        ipAddress: "IP",
-        userAgent: "Navigateur",
-        imageCount: "Images",
-        isHd: "HD",
-        processedAt: "Traité le",
-        expiresAt: "Expire le",
-        errorDetails: "Erreur",
-        source: "Source",
-        totalItems: "Total",
-        uploadedItems: "Envoyés",
-        processedItems: "Traités",
-        failedItems: "Échecs",
-        duplicateItems: "Doublons",
-        failedItemDetails: "Fichiers en erreur",
-        startedAt: "Début",
-        finishedAt: "Fin",
-        metadata: "Métadonnées",
-        format: "Format",
-        requestedImages: "Images demandées",
-        skippedImages: "Images ignorées",
-        variant: "Variante",
-        cropPreset: "Format export",
-        cropSource: "Source recadrage",
-        mode: "Mode",
-        currentFolder: "Dossier courant",
-        totalFolders: "Dossiers",
-        processedFolders: "Traités",
-        failedFolders: "Dossiers échoués",
-        failedFolderDetails: "Détails dossiers",
-        logFile: "Fichier log",
-        uuid: "UUID",
-        connection: "Connexion",
-        queue: "Queue",
-        exception: "Exception",
-        rightsEndsAt: "Fin cession",
-        resolvedAt: "Résolu le",
-        resolvedBy: "Résolu par",
-        requestMetadata: "Métadonnées demande",
-    };
+function formatPlainDate(value?: string | null) {
+    if (!value) {
+        return "";
+    }
 
-    return labels[key] ?? key;
+    return new Intl.DateTimeFormat("fr-FR", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+    }).format(new Date(`${value}T00:00:00`));
 }
 
-function metadataValue(event: OperationEvent, key: string) {
-    const value = event.metadata[key];
-
-    if (value === null || value === "" || typeof value === "undefined") {
-        return null;
+function rightsStatusLabel(status: string) {
+    if (status === "expired") {
+        return "Cession expirée";
     }
 
-    return formatMetadataValue(value);
-}
-
-function formatMetadataValue(value: string | number | boolean | null) {
-    if (typeof value === "boolean") {
-        return value ? "oui" : "non";
+    if (status === "expiring_soon") {
+        return "Expire bientôt";
     }
 
-    if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
-        return formatDate(value);
+    if (status === "unlimited") {
+        return "Illimitée";
     }
 
-    return value;
+    return "Active";
 }

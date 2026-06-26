@@ -2,18 +2,15 @@
 
 namespace Tests\Feature;
 
-use App\Models\AssetTransferJob;
-use App\Models\AuditLog;
 use App\Models\Client;
 use App\Models\ClientMembership;
 use App\Models\DownloadJob;
 use App\Models\Image;
 use App\Models\ImageRightsExtensionRequest;
-use App\Models\Import;
 use App\Models\Project;
+use App\Models\ProjectAccessPeriod;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -21,7 +18,7 @@ class OperationalLogPageTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_super_admin_can_view_paginated_technical_tracking(): void
+    public function test_super_admin_can_view_business_operational_tracking(): void
     {
         $admin = User::factory()->create([
             'platform_role' => 'super_admin',
@@ -29,11 +26,25 @@ class OperationalLogPageTest extends TestCase
         ]);
         [$client, $project] = $this->clientProject('Client Suivi', 'Projet Suivi');
         $image = $this->image($client, $project, [
-            'title' => 'Image droits expires',
-            'rights_starts_at' => now()->subYear(),
-            'rights_ends_at' => now()->subDay(),
+            'title' => 'Image cession',
+            'rights_starts_at' => now()->subMonth()->toDateString(),
+            'rights_ends_at' => now()->addDays(10)->toDateString(),
         ]);
 
+        DownloadJob::create([
+            'user_id' => $admin->id,
+            'client_id' => $client->id,
+            'title' => 'Archive suivi',
+            'status' => 'ready',
+            'image_count' => 1,
+            'is_hd' => false,
+            'payload' => [
+                'variant' => 'web',
+                'requested_image_ids' => [$image->id],
+            ],
+            'processed_at' => now(),
+            'download_url_expires_at' => now()->addDays(7),
+        ]);
         ImageRightsExtensionRequest::create([
             'image_id' => $image->id,
             'client_id' => $client->id,
@@ -42,49 +53,13 @@ class OperationalLogPageTest extends TestCase
             'status' => ImageRightsExtensionRequest::STATUS_REQUESTED,
             'rights_ends_at' => $image->rights_ends_at,
         ]);
-        DownloadJob::create([
-            'user_id' => $admin->id,
-            'client_id' => $client->id,
-            'title' => 'Archive suivi',
-            'status' => 'failed',
-            'image_count' => 3,
-            'error_details' => 'Archive impossible à écrire',
-        ]);
-        Import::create([
+        ProjectAccessPeriod::create([
             'client_id' => $client->id,
             'project_id' => $project->id,
-            'started_by' => $admin->id,
-            'source' => 'folder_upload',
-            'status' => 'failed',
-            'total_items' => 4,
-            'processed_items' => 3,
-            'failed_items' => 1,
-        ]);
-        AssetTransferJob::create([
-            'started_by' => $admin->id,
-            'status' => 'failed',
-            'mode' => 'batch-copy',
-            'total_folders' => 2,
-            'processed_folders' => 1,
-            'failed_folders' => 1,
-            'failed_folder_details' => [['folder' => 'ADAMANCE', 'error' => 'Timeout']],
-        ]);
-        DB::table('failed_jobs')->insert([
-            'uuid' => 'failed-job-uuid',
-            'connection' => 'database',
-            'queue' => 'default',
-            'payload' => '{}',
-            'exception' => "RuntimeException: Job cassé\nStack trace",
-            'failed_at' => now(),
-        ]);
-        AuditLog::create([
-            'actor_id' => $admin->id,
-            'client_id' => $client->id,
-            'action' => 'rights_extension.created',
-            'subject_type' => ImageRightsExtensionRequest::class,
-            'subject_id' => 1,
-            'ip_address' => '127.0.0.1',
-            'user_agent' => 'Feature test',
+            'starts_at' => now()->subDay(),
+            'ends_at' => now()->addMonth(),
+            'is_active' => true,
+            'created_by' => $admin->id,
         ]);
 
         $this->actingAs($admin)
@@ -92,196 +67,136 @@ class OperationalLogPageTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Operations/Index')
-                ->where('stats.auditLogs', 1)
-                ->where('stats.openRightsRequests', 1)
-                ->where('stats.failedDownloads', 1)
-                ->where('stats.failedImports', 1)
-                ->where('stats.failedTransfers', 1)
-                ->where('stats.failedJobs', 1)
-                ->where('canViewSensitiveAuditData', true)
-                ->where('pagination.total', 6)
-                ->has('events', 6)
+                ->where('summary.downloadsLast30Days', 1)
+                ->where('summary.downloadedImagesLast30Days', 1)
+                ->where('summary.openExtensionRequests', 1)
+                ->where('summary.expiringRights', 1)
+                ->where('summary.activeAccessPeriods', 1)
+                ->where('downloads.total', 1)
+                ->where('downloads.items.0.title', 'Archive suivi')
+                ->where('downloads.items.0.actorName', $admin->name)
+                ->where('downloads.items.0.images.0.title', 'Image cession')
+                ->where('rights.total', 1)
+                ->where('rights.items.0.status', 'expiring_soon')
+                ->where('extensionRequests.total', 1)
+                ->where('extensionRequests.items.0.imageTitle', 'Image cession')
+                ->where('accessPeriods.total', 1)
+                ->where('accessPeriods.items.0.status', 'active')
                 ->etc());
     }
 
-    public function test_client_manager_only_sees_operational_events_for_managed_clients(): void
+    public function test_only_super_admin_can_access_operational_tracking(): void
     {
         $manager = User::factory()->create([
             'platform_role' => 'admin_client',
             'status' => 'active',
         ]);
-        [$visibleClient, $visibleProject] = $this->clientProject('Client Visible', 'Projet Visible');
-        [$hiddenClient, $hiddenProject] = $this->clientProject('Client Cache', 'Projet Cache');
+        [$client] = $this->clientProject('Client Manager', 'Projet Manager');
 
         ClientMembership::create([
-            'client_id' => $visibleClient->id,
+            'client_id' => $client->id,
             'user_id' => $manager->id,
             'role' => 'manager',
             'status' => 'active',
         ]);
 
-        AuditLog::create([
-            'actor_id' => $manager->id,
-            'client_id' => $visibleClient->id,
-            'action' => 'visible.trace',
-            'subject_type' => Project::class,
-            'subject_id' => $visibleProject->id,
-        ]);
-        AuditLog::create([
-            'actor_id' => $manager->id,
-            'client_id' => $hiddenClient->id,
-            'action' => 'hidden.trace',
-            'subject_type' => Project::class,
-            'subject_id' => $hiddenProject->id,
-        ]);
-
-        $response = $this->actingAs($manager)
-            ->get(route('operations.index', ['type' => 'audit']))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->component('Operations/Index')
-                ->where('canViewSensitiveAuditData', false)
-                ->has('events', 1)
-                ->where('events.0.title', 'visible.trace')
-                ->where('events.0.clientName', 'Client Visible')
-                ->where('activeFilters.type', 'audit')
-                ->etc());
-
-        $response->assertDontSee('hidden.trace');
-        $response->assertDontSee('Client Cache');
-    }
-
-    public function test_viewer_cannot_access_operational_tracking(): void
-    {
-        $viewer = User::factory()->create([
-            'platform_role' => 'user',
-            'status' => 'active',
-        ]);
-        [$client] = $this->clientProject('Client Viewer', 'Projet Viewer');
-
-        ClientMembership::create([
-            'client_id' => $client->id,
-            'user_id' => $viewer->id,
-            'role' => 'viewer',
-            'status' => 'active',
-        ]);
-
-        $this->actingAs($viewer)
+        $this->actingAs($manager)
             ->get(route('operations.index'))
             ->assertForbidden();
     }
 
-    public function test_operational_tracking_filters_by_type_status_and_paginates(): void
+    public function test_operational_tracking_filters_downloads_by_user_and_project_images(): void
     {
         $admin = User::factory()->create([
             'platform_role' => 'super_admin',
             'status' => 'active',
         ]);
-        [$client, $project] = $this->clientProject('Client Filtre', 'Projet Filtre');
+        $otherUser = User::factory()->create([
+            'platform_role' => 'user',
+            'status' => 'active',
+        ]);
+        [$visibleClient, $visibleProject] = $this->clientProject('Client Visible', 'Projet Visible');
+        [$hiddenClient, $hiddenProject] = $this->clientProject('Client Cache', 'Projet Cache');
+        $visibleImage = $this->image($visibleClient, $visibleProject, ['title' => 'Image visible']);
+        $hiddenImage = $this->image($hiddenClient, $hiddenProject, ['title' => 'Image cachee']);
 
         DownloadJob::create([
             'user_id' => $admin->id,
-            'client_id' => $client->id,
-            'title' => 'Archive erreur',
-            'status' => 'failed',
-            'image_count' => 1,
-            'error_details' => 'Zip failed',
-        ]);
-        DownloadJob::create([
-            'user_id' => $admin->id,
-            'client_id' => $client->id,
-            'title' => 'Archive prête',
+            'client_id' => $visibleClient->id,
+            'title' => 'Archive visible',
             'status' => 'ready',
             'image_count' => 1,
+            'payload' => [
+                'variant' => 'hd',
+                'requested_image_ids' => [$visibleImage->id],
+            ],
+        ]);
+        DownloadJob::create([
+            'user_id' => $otherUser->id,
+            'client_id' => $hiddenClient->id,
+            'title' => 'Archive cachee',
+            'status' => 'ready',
+            'image_count' => 1,
+            'payload' => [
+                'variant' => 'hd',
+                'requested_image_ids' => [$hiddenImage->id],
+            ],
         ]);
 
-        $response = $this->actingAs($admin)
+        $this->actingAs($admin)
             ->get(route('operations.index', [
-                'type' => 'telechargement',
-                'status' => 'failed',
-                'per_page' => 10,
+                'user_id' => $admin->id,
+                'project_id' => $visibleProject->id,
             ]))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Operations/Index')
-                ->where('pagination.total', 1)
-                ->where('pagination.perPage', 10)
-                ->has('events', 1)
-                ->where('events.0.title', 'Archive erreur')
-                ->where('events.0.status', 'failed')
-                ->where('events.0.severity', 'error')
-                ->where('activeFilters.type', 'telechargement')
-                ->where('activeFilters.status', 'failed')
+                ->where('downloads.total', 1)
+                ->where('downloads.items.0.title', 'Archive visible')
+                ->where('downloads.items.0.projectName', 'Projet Visible')
+                ->where('activeFilters.userId', (string) $admin->id)
+                ->where('activeFilters.projectId', (string) $visibleProject->id)
                 ->etc());
-
-        $response->assertDontSee('Archive prête');
     }
 
-    public function test_operational_tracking_card_view_lists_failed_download_details(): void
+    public function test_operational_tracking_filters_rights_and_access_period_statuses(): void
     {
         $admin = User::factory()->create([
             'platform_role' => 'super_admin',
             'status' => 'active',
         ]);
-        [$client, $project] = $this->clientProject('Client Vue', 'Projet Vue');
-        $firstImage = $this->image($client, $project, ['title' => 'Image A']);
-        $secondImage = $this->image($client, $project, ['title' => 'Image B']);
-
-        DownloadJob::create([
-            'user_id' => $admin->id,
-            'client_id' => $client->id,
-            'title' => 'Archive export story',
-            'status' => 'failed',
-            'image_count' => 2,
-            'error_details' => 'Aucune source disponible',
-            'payload' => [
-                'variant' => 'crop',
-                'crop_preset' => 'story',
-                'crop_source' => 'web',
-                'requested_image_ids' => [$firstImage->id, $secondImage->id],
-                'skipped_images' => [
-                    ['id' => $secondImage->id, 'title' => $secondImage->title],
-                ],
-            ],
+        [$client, $project] = $this->clientProject('Client Droits', 'Projet Droits');
+        $expiredImage = $this->image($client, $project, [
+            'title' => 'Image expiree',
+            'rights_ends_at' => now()->subDay()->toDateString(),
         ]);
-        DownloadJob::create([
-            'user_id' => $admin->id,
-            'client_id' => $client->id,
-            'title' => 'Archive prête',
-            'status' => 'ready',
-            'image_count' => 1,
+        $this->image($client, $project, [
+            'title' => 'Image active',
+            'rights_ends_at' => now()->addYear()->toDateString(),
         ]);
-
-        $response = $this->actingAs($admin)
-            ->get(route('operations.index', ['view' => 'failed_downloads']))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->component('Operations/Index')
-                ->where('pagination.total', 1)
-                ->where('activeFilters.view', 'failed_downloads')
-                ->has('events', 1)
-                ->where('events.0.title', 'Archive export story')
-                ->where('events.0.metadata.format', 'Export story')
-                ->where('events.0.metadata.requestedImages', "#{$firstImage->id} Image A - Client Vue / Projet Vue ; #{$secondImage->id} Image B - Client Vue / Projet Vue")
-                ->where('events.0.metadata.skippedImages', "#{$secondImage->id} Image B")
-                ->etc());
-
-        $response->assertDontSee('Archive prête');
-    }
-
-    public function test_operational_tracking_no_longer_lists_access_periods(): void
-    {
-        $admin = User::factory()->create([
-            'platform_role' => 'super_admin',
-            'status' => 'active',
+        ProjectAccessPeriod::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'starts_at' => now()->subMonth(),
+            'ends_at' => now()->subDay(),
+            'is_active' => true,
+            'created_by' => $admin->id,
         ]);
 
         $this->actingAs($admin)
-            ->get(route('operations.index'))
+            ->get(route('operations.index', [
+                'status' => 'expired',
+                'client_id' => $client->id,
+            ]))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Operations/Index')
-                ->where('filters.types', fn ($types) => collect($types)->pluck('value')->doesntContain('droits_acces'))
+                ->where('rights.total', 1)
+                ->where('rights.items.0.id', $expiredImage->id)
+                ->where('rights.items.0.status', 'expired')
+                ->where('accessPeriods.total', 1)
+                ->where('accessPeriods.items.0.status', 'expired')
+                ->where('activeFilters.status', 'expired')
                 ->etc());
     }
 
