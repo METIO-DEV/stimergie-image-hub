@@ -380,9 +380,7 @@ class ImportLegacyDump extends Command
                     'title' => $row['title'],
                     'slug' => $row['slug'],
                     'content' => $row['content'],
-                    'content_type' => ($row['content_type'] ?? 'resource') === 'ensemble'
-                        ? 'blog'
-                        : ($row['content_type'] ?? 'resource'),
+                    'content_type' => $this->blogPostContentType($row['content_type'] ?? null),
                     'category' => $row['category'] ?? null,
                     'is_published' => (bool) $row['published'],
                     'featured_image_object_key' => null,
@@ -392,6 +390,14 @@ class ImportLegacyDump extends Command
                 ],
             );
         }
+    }
+
+    private function blogPostContentType(?string $contentType): string
+    {
+        return match ($contentType) {
+            'blog', 'ensemble', 'article', 'actualite', 'actualites' => 'blog',
+            default => 'resource',
+        };
     }
 
     private function importDownloadJobs(): void

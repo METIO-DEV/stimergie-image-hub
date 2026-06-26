@@ -105,6 +105,71 @@ class BlogPostManagementTest extends TestCase
             ->assertRedirect(route('blog.index'));
     }
 
+    public function test_legacy_blog_content_types_remain_viewable(): void
+    {
+        $author = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $viewer = User::factory()->create([
+            'platform_role' => 'user',
+            'status' => 'active',
+        ]);
+        $client = Client::create([
+            'name' => 'Client Legacy',
+            'slug' => 'client-legacy',
+            'status' => 'active',
+        ]);
+
+        ClientMembership::create([
+            'client_id' => $client->id,
+            'user_id' => $viewer->id,
+            'role' => 'member',
+            'status' => 'active',
+        ]);
+
+        $legacyBlog = BlogPost::create([
+            'author_id' => $author->id,
+            'title' => 'Ancien article ensemble',
+            'slug' => 'ancien-article-ensemble',
+            'content' => 'Contenu blog legacy',
+            'content_type' => 'ensemble',
+            'is_published' => true,
+            'published_at' => now(),
+        ]);
+        $legacyResource = BlogPost::create([
+            'client_id' => $client->id,
+            'author_id' => $author->id,
+            'title' => 'Ancienne ressource',
+            'slug' => 'ancienne-ressource',
+            'content' => 'Contenu ressource legacy',
+            'content_type' => 'ressource',
+            'is_published' => true,
+            'published_at' => now(),
+        ]);
+
+        $this->actingAs($viewer)
+            ->get(route('blog.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('posts', 1)
+                ->where('posts.0.id', $legacyBlog->id)
+                ->where('posts.0.contentType', 'blog')
+            );
+
+        $this->actingAs($viewer)
+            ->get(route('blog.resources'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('posts', 1)
+                ->where('posts.0.id', $legacyResource->id)
+                ->where('posts.0.contentType', 'resource')
+            );
+
+        $this->actingAs($viewer)->get(route('blog.show', $legacyBlog->slug))->assertOk();
+        $this->actingAs($viewer)->get(route('blog.show', $legacyResource->slug))->assertOk();
+    }
+
     public function test_resource_posts_are_limited_to_authenticated_users_clients(): void
     {
         $author = User::factory()->create([

@@ -353,11 +353,13 @@ class BlogPostController extends Controller
             return false;
         }
 
-        if (in_array($post->content_type, ['blog', 'ensemble'], true)) {
+        $contentType = $this->canonicalContentType($post->content_type);
+
+        if ($contentType === 'blog') {
             return true;
         }
 
-        if ($post->content_type !== 'resource') {
+        if ($contentType !== 'resource') {
             return false;
         }
 
@@ -476,9 +478,12 @@ class BlogPostController extends Controller
             ]);
     }
 
-    private function canonicalContentType(string $contentType): string
+    private function canonicalContentType(?string $contentType): string
     {
-        return $contentType === 'ensemble' ? 'blog' : $contentType;
+        return match ($contentType) {
+            'blog', 'ensemble', 'article', 'actualite', 'actualites' => 'blog',
+            default => 'resource',
+        };
     }
 
     /**
@@ -486,6 +491,8 @@ class BlogPostController extends Controller
      */
     private function contentTypeValues(string $contentType): array
     {
-        return $contentType === 'blog' ? ['blog', 'ensemble'] : [$contentType];
+        return $contentType === 'blog'
+            ? ['blog', 'ensemble', 'article', 'actualite', 'actualites']
+            : ['resource', 'resources', 'ressource', 'ressources'];
     }
 }

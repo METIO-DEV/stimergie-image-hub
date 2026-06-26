@@ -12,7 +12,7 @@ class StoreBlogPostRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
-            'content_type' => $this->input('content_type') === 'ensemble' ? 'blog' : $this->input('content_type'),
+            'content_type' => $this->normalizedContentType($this->input('content_type')),
             'external_links' => $this->normalizedExternalLinks(),
         ]);
     }
@@ -86,5 +86,14 @@ class StoreBlogPostRequest extends FormRequest
             ->filter(fn (array $link) => $link['label'] !== null || $link['url'] !== '')
             ->values()
             ->all();
+    }
+
+    private function normalizedContentType(mixed $contentType): mixed
+    {
+        return match ($contentType) {
+            'ensemble', 'article', 'actualite', 'actualites' => 'blog',
+            'ressource', 'ressources', 'resources' => 'resource',
+            default => $contentType,
+        };
     }
 }
