@@ -27,6 +27,7 @@ class OperationalLogPageTest extends TestCase
         [$client, $project] = $this->clientProject('Client Suivi', 'Projet Suivi');
         $image = $this->image($client, $project, [
             'title' => 'Image cession',
+            'object_key_web' => 'photos/projet-suivi/web/image-cession.jpg',
             'rights_starts_at' => now()->subMonth()->toDateString(),
             'rights_ends_at' => now()->addDays(10)->toDateString(),
         ]);
@@ -76,12 +77,21 @@ class OperationalLogPageTest extends TestCase
                 ->where('downloads.items.0.title', 'Archive suivi')
                 ->where('downloads.items.0.actorName', $admin->name)
                 ->where('downloads.items.0.images.0.title', 'Image cession')
+                ->where('downloads.items.0.images.0.thumbUrl', fn (string $url) => str_contains($url, "/image-assets/{$image->id}")
+                    && str_contains($url, 'variant=thumb'))
                 ->where('rights.total', 1)
                 ->where('rights.items.0.status', 'expiring_soon')
+                ->where('rights.items.0.thumbUrl', fn (string $url) => str_contains($url, "/image-assets/{$image->id}")
+                    && str_contains($url, 'variant=thumb'))
                 ->where('extensionRequests.total', 1)
                 ->where('extensionRequests.items.0.imageTitle', 'Image cession')
+                ->where('extensionRequests.items.0.thumbUrl', fn (string $url) => str_contains($url, "/image-assets/{$image->id}")
+                    && str_contains($url, 'variant=thumb'))
                 ->where('accessPeriods.total', 1)
                 ->where('accessPeriods.items.0.status', 'active')
+                ->where('accessPeriods.items.0.images.0.title', 'Image cession')
+                ->where('accessPeriods.items.0.images.0.thumbUrl', fn (string $url) => str_contains($url, "/image-assets/{$image->id}")
+                    && str_contains($url, 'variant=thumb'))
                 ->etc());
     }
 

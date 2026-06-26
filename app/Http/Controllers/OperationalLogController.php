@@ -178,6 +178,7 @@ class OperationalLogController extends Controller
             ->with([
                 'client:id,name',
                 'project:id,name',
+                'variants:id,image_id,kind,object_key',
                 'latestRightsExtensionRequest.requester:id,name,email',
                 'latestRightsExtensionRequest.resolver:id,name,email',
             ])
@@ -212,6 +213,7 @@ class OperationalLogController extends Controller
             'clientName' => $image->client?->name,
             'projectId' => $image->project_id,
             'projectName' => $image->project?->name,
+            'thumbUrl' => $this->imageUrls->temporaryThumbnailUrl($image),
             'startsAt' => $image->rights_starts_at?->toDateString(),
             'endsAt' => $image->rights_ends_at?->toDateString(),
             'status' => $image->rightsStatus(),
@@ -237,7 +239,8 @@ class OperationalLogController extends Controller
     {
         $requests = ImageRightsExtensionRequest::query()
             ->with([
-                'image:id,title',
+                'image:id,title,client_id,project_id,rights_starts_at,rights_ends_at,storage_provider,object_key_original,object_key_web,object_key_thumb,object_key_hd',
+                'image.variants:id,image_id,kind,object_key',
                 'client:id,name',
                 'project:id,name',
                 'requester:id,name,email',
@@ -258,6 +261,7 @@ class OperationalLogController extends Controller
                 'resolvedAt' => $request->resolved_at?->toIso8601String(),
                 'imageTitle' => $request->image?->title,
                 'imageId' => $request->image_id,
+                'thumbUrl' => $request->image ? $this->imageUrls->temporaryThumbnailUrl($request->image) : null,
                 'clientName' => $request->client?->name,
                 'clientId' => $request->client_id,
                 'projectName' => $request->project?->name,
@@ -284,7 +288,14 @@ class OperationalLogController extends Controller
     private function accessPeriodRows(array $filters): array
     {
         $periods = ProjectAccessPeriod::query()
-            ->with(['client:id,name', 'project:id,name', 'project.images:id,project_id'])
+            ->with([
+                'client:id,name',
+                'project:id,name',
+                'project.images:id,client_id,project_id,title,rights_starts_at,rights_ends_at,storage_provider,object_key_original,object_key_web,object_key_thumb,object_key_hd',
+                'project.images.client:id,name',
+                'project.images.project:id,name',
+                'project.images.variants:id,image_id,kind,object_key',
+            ])
             ->tap(fn (Builder $query) => $this->applyDateFilters($query, $filters, 'created_at'))
             ->when($filters['clientId'] !== null, fn (Builder $query) => $query->where('client_id', $filters['clientId']))
             ->when($filters['projectId'] !== null, fn (Builder $query) => $query->where('project_id', $filters['projectId']))
@@ -318,6 +329,10 @@ class OperationalLogController extends Controller
             'status' => $status,
             'statusLabel' => $this->accessStatusLabel($status),
             'imagesCount' => $period->project?->images->count() ?? 0,
+            'images' => $period->project?->images
+                ->take(12)
+                ->map(fn (Image $image) => $this->imageChip($image))
+                ->values() ?? [],
             'createdAt' => $period->created_at?->toIso8601String(),
             'updatedAt' => $period->updated_at?->toIso8601String(),
             'targetUrl' => route('access-periods.index'),
