@@ -13,13 +13,7 @@ class ImageUrlResolver
 
     public function thumbnailUrl(Image $image): ?string
     {
-        $thumbnailKey = $this->variantObjectKey($image, 'thumb') ?: $image->object_key_thumb;
-
-        if ($thumbnailKey && $this->isStandaloneThumbnailKey($image, $thumbnailKey)) {
-            return $this->url($image->storage_provider, $thumbnailKey);
-        }
-
-        return null;
+        return $this->url($image->storage_provider, $this->thumbnailObjectKey($image));
     }
 
     public function displayUrl(Image $image): ?string
@@ -125,7 +119,18 @@ class ImageUrlResolver
             return $thumbnailKey;
         }
 
-        return null;
+        return $this->thumbnailFallbackObjectKey($image);
+    }
+
+    private function thumbnailFallbackObjectKey(Image $image): ?string
+    {
+        $webKey = $this->variantObjectKey($image, 'web') ?: $image->object_key_web;
+
+        if (! $webKey || $this->isOriginalKey($image, $webKey)) {
+            return null;
+        }
+
+        return $webKey;
     }
 
     private function isStandaloneThumbnailKey(Image $image, string $objectKey): bool

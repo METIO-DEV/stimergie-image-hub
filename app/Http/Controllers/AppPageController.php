@@ -18,6 +18,7 @@ use App\Support\ProjectAccess;
 use App\Support\TransactionalMailer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 use Throwable;
@@ -178,7 +179,7 @@ class AppPageController extends Controller
         $user = $request->user();
         $clientIds = $this->projectAccess->accessibleClientIds($user);
 
-        $downloads = DownloadJob::query()
+        $jobs = DownloadJob::query()
             ->with('client:id,name')
             ->when(! $user->isSuperAdmin(), fn ($query) => $query->where('user_id', $user->id))
             ->when($clientIds !== null, fn ($query) => $query->where(function ($query) use ($clientIds) {
@@ -186,23 +187,80 @@ class AppPageController extends Controller
             }))
             ->latest()
             ->limit(50)
+            ->get();
+
+        $imageIds = $jobs
+            ->flatMap(fn (DownloadJob $job) => $this->downloadImageIds($job))
+            ->unique()
+            ->values();
+
+        $images = Image::query()
+            ->with([
+                'client:id,name',
+                'project:id,name',
+                'variants:id,image_id,kind,object_key',
+            ])
+            ->whereIn('id', $imageIds)
             ->get()
-            ->map(fn (DownloadJob $job) => [
-                'id' => $job->id,
-                'title' => $job->title,
-                'status' => $job->status,
-                'isHd' => $job->is_hd,
-                'imageCount' => $job->image_count,
-                'clientName' => $job->client?->name,
-                'processedAt' => $job->processed_at?->toIso8601String(),
-                'expiresAt' => $job->download_url_expires_at?->toIso8601String(),
-                'createdAt' => $job->created_at->toIso8601String(),
-                'downloadUrl' => $job->status === 'ready' ? route('downloads.show', $job) : null,
-            ]);
+            ->keyBy('id');
+
+        $downloads = $jobs->map(fn (DownloadJob $job) => $this->downloadSummary($job, $images));
 
         return Inertia::render('Downloads/Index', [
             'downloads' => $downloads,
         ]);
+    }
+
+    /**
+     * @param  Collection<int, Image>  $images
+     * @return array<string, mixed>
+     */
+    private function downloadSummary(DownloadJob $job, Collection $images): array
+    {
+        $jobImages = $this->downloadImageIds($job)
+            ->map(fn (int $imageId) => $images->get($imageId))
+            ->filter()
+            ->values();
+
+        return [
+            'id' => $job->id,
+            'title' => $job->title,
+            'status' => $job->status,
+            'isHd' => $job->is_hd,
+            'imageCount' => $job->image_count,
+            'clientName' => $job->client?->name,
+            'processedAt' => $job->processed_at?->toIso8601String(),
+            'expiresAt' => $job->download_url_expires_at?->toIso8601String(),
+            'createdAt' => $job->created_at->toIso8601String(),
+            'downloadUrl' => $job->status === 'ready' ? route('downloads.show', $job) : null,
+            'images' => $jobImages->map(fn (Image $image) => $this->downloadImageSummary($image))->all(),
+        ];
+    }
+
+    /**
+     * @return Collection<int, int>
+     */
+    private function downloadImageIds(DownloadJob $job): Collection
+    {
+        return collect($job->payload['requested_image_ids'] ?? [])
+            ->map(fn ($imageId) => (int) $imageId)
+            ->filter()
+            ->unique()
+            ->values();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function downloadImageSummary(Image $image): array
+    {
+        return [
+            'id' => $image->id,
+            'title' => $image->title,
+            'clientName' => $image->client?->name,
+            'projectName' => $image->project?->name,
+            'thumbUrl' => $this->imageUrls->temporaryThumbnailUrl($image),
+        ];
     }
 
     public function images(Request $request): Response

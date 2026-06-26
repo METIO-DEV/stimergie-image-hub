@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Client;
 use App\Models\ClientMembership;
+use App\Models\DownloadJob;
 use App\Models\Image;
 use App\Models\ImageRightsExtensionRequest;
 use App\Models\LegalPage;
@@ -663,6 +664,47 @@ class AppPagesTest extends TestCase
                 ->where('images.0.thumbUrl', null)
                 ->where('images.0.imageUrl', fn (string $url) => str_contains($url, "/image-assets/{$image->id}")
                     && str_contains($url, 'variant=display')
+                    && str_contains($url, 'signature='))
+                ->etc());
+    }
+
+    public function test_gallery_uses_web_object_as_thumbnail_fallback(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $client = Client::create([
+            'name' => 'Client Apercu Web',
+            'slug' => 'client-apercu-web',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Apercu Web',
+            'slug' => 'projet-apercu-web',
+            'status' => 'active',
+        ]);
+        $image = Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Image sans miniature',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/projet-apercu-web/source-original.jpg',
+            'object_key_web' => 'photos/projet-apercu-web/web/source.jpg',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('gallery.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Gallery/Index')
+                ->where('images.0.id', $image->id)
+                ->where('images.0.thumbUrl', fn (string $url) => str_contains($url, "/image-assets/{$image->id}")
+                    && str_contains($url, 'variant=thumb')
                     && str_contains($url, 'signature='))
                 ->etc());
     }
@@ -1409,6 +1451,62 @@ class AppPagesTest extends TestCase
 
         $this->assertStringContainsString('photos/client-download/source.jpg', $response->headers->get('Location'));
         $this->assertStringContainsString('expiration=', $response->headers->get('Location'));
+    }
+
+    public function test_downloads_page_exposes_requested_image_previews(): void
+    {
+        Storage::fake('scaleway');
+
+        $admin = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $client = Client::create([
+            'name' => 'Client Historique',
+            'slug' => 'client-historique',
+            'status' => 'active',
+        ]);
+        $project = Project::create([
+            'client_id' => $client->id,
+            'name' => 'Projet Historique',
+            'slug' => 'projet-historique',
+            'status' => 'active',
+        ]);
+        $image = Image::create([
+            'client_id' => $client->id,
+            'project_id' => $project->id,
+            'title' => 'Image historique',
+            'status' => 'ready',
+            'storage_provider' => 'scaleway',
+            'object_key_original' => 'photos/projet-historique/source-original.jpg',
+            'object_key_web' => 'photos/projet-historique/web/source.jpg',
+        ]);
+        $job = DownloadJob::create([
+            'user_id' => $admin->id,
+            'client_id' => $client->id,
+            'title' => 'Archive historique',
+            'status' => 'ready',
+            'is_hd' => false,
+            'image_count' => 1,
+            'storage_provider' => 'scaleway',
+            'payload' => [
+                'variant' => 'web',
+                'requested_image_ids' => [$image->id],
+            ],
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('downloads.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Downloads/Index')
+                ->where('downloads.0.id', $job->id)
+                ->where('downloads.0.images.0.id', $image->id)
+                ->where('downloads.0.images.0.title', 'Image historique')
+                ->where('downloads.0.images.0.thumbUrl', fn (string $url) => str_contains($url, "/image-assets/{$image->id}")
+                    && str_contains($url, 'variant=thumb')
+                    && str_contains($url, 'signature='))
+                ->etc());
     }
 
     public function test_image_download_route_serves_requested_web_variant(): void
