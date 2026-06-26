@@ -35,7 +35,7 @@ class BlogPostController extends Controller
 
     public function show(Request $request, BlogPost $blogPost): Response
     {
-        abort_unless($blogPost->is_published, 404);
+        abort_unless($this->canViewPublishedPost($request->user(), $blogPost), 404);
 
         $blogPost->load('client:id,name');
 
@@ -110,7 +110,7 @@ class BlogPostController extends Controller
         $featuredImageObjectKey = $featuredImage?->object_key_web ?: $featuredImage?->object_key_original;
 
         BlogPost::create([
-            'client_id' => $data['client_id'] ?? null,
+            'client_id' => $data['content_type'] === 'ensemble' ? null : ($data['client_id'] ?? null),
             'author_id' => $request->user()->id,
             'title' => $data['title'],
             'slug' => $this->uniqueSlug($data['title']),
@@ -142,7 +142,7 @@ class BlogPostController extends Controller
         }
 
         $blogPost->update([
-            'client_id' => $data['client_id'] ?? null,
+            'client_id' => $data['content_type'] === 'ensemble' ? null : ($data['client_id'] ?? null),
             'title' => $data['title'],
             'slug' => $this->uniqueSlug($data['title'], $blogPost),
             'content' => $data['content'],
@@ -170,12 +170,17 @@ class BlogPostController extends Controller
 
     private function publicIndex(Request $request, string $contentType, string $title, string $description): Response
     {
+        $user = $request->user();
+        abort_unless($user instanceof User, 403);
+
         $activeClientId = $request->query('client_id') ? max(1, (int) $request->query('client_id')) : null;
+        $viewableClientIds = $contentType === 'resource' ? $this->viewableClientIds($user) : null;
 
         $posts = BlogPost::query()
             ->with('client:id,name')
             ->where('content_type', $contentType)
             ->where('is_published', true)
+            ->tap(fn ($query) => $this->applyViewablePostScope($query, $contentType, $viewableClientIds))
             ->when($activeClientId !== null, fn ($query) => $query->where('client_id', $activeClientId))
             ->latest('published_at')
             ->latest()
@@ -188,7 +193,9 @@ class BlogPostController extends Controller
             'description' => $description,
             'contentType' => $contentType,
             'filters' => [
-                'clients' => $this->publicClientOptions($contentType),
+                'clients' => $contentType === 'resource'
+                    ? $this->publicClientOptions($contentType, $viewableClientIds)
+                    : [],
             ],
             'activeFilters' => [
                 'clientId' => $activeClientId ? (string) $activeClientId : '',
@@ -340,6 +347,34 @@ class BlogPostController extends Controller
         return $client instanceof Client && $user->can('update', $client);
     }
 
+    private function canViewPublishedPost(?User $user, BlogPost $post): bool
+    {
+        if (! $user instanceof User || ! $post->is_published) {
+            return false;
+        }
+
+        if ($post->content_type === 'ensemble') {
+            return true;
+        }
+
+        if ($post->content_type !== 'resource') {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        if ($post->client_id === null) {
+            return false;
+        }
+
+        return $user->clientMemberships()
+            ->where('client_id', $post->client_id)
+            ->where('status', 'active')
+            ->exists();
+    }
+
     /**
      * @return array<int>|null
      */
@@ -365,6 +400,36 @@ class BlogPostController extends Controller
         $query->whereIn('client_id', $manageableClientIds);
     }
 
+    /**
+     * @return array<int>|null
+     */
+    private function viewableClientIds(User $user): ?array
+    {
+        if ($user->isSuperAdmin()) {
+            return null;
+        }
+
+        return $user->clientMemberships()
+            ->where('status', 'active')
+            ->pluck('client_id')
+            ->all();
+    }
+
+    private function applyViewablePostScope($query, string $contentType, ?array $viewableClientIds): void
+    {
+        if ($contentType !== 'resource' || $viewableClientIds === null) {
+            return;
+        }
+
+        if ($viewableClientIds === []) {
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
+        $query->whereIn('client_id', $viewableClientIds);
+    }
+
     private function clientOptions(?array $clientIds): mixed
     {
         return Client::query()
@@ -377,9 +442,10 @@ class BlogPostController extends Controller
             ]);
     }
 
-    private function publicClientOptions(string $contentType): mixed
+    private function publicClientOptions(string $contentType, ?array $viewableClientIds): mixed
     {
         return Client::query()
+            ->when($viewableClientIds !== null, fn ($query) => $query->whereIn('id', $viewableClientIds))
             ->whereHas('blogPosts', fn ($query) => $query
                 ->where('content_type', $contentType)
                 ->where('is_published', true))

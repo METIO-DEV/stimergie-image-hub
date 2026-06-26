@@ -38,10 +38,14 @@ class UpdateBlogPostRequest extends FormRequest
             }
         }
 
+        if ($this->input('content_type') === 'ensemble') {
+            return $user->isSuperAdmin();
+        }
+
         $targetClientId = $this->integer('client_id') ?: null;
 
         if ($targetClientId === null) {
-            return $user->isSuperAdmin();
+            return false;
         }
 
         $targetClient = Client::find($targetClientId);
@@ -64,7 +68,12 @@ class UpdateBlogPostRequest extends FormRequest
         return [
             'title' => ['required', 'string', 'max:255'],
             'content' => ['required', 'string', 'max:100000'],
-            'client_id' => ['nullable', 'integer', Rule::exists('clients', 'id')],
+            'client_id' => [
+                Rule::requiredIf($this->input('content_type') === 'resource'),
+                'nullable',
+                'integer',
+                Rule::exists('clients', 'id'),
+            ],
             'content_type' => ['required', 'string', Rule::in(['resource', 'ensemble'])],
             'category' => ['nullable', 'string', Rule::in(['actualites', 'projets', 'conseils'])],
             'featured_image_id' => ['nullable', 'integer', $featuredImageRule],

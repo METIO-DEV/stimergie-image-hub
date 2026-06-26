@@ -243,12 +243,19 @@ Les contenus ont :
 - un slug unique ;
 - un contenu riche ;
 - une image mise en avant ;
-- un client optionnel ;
+- un client obligatoire pour les ressources ;
 - un type de contenu : `Ressource` ou `Ensemble` ;
 - une categorie optionnelle pour certains contenus ;
 - un statut publie/non publie.
 
-La page `/blog-editor` est accessible aux administrateurs et administrateurs clients pour creer ou modifier ces contenus.
+Les regles metier sont les suivantes :
+
+- `Ensemble` correspond a des informations descendantes de l'agence vers tous les clients. Ces articles sont visibles par tous les utilisateurs connectes et ne sont pas rattaches a un client.
+- `Ressources` correspond a des informations specifiques a un espace client. Une ressource rattachee a un client n'est visible que par les utilisateurs connectes rattaches a ce client.
+- Aucun contenu editorial n'est visible publiquement pour le moment.
+- Les brouillons restent visibles uniquement dans l'administration.
+
+La page `/blog-editor` est accessible aux super-administrateurs pour les articles Ensemble, et aux administrateurs / responsables client pour les ressources rattachees aux clients qu'ils gerent.
 
 ### Pages legales et institutionnelles
 
@@ -272,22 +279,22 @@ Routes publiques :
 - `/` ;
 - `/auth` ;
 - `/reset-password` ;
-- `/resources` ;
 - `/privacy-policy` ;
 - `/terms-of-service` ;
 - `/licenses` ;
 - `/about` ;
-- `/blog/:slug` ;
 - `/shared-album/:shareKey`.
 
 Routes authentifiees :
 
 - `/profile` ;
 - `/gallery` ;
+- `/resources` ;
 - `/images/:id` ;
 - `/projects` ;
 - `/downloads` ;
-- `/ensemble`.
+- `/ensemble` ;
+- `/blog/:slug`.
 
 Routes limitees par role :
 
@@ -534,7 +541,7 @@ Menu utilisateur :
 | Utilisateurs | CRUD utilisateurs, roles, rattachements clients | Admin, admin_client |
 | Telechargements | Suivi des ZIP et statuts | Tous |
 | Albums partages | Partage externe temporaire | Utilisateurs authentifies pour creation, public avec lien pour consultation |
-| Blog/Ressources | Contenus editoriaux | Lecture publique, edition admin/admin_client |
+| Blog/Ressources | Contenus editoriaux | Utilisateurs connectes selon portee Ensemble ou client, edition admin/admin_client |
 | Profil | Donnees personnelles et mot de passe | Tous |
 | Contact | Envoi de message a Stimergie | Tous |
 

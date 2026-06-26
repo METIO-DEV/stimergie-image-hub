@@ -260,7 +260,7 @@ Fonctionnalites a conserver si le client les utilise :
 - categorie ;
 - slug public ;
 - edition par `super_admin`, `owner` ou `manager` selon le client rattache au contenu ;
-- lecture publique uniquement des contenus publies.
+- lecture authentifiee uniquement : Ensemble pour tous les utilisateurs connectes, Ressources limitees aux utilisateurs rattaches au client concerne.
 
 Le blog ne doit pas etre traite comme secondaire sans validation metier. S'il est conserve, il doit avoir les memes exigences de droits, publication et migration que le reste.
 

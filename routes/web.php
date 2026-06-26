@@ -40,9 +40,6 @@ Route::get('/conditions-utilisation', [LegalPageController::class, 'terms'])->na
 Route::get('/privacy-policy', [LegalPageController::class, 'privacy'])->name('privacy.legacy');
 Route::get('/confidentialite', [LegalPageController::class, 'privacy'])->name('privacy');
 Route::get('/licenses', [LegalPageController::class, 'licenses'])->name('licenses');
-Route::get('/resources', [BlogPostController::class, 'resources'])->name('blog.resources');
-Route::get('/ressources', [BlogPostController::class, 'resources'])->name('blog.resources.fr');
-Route::get('/ensemble', [BlogPostController::class, 'ensemble'])->name('blog.ensemble');
 Route::get('/image-assets/{image}', [ImageAssetController::class, 'show'])->name('images.asset');
 Route::get('/shared-albums/{shareKey}', [SharedAlbumController::class, 'show'])->name('shared-albums.show');
 Route::get('/shared-albums/{shareKey}/images/{image}/asset', [ImageAssetController::class, 'sharedAlbum'])->name('shared-albums.images.asset');
@@ -85,6 +82,9 @@ Route::get('/dashboard', function (Request $request) {
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
+    Route::get('/resources', [BlogPostController::class, 'resources'])->name('blog.resources');
+    Route::get('/ressources', [BlogPostController::class, 'resources'])->name('blog.resources.fr');
+    Route::get('/ensemble', [BlogPostController::class, 'ensemble'])->name('blog.ensemble');
     Route::get('/gallery', [AppPageController::class, 'gallery'])->name('gallery.index');
     Route::get('/contact', [AppPageController::class, 'contact'])->name('contact.index');
     Route::post('/contact', [AppPageController::class, 'sendContact'])->name('contact.send');
@@ -145,6 +145,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/blog', [BlogPostController::class, 'store'])->name('blog.store');
     Route::patch('/blog/{blogPost}', [BlogPostController::class, 'update'])->name('blog.update');
     Route::delete('/blog/{blogPost}', [BlogPostController::class, 'destroy'])->name('blog.destroy');
+    Route::get('/blog/{blogPost:slug}', [BlogPostController::class, 'show'])->name('blog.show');
 
     Route::resource('clients', ClientController::class);
     Route::post('/clients/{client}/members', [ClientMemberController::class, 'store'])->name('clients.members.store');
@@ -155,7 +156,5 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
-
-Route::get('/blog/{blogPost:slug}', [BlogPostController::class, 'show'])->name('blog.show');
 
 require __DIR__.'/auth.php';

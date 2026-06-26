@@ -51,15 +51,18 @@ export default function Edit({
         );
     }, [existingPost, imageOptions]);
 
+    const initialContentType = existingPost?.contentType ?? "resource";
     const fallbackClientId =
-        existingPost?.clientId ?? (canCreateGlobalPost ? null : clients[0]?.id ?? null);
+        initialContentType === "ensemble"
+            ? null
+            : existingPost?.clientId ?? clients[0]?.id ?? null;
 
     const { data, setData, post, patch, processing, errors } =
         useForm<BlogFormData>({
             title: existingPost?.title ?? "",
             content: existingPost?.content ?? "",
             client_id: fallbackClientId,
-            content_type: existingPost?.contentType ?? "resource",
+            content_type: initialContentType,
             category:
                 (existingPost?.category as BlogFormData["category"]) ?? null,
             featured_image_id: initialFeaturedImageId,
@@ -98,6 +101,10 @@ export default function Edit({
             ...values,
             content_type: contentType,
             category: contentType === "ensemble" ? values.category : null,
+            client_id:
+                contentType === "ensemble"
+                    ? null
+                    : values.client_id ?? clients[0]?.id ?? null,
         }));
     };
 
@@ -191,42 +198,45 @@ export default function Edit({
                                         className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
                                     >
                                         <option value="resource">Ressource</option>
-                                        <option value="ensemble">Blog</option>
+                                        {canCreateGlobalPost && (
+                                            <option value="ensemble">Blog</option>
+                                        )}
                                     </select>
                                     <InputError message={errors.content_type} />
                                 </div>
 
-                                <div className="space-y-2">
-                                    <Label htmlFor="blog-client">
-                                        Client associé
-                                    </Label>
-                                    <select
-                                        id="blog-client"
-                                        value={data.client_id ?? ""}
-                                        onChange={(event) =>
-                                            setData(
-                                                "client_id",
-                                                event.target.value
-                                                    ? Number(event.target.value)
-                                                    : null,
-                                            )
-                                        }
-                                        className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-                                    >
-                                        {canCreateGlobalPost && (
-                                            <option value="">Aucun client</option>
-                                        )}
-                                        {clients.map((client) => (
-                                            <option
-                                                key={client.id}
-                                                value={client.id}
-                                            >
-                                                {client.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <InputError message={errors.client_id} />
-                                </div>
+                                {data.content_type === "resource" && (
+                                    <div className="space-y-2">
+                                        <Label htmlFor="blog-client">
+                                            Client associé
+                                        </Label>
+                                        <select
+                                            id="blog-client"
+                                            value={data.client_id ?? ""}
+                                            onChange={(event) =>
+                                                setData(
+                                                    "client_id",
+                                                    event.target.value
+                                                        ? Number(
+                                                              event.target.value,
+                                                          )
+                                                        : null,
+                                                )
+                                            }
+                                            className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                                        >
+                                            {clients.map((client) => (
+                                                <option
+                                                    key={client.id}
+                                                    value={client.id}
+                                                >
+                                                    {client.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <InputError message={errors.client_id} />
+                                    </div>
+                                )}
 
                                 {data.content_type === "ensemble" && (
                                     <div className="space-y-2">

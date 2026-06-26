@@ -16,57 +16,179 @@ class BlogPostManagementTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_public_blog_lists_and_shows_only_published_posts(): void
+    public function test_blog_and_resources_require_authentication(): void
     {
         $author = User::factory()->create([
             'platform_role' => 'super_admin',
             'status' => 'active',
         ]);
 
-        $published = BlogPost::create([
+        $post = BlogPost::create([
             'author_id' => $author->id,
             'title' => 'Guide publié',
             'slug' => 'guide-publie',
             'content' => 'Contenu visible',
-            'content_type' => 'resource',
-            'featured_image_object_key' => 'https://picsum.photos/seed/test-public-blog/1200/800',
+            'content_type' => 'ensemble',
+            'is_published' => true,
+            'published_at' => now(),
+        ]);
+
+        $this->get(route('blog.resources'))->assertRedirect(route('login'));
+        $this->get(route('blog.ensemble'))->assertRedirect(route('login'));
+        $this->get(route('blog.show', $post->slug))->assertRedirect(route('login'));
+    }
+
+    public function test_ensemble_posts_are_visible_to_any_authenticated_user(): void
+    {
+        $author = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $viewer = User::factory()->create([
+            'platform_role' => 'user',
+            'status' => 'active',
+        ]);
+
+        $published = BlogPost::create([
+            'author_id' => $author->id,
+            'title' => 'Information agence',
+            'slug' => 'information-agence',
+            'content' => 'Contenu visible par tous les clients connectes',
+            'content_type' => 'ensemble',
+            'category' => 'actualites',
             'external_links' => [
                 ['label' => 'Direction artistique', 'url' => 'https://docs.google.com/presentation/d/example'],
             ],
             'is_published' => true,
             'published_at' => now(),
         ]);
-        $draft = BlogPost::create([
+
+        BlogPost::create([
             'author_id' => $author->id,
-            'title' => 'Guide brouillon',
-            'slug' => 'guide-brouillon',
+            'title' => 'Information agence brouillon',
+            'slug' => 'information-agence-brouillon',
             'content' => 'Contenu cache',
-            'content_type' => 'resource',
+            'content_type' => 'ensemble',
             'is_published' => false,
         ]);
 
-        $this->get(route('blog.resources'))
+        $this->actingAs($viewer)
+            ->get(route('blog.ensemble'))
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->component('Blog/PublicIndex')
                 ->has('posts', 1)
                 ->where('posts.0.id', $published->id)
-                ->where('posts.0.featuredImageUrl', 'https://picsum.photos/seed/test-public-blog/1200/800')
+                ->where('posts.0.contentTypeLabel', 'Blog')
             );
 
-        $this->get(route('blog.show', $published->slug))
+        $this->actingAs($viewer)
+            ->get(route('blog.show', $published->slug))
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('post.externalLinks.0.label', 'Direction artistique')
                 ->where('post.externalLinks.0.url', 'https://docs.google.com/presentation/d/example')
                 ->where('post.externalLinks.0.host', 'docs.google.com')
             );
-        $this->get(route('blog.show', $draft->slug))->assertNotFound();
     }
 
-    public function test_public_blog_can_filter_published_posts_by_client(): void
+    public function test_resource_posts_are_limited_to_authenticated_users_clients(): void
     {
         $author = User::factory()->create([
+            'platform_role' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $viewer = User::factory()->create([
+            'platform_role' => 'user',
+            'status' => 'active',
+        ]);
+        $firstClient = Client::create([
+            'name' => 'Client Alpha',
+            'slug' => 'client-alpha',
+            'status' => 'active',
+        ]);
+        $secondClient = Client::create([
+            'name' => 'Client Beta',
+            'slug' => 'client-beta',
+            'status' => 'active',
+        ]);
+
+        ClientMembership::create([
+            'client_id' => $firstClient->id,
+            'user_id' => $viewer->id,
+            'role' => 'member',
+            'status' => 'active',
+        ]);
+
+        $firstPost = BlogPost::create([
+            'client_id' => $firstClient->id,
+            'author_id' => $author->id,
+            'title' => 'Article Alpha',
+            'slug' => 'article-alpha',
+            'content' => 'Contenu Alpha',
+            'content_type' => 'resource',
+            'featured_image_object_key' => 'https://picsum.photos/seed/test-client-resource/1200/800',
+            'is_published' => true,
+            'published_at' => now(),
+        ]);
+        $secondPost = BlogPost::create([
+            'client_id' => $secondClient->id,
+            'author_id' => $author->id,
+            'title' => 'Article Beta',
+            'slug' => 'article-beta',
+            'content' => 'Contenu Beta',
+            'content_type' => 'resource',
+            'is_published' => true,
+            'published_at' => now(),
+        ]);
+        $globalResource = BlogPost::create([
+            'client_id' => null,
+            'author_id' => $author->id,
+            'title' => 'Ressource globale',
+            'slug' => 'ressource-globale',
+            'content' => 'Contenu global',
+            'content_type' => 'resource',
+            'is_published' => true,
+            'published_at' => now(),
+        ]);
+        $draft = BlogPost::create([
+            'client_id' => $firstClient->id,
+            'author_id' => $author->id,
+            'title' => 'Article Alpha brouillon',
+            'slug' => 'article-alpha-brouillon',
+            'content' => 'Contenu cache',
+            'content_type' => 'resource',
+            'is_published' => false,
+        ]);
+
+        $this->actingAs($viewer)
+            ->get(route('blog.resources'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Blog/PublicIndex')
+                ->has('filters.clients', 1)
+                ->where('filters.clients.0.name', 'Client Alpha')
+                ->where('activeFilters.clientId', '')
+                ->has('posts', 1)
+                ->where('posts.0.id', $firstPost->id)
+                ->where('posts.0.clientName', 'Client Alpha')
+                ->where('posts.0.featuredImageUrl', 'https://picsum.photos/seed/test-client-resource/1200/800')
+            );
+
+        $this->actingAs($viewer)
+            ->get(route('blog.resources', ['client_id' => $secondClient->id]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->has('posts', 0));
+
+        $this->actingAs($viewer)->get(route('blog.show', $firstPost->slug))->assertOk();
+        $this->actingAs($viewer)->get(route('blog.show', $secondPost->slug))->assertNotFound();
+        $this->actingAs($viewer)->get(route('blog.show', $globalResource->slug))->assertNotFound();
+        $this->actingAs($viewer)->get(route('blog.show', $draft->slug))->assertNotFound();
+    }
+
+    public function test_super_admin_can_filter_all_client_resources(): void
+    {
+        $admin = User::factory()->create([
             'platform_role' => 'super_admin',
             'status' => 'active',
         ]);
@@ -83,7 +205,7 @@ class BlogPostManagementTest extends TestCase
 
         $firstPost = BlogPost::create([
             'client_id' => $firstClient->id,
-            'author_id' => $author->id,
+            'author_id' => $admin->id,
             'title' => 'Article Alpha',
             'slug' => 'article-alpha',
             'content' => 'Contenu Alpha',
@@ -93,7 +215,7 @@ class BlogPostManagementTest extends TestCase
         ]);
         BlogPost::create([
             'client_id' => $secondClient->id,
-            'author_id' => $author->id,
+            'author_id' => $admin->id,
             'title' => 'Article Beta',
             'slug' => 'article-beta',
             'content' => 'Contenu Beta',
@@ -102,7 +224,8 @@ class BlogPostManagementTest extends TestCase
             'published_at' => now(),
         ]);
 
-        $this->get(route('blog.resources', ['client_id' => $firstClient->id]))
+        $this->actingAs($admin)
+            ->get(route('blog.resources', ['client_id' => $firstClient->id]))
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->component('Blog/PublicIndex')
@@ -110,7 +233,6 @@ class BlogPostManagementTest extends TestCase
                 ->where('activeFilters.clientId', (string) $firstClient->id)
                 ->has('posts', 1)
                 ->where('posts.0.id', $firstPost->id)
-                ->where('posts.0.clientName', 'Client Alpha')
             );
     }
 
@@ -252,6 +374,18 @@ class BlogPostManagementTest extends TestCase
                 'client_id' => null,
                 'content_type' => 'resource',
                 'category' => null,
+                'featured_image_id' => null,
+                'is_published' => false,
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($manager)
+            ->post(route('blog.store'), [
+                'title' => 'Info Ensemble refusee',
+                'content' => 'Contenu',
+                'client_id' => $managedClient->id,
+                'content_type' => 'ensemble',
+                'category' => 'actualites',
                 'featured_image_id' => null,
                 'is_published' => false,
             ])

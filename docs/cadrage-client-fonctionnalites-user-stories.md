@@ -535,9 +535,9 @@ Etat actuel des droits d'acces :
 ### Blog / ressources et mentions legales
 
 - En tant que visiteur ou utilisateur, je veux consulter les mentions legales de l'application.
-- En tant que Stimergie, je veux conserver la possibilite d'un blog ou espace ressources prevu a l'origine.
-- En tant qu'administrateur, je veux creer et publier un contenu editorial si ce module est confirme.
-- En tant qu'administrateur, je veux gerer les brouillons, categories et images mises en avant si le blog reste dans le perimetre.
+- En tant que Stimergie, je veux publier des informations Ensemble descendantes vers tous les clients connectes.
+- En tant que Stimergie, je veux publier des ressources rattachees a un client et visibles uniquement dans l'espace de ce client.
+- En tant qu'administrateur, je veux gerer les brouillons, categories et images mises en avant.
 
 ### Abonnement / facturation
 
