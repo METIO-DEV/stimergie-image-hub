@@ -9,6 +9,7 @@ use App\Models\ImageRightsExtensionRequest;
 use App\Models\Project;
 use App\Models\ProjectAccessPeriod;
 use App\Models\User;
+use App\Support\ImageUrlResolver;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -18,6 +19,8 @@ use Inertia\Response;
 class OperationalLogController extends Controller
 {
     private const MAX_ROWS = 120;
+
+    public function __construct(private readonly ImageUrlResolver $imageUrls) {}
 
     public function index(Request $request): Response
     {
@@ -350,7 +353,11 @@ class OperationalLogController extends Controller
         }
 
         return Image::query()
-            ->with(['client:id,name', 'project:id,name'])
+            ->with([
+                'client:id,name',
+                'project:id,name',
+                'variants:id,image_id,kind,object_key',
+            ])
             ->whereIn('id', $ids)
             ->get()
             ->sortBy(fn (Image $image) => $ids->search($image->id))
@@ -366,6 +373,7 @@ class OperationalLogController extends Controller
             'clientId' => $image->client_id,
             'projectName' => $image->project?->name,
             'projectId' => $image->project_id,
+            'thumbUrl' => $this->imageUrls->temporaryThumbnailUrl($image),
             'rightsEndsAt' => $image->rights_ends_at?->toDateString(),
             'rightsStatus' => $image->rightsStatus(),
         ];

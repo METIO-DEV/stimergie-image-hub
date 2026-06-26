@@ -28,6 +28,7 @@ import { Head, Link, router } from "@inertiajs/react";
 import {
     Download,
     ExternalLink,
+    Image as ImageIcon,
     RefreshCw,
     Search,
     ShieldCheck,
@@ -67,6 +68,7 @@ type ImageChip = {
     clientId: number;
     projectName: string | null;
     projectId: number;
+    thumbUrl: string | null;
     rightsEndsAt: string | null;
     rightsStatus: string;
 };
@@ -249,19 +251,14 @@ export default function OperationsIndex({
             <Head title="Suivi opérationnel" />
 
             <main className="mx-auto max-w-7xl px-4 py-8">
-                <div className="space-y-7">
+                <div className="space-y-8">
                     <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                         <div className="min-w-0">
                             <h1 className="break-words text-2xl font-bold leading-tight sm:text-3xl">
                                 Suivi opérationnel
                             </h1>
-                            <p className="mt-2 max-w-3xl text-sm text-muted-foreground sm:text-base">
-                                Consultation super-admin des téléchargements,
-                                cessions d’images, demandes d’extension et droits
-                                d’accès projet.
-                            </p>
                         </div>
-                        <div className="flex flex-col gap-2 sm:flex-row">
+                        <div className="flex flex-col gap-3 sm:flex-row">
                             <Button
                                 asChild
                                 variant="outline"
@@ -287,9 +284,9 @@ export default function OperationsIndex({
 
                     <form
                         onSubmit={applyFilters}
-                        className="grid gap-3 border-y bg-background py-4 lg:grid-cols-[1.4fr_180px_180px_180px_170px] xl:grid-cols-[1.4fr_170px_170px_170px_160px_150px_150px_auto]"
+                        className="grid grid-cols-2 gap-3 border-y bg-background py-5 md:grid-cols-[minmax(220px,1.6fr)_repeat(4,minmax(130px,1fr))] xl:grid-cols-[minmax(240px,1.7fr)_repeat(4,minmax(135px,1fr))_145px_145px_auto]"
                     >
-                        <div className="relative">
+                        <div className="relative col-span-2 md:col-span-1">
                             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                             <Input
                                 value={form.search}
@@ -360,12 +357,15 @@ export default function OperationsIndex({
                                 })
                             }
                         />
-                        <div className="flex gap-2 xl:justify-end">
-                            <Button type="submit">Filtrer</Button>
+                        <div className="col-span-2 flex gap-3 md:col-span-5 xl:col-span-1 xl:justify-end">
+                            <Button type="submit" className="flex-1 xl:flex-none">
+                                Filtrer
+                            </Button>
                             <Button
                                 type="button"
                                 variant="outline"
                                 onClick={resetFilters}
+                                className="flex-1 xl:flex-none"
                             >
                                 Effacer
                             </Button>
@@ -477,7 +477,7 @@ export default function OperationsIndex({
 
 function SummaryGrid({ summary }: { summary: Summary }) {
     return (
-        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <MetricCard
                 title="Téléchargements"
                 value={summary.downloadsLast30Days}
@@ -523,7 +523,7 @@ function MetricCard({
     tone?: "neutral" | "warning" | "danger" | "success";
 }) {
     return (
-        <div className="rounded-md border bg-card p-4 shadow-sm">
+        <div className="rounded-md border bg-card p-5 shadow-sm">
             <div className="flex items-start justify-between gap-3">
                 <div>
                     <p className="text-sm font-medium text-muted-foreground">
@@ -568,7 +568,7 @@ function OverviewSection({
     onOpenDetail: (detail: DetailItem) => void;
 }) {
     return (
-        <div className="grid gap-5 xl:grid-cols-2">
+        <div className="grid gap-6 xl:grid-cols-2">
             <OverviewList
                 title="Derniers téléchargements"
                 emptyLabel="Aucun téléchargement dans les filtres."
@@ -1112,9 +1112,23 @@ function ImageList({ images }: { images: ImageChip[] }) {
                     {images.map((image) => (
                         <div
                             key={image.id}
-                            className="grid gap-1 rounded-md border bg-background p-3 text-sm sm:grid-cols-[1fr_auto]"
+                            className="grid gap-3 rounded-md border bg-background p-3 text-sm sm:grid-cols-[72px_1fr_auto]"
                         >
-                            <div>
+                            <div className="h-[72px] w-[72px] overflow-hidden rounded-md border bg-muted">
+                                {image.thumbUrl ? (
+                                    <img
+                                        src={image.thumbUrl}
+                                        alt=""
+                                        className="h-full w-full object-cover"
+                                        loading="lazy"
+                                    />
+                                ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                                        <ImageIcon className="h-5 w-5" />
+                                    </div>
+                                )}
+                            </div>
+                            <div className="min-w-0">
                                 <div className="font-medium">
                                     #{image.id} {image.title}
                                 </div>
@@ -1196,7 +1210,7 @@ function SelectControl({
         <select
             value={value}
             onChange={(event) => onChange(event.target.value)}
-            className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
         >
             <option value="">{placeholder}</option>
             {options.map((option) => (

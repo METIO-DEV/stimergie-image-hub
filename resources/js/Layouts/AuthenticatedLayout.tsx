@@ -216,7 +216,7 @@ export default function Authenticated({
         },
         {
             href: route("operations.index"),
-            label: "Suivi technique",
+            label: "Suivi opérationnel",
             icon: History,
             active: route().current("operations.index"),
         },
@@ -259,7 +259,7 @@ export default function Authenticated({
                   return abilities.canManageClientContent;
               }
 
-              if (item.label === "Suivi technique") {
+              if (item.label === "Suivi opérationnel") {
                   return abilities.canViewOperationalLogs;
               }
 
@@ -637,7 +637,7 @@ function breadcrumbItems(props?: object): BreadcrumbItem[] {
     }
 
     if (route().current("operations.index")) {
-        return [home, { label: "Suivi technique" }];
+        return [home, { label: "Suivi opérationnel" }];
     }
 
     if (route().current("projects.index")) {
