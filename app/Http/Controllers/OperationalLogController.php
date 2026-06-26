@@ -214,6 +214,7 @@ class OperationalLogController extends Controller
             'projectId' => $image->project_id,
             'projectName' => $image->project?->name,
             'thumbUrl' => $this->imageUrls->temporaryThumbnailUrl($image),
+            'imageUrl' => $this->imageUrls->temporaryDisplayUrl($image),
             'startsAt' => $image->rights_starts_at?->toDateString(),
             'endsAt' => $image->rights_ends_at?->toDateString(),
             'status' => $image->rightsStatus(),
@@ -262,6 +263,7 @@ class OperationalLogController extends Controller
                 'imageTitle' => $request->image?->title,
                 'imageId' => $request->image_id,
                 'thumbUrl' => $request->image ? $this->imageUrls->temporaryThumbnailUrl($request->image) : null,
+                'imageUrl' => $request->image ? $this->imageUrls->temporaryDisplayUrl($request->image) : null,
                 'clientName' => $request->client?->name,
                 'clientId' => $request->client_id,
                 'projectName' => $request->project?->name,
@@ -389,6 +391,7 @@ class OperationalLogController extends Controller
             'projectName' => $image->project?->name,
             'projectId' => $image->project_id,
             'thumbUrl' => $this->imageUrls->temporaryThumbnailUrl($image),
+            'imageUrl' => $this->imageUrls->temporaryDisplayUrl($image),
             'rightsEndsAt' => $image->rights_ends_at?->toDateString(),
             'rightsStatus' => $image->rightsStatus(),
         ];

@@ -69,6 +69,7 @@ type ImageChip = {
     projectName: string | null;
     projectId: number;
     thumbUrl: string | null;
+    imageUrl: string | null;
     rightsEndsAt: string | null;
     rightsStatus: string;
 };
@@ -103,6 +104,7 @@ type RightsRow = {
     projectId: number;
     projectName: string | null;
     thumbUrl: string | null;
+    imageUrl: string | null;
     startsAt: string | null;
     endsAt: string | null;
     status: string;
@@ -127,6 +129,7 @@ type ExtensionRequestRow = {
     imageTitle: string | null;
     imageId: number;
     thumbUrl: string | null;
+    imageUrl: string | null;
     clientName: string | null;
     clientId: number;
     projectName: string | null;
@@ -593,7 +596,6 @@ function OverviewSection({
                 renderItem={(item) => (
                     <OverviewButton
                         key={item.id}
-                        preview={<ThumbnailPreview src={item.thumbUrl} />}
                         title={item.title}
                         meta={`${item.clientName || "-"} · ${item.projectName || "-"}`}
                         right={<StatusBadge status={item.status} label={item.statusLabel} />}
@@ -608,7 +610,6 @@ function OverviewSection({
                 renderItem={(item) => (
                     <OverviewButton
                         key={item.id}
-                        preview={<ThumbnailPreview src={item.thumbUrl} />}
                         title={item.imageTitle || `Demande #${item.id}`}
                         meta={`${item.requestedBy || "Compte inconnu"} · ${formatDate(item.createdAt)}`}
                         right={<StatusBadge status={item.status} label={item.statusLabel} />}
@@ -625,7 +626,6 @@ function OverviewSection({
                 renderItem={(item) => (
                     <OverviewButton
                         key={item.id}
-                        preview={<ImagePreviewStack images={item.images} />}
                         title={`${item.clientName || "-"} / ${item.projectName || "-"}`}
                         meta={`${item.imagesCount} image${item.imagesCount > 1 ? "s" : ""} concernée${item.imagesCount > 1 ? "s" : ""}`}
                         right={<StatusBadge status={item.status} label={item.statusLabel} />}
@@ -667,13 +667,11 @@ function OverviewList<T>({
 }
 
 function OverviewButton({
-    preview,
     title,
     meta,
     right,
     onClick,
 }: {
-    preview?: ReactNode;
     title: string;
     meta: string;
     right: ReactNode;
@@ -683,12 +681,8 @@ function OverviewButton({
         <button
             type="button"
             onClick={onClick}
-            className={cn(
-                "grid w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                preview ? "grid-cols-[44px_1fr_auto]" : "grid-cols-[1fr_auto]",
-            )}
+            className="grid w-full grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 text-left transition hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-            {preview}
             <span className="min-w-0">
                 <span className="block truncate text-sm font-medium">
                     {title}
@@ -785,11 +779,7 @@ function RightsTable({
             ]}
             rows={rows}
             renderRow={(row) => [
-                <ImageTitleCell
-                    title={row.title}
-                    subtitle={`#${row.id}`}
-                    thumbUrl={row.thumbUrl}
-                />,
+                <StrongCell title={row.title} subtitle={`#${row.id}`} />,
                 <ContextCell primary={row.clientName} secondary={row.projectName} />,
                 formatPlainDate(row.startsAt),
                 formatPlainDate(row.endsAt) || "Illimitée",
@@ -823,10 +813,7 @@ function ExtensionRequestsTable({
             rows={rows}
             renderRow={(row) => [
                 formatDate(row.createdAt),
-                <ImageTitleCell
-                    title={row.imageTitle || `#${row.imageId}`}
-                    thumbUrl={row.thumbUrl}
-                />,
+                <StrongCell title={row.imageTitle || `#${row.imageId}`} />,
                 <ContextCell primary={row.clientName} secondary={row.projectName} />,
                 <PersonCell name={row.requestedBy} />,
                 formatPlainDate(row.rightsEndsAt),
@@ -862,7 +849,7 @@ function AccessPeriodsTable({
                 row.projectName || "-",
                 formatPlainDate(row.startsAt) || "Immédiat",
                 formatPlainDate(row.endsAt) || "Sans limite",
-                <ImagesCountCell count={row.imagesCount} images={row.images} />,
+                row.imagesCount,
                 <StatusBadge status={row.status} label={row.statusLabel} />,
                 <RowActions onOpen={() => onOpen(row)} href={row.targetUrl} />,
             ]}
@@ -1135,46 +1122,52 @@ function ImageList({ images }: { images: ImageChip[] }) {
         <DetailSection title={`Images concernées (${images.length})`}>
             {images.length > 0 ? (
                 <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-                    {images.map((image) => (
-                        <div
-                            key={image.id}
-                            className="grid gap-3 rounded-md border bg-background p-3 text-sm sm:grid-cols-[72px_1fr_auto]"
-                        >
-                            <div className="h-[72px] w-[72px] overflow-hidden rounded-md border bg-muted">
-                                {image.thumbUrl ? (
-                                    <img
-                                        src={image.thumbUrl}
-                                        alt=""
-                                        className="h-full w-full object-cover"
-                                        loading="lazy"
-                                    />
-                                ) : (
-                                    <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                                        <ImageIcon className="h-5 w-5" />
+                    {images.map((image) => {
+                        const previewUrl = image.thumbUrl || image.imageUrl;
+
+                        return (
+                            <div
+                                key={image.id}
+                                className="grid gap-3 rounded-md border bg-background p-3 text-sm sm:grid-cols-[72px_1fr_auto]"
+                            >
+                                <div className="h-[72px] w-[72px] overflow-hidden rounded-md border bg-muted">
+                                    {previewUrl ? (
+                                        <img
+                                            src={previewUrl}
+                                            alt=""
+                                            className="h-full w-full object-cover"
+                                            loading="lazy"
+                                        />
+                                    ) : (
+                                        <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                                            <ImageIcon className="h-5 w-5" />
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="min-w-0">
+                                    <div className="font-medium">
+                                        #{image.id} {image.title}
                                     </div>
-                                )}
-                            </div>
-                            <div className="min-w-0">
-                                <div className="font-medium">
-                                    #{image.id} {image.title}
+                                    <div className="text-muted-foreground">
+                                        {image.clientName || "-"} ·{" "}
+                                        {image.projectName || "-"}
+                                    </div>
                                 </div>
-                                <div className="text-muted-foreground">
-                                    {image.clientName || "-"} ·{" "}
-                                    {image.projectName || "-"}
-                                </div>
-                            </div>
-                            <div className="sm:text-right">
-                                <StatusBadge
-                                    status={image.rightsStatus}
-                                    label={rightsStatusLabel(image.rightsStatus)}
-                                />
-                                <div className="mt-1 text-xs text-muted-foreground">
-                                    {formatPlainDate(image.rightsEndsAt) ||
-                                        "Illimitée"}
+                                <div className="sm:text-right">
+                                    <StatusBadge
+                                        status={image.rightsStatus}
+                                        label={rightsStatusLabel(
+                                            image.rightsStatus,
+                                        )}
+                                    />
+                                    <div className="mt-1 text-xs text-muted-foreground">
+                                        {formatPlainDate(image.rightsEndsAt) ||
+                                            "Illimitée"}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             ) : (
                 <p className="text-sm text-muted-foreground">
@@ -1245,92 +1238,6 @@ function SelectControl({
                 </option>
             ))}
         </select>
-    );
-}
-
-function ThumbnailPreview({ src }: { src?: string | null }) {
-    return (
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
-            {src ? (
-                <img
-                    src={src}
-                    alt=""
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                />
-            ) : (
-                <ImageIcon className="h-4 w-4 text-muted-foreground" />
-            )}
-        </div>
-    );
-}
-
-function ImagePreviewStack({ images }: { images: ImageChip[] }) {
-    const visibleImages = images.slice(0, 3);
-
-    if (visibleImages.length === 0) {
-        return <ThumbnailPreview />;
-    }
-
-    return (
-        <div className="flex h-11 w-11 items-center">
-            {visibleImages.map((image, index) => (
-                <div
-                    key={image.id}
-                    className={cn(
-                        "h-8 w-8 shrink-0 overflow-hidden rounded-md border bg-muted shadow-sm",
-                        index > 0 && "-ml-4",
-                    )}
-                >
-                    {image.thumbUrl ? (
-                        <img
-                            src={image.thumbUrl}
-                            alt=""
-                            className="h-full w-full object-cover"
-                            loading="lazy"
-                        />
-                    ) : (
-                        <div className="flex h-full w-full items-center justify-center">
-                            <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                        </div>
-                    )}
-                </div>
-            ))}
-        </div>
-    );
-}
-
-function ImageTitleCell({
-    title,
-    subtitle,
-    thumbUrl,
-}: {
-    title: string;
-    subtitle?: string;
-    thumbUrl?: string | null;
-}) {
-    return (
-        <div className="flex min-w-0 items-center gap-3">
-            <ThumbnailPreview src={thumbUrl} />
-            <StrongCell title={title} subtitle={subtitle} />
-        </div>
-    );
-}
-
-function ImagesCountCell({
-    count,
-    images,
-}: {
-    count: number;
-    images: ImageChip[];
-}) {
-    return (
-        <div className="flex items-center gap-3">
-            <ImagePreviewStack images={images} />
-            <span>
-                {count} image{count > 1 ? "s" : ""}
-            </span>
-        </div>
     );
 }
 
@@ -1462,6 +1369,7 @@ function rightsToImageChip(item: RightsRow): ImageChip {
         projectName: item.projectName,
         projectId: item.projectId,
         thumbUrl: item.thumbUrl,
+        imageUrl: item.imageUrl,
         rightsEndsAt: item.endsAt,
         rightsStatus: item.status,
     };
@@ -1476,6 +1384,7 @@ function extensionToImageChip(item: ExtensionRequestRow): ImageChip {
         projectName: item.projectName,
         projectId: item.projectId,
         thumbUrl: item.thumbUrl,
+        imageUrl: item.imageUrl,
         rightsEndsAt: item.rightsEndsAt,
         rightsStatus: "active",
     };
