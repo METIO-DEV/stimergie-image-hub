@@ -27,7 +27,7 @@ class ImageVariantGenerator
     public function __construct(private readonly ObjectStoragePolicy $storagePolicy) {}
 
     /**
-     * @return array{disk: string, original: string, web: string, thumb: null, hd: string, url: string, width: int|null, height: int|null, orientation: string|null, mime_type: string|null, size_bytes: int|null, checksum: string, variants: array<string, array{object_key: string, mime_type: string|null, width: int|null, height: int|null, size_bytes: int|null}>}
+     * @return array{disk: string, original: string, web: string, thumb: string|null, hd: string, url: string, width: int|null, height: int|null, orientation: string|null, mime_type: string|null, size_bytes: int|null, checksum: string, variants: array<string, array{object_key: string, mime_type: string|null, width: int|null, height: int|null, size_bytes: int|null}>}
      */
     public function store(UploadedFile $file, string $targetPrefix = 'images'): array
     {
@@ -59,6 +59,7 @@ class ImageVariantGenerator
             ],
         ];
 
+        $variants['thumb'] = $this->putResizedVariant($disk, "{$targetPrefix}/".self::THUMBNAIL_VARIANT_DIRECTORY."/{$baseName}.{$extension}", $sourcePath, $mimeType, self::THUMBNAIL_MAX_SIZE, self::THUMBNAIL_QUALITY);
         $variants['web'] = $this->putResizedVariant($disk, "{$targetPrefix}/".self::WEB_VARIANT_DIRECTORY."/{$baseName}.{$extension}", $sourcePath, $mimeType, self::WEB_MAX_SIZE, self::WEB_QUALITY);
         $variants['hd'] = $variants['original'];
 
@@ -66,7 +67,7 @@ class ImageVariantGenerator
             'disk' => $disk,
             'original' => $variants['original']['object_key'],
             'web' => $variants['web']['object_key'],
-            'thumb' => null,
+            'thumb' => $variants['thumb']['object_key'],
             'hd' => $variants['hd']['object_key'],
             'url' => Storage::disk($disk)->url($variants['web']['object_key']),
             'width' => $width,

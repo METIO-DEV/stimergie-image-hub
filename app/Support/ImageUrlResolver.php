@@ -13,17 +13,22 @@ class ImageUrlResolver
 
     public function thumbnailUrl(Image $image): ?string
     {
-        return $this->url($image->storage_provider, $this->webObjectKey($image));
+        return $this->url($image->storage_provider, $this->thumbnailObjectKey($image));
     }
 
     public function displayUrl(Image $image): ?string
     {
-        return $this->url($image->storage_provider, $this->webObjectKey($image));
+        $webKey = $this->variantObjectKey($image, 'web') ?: $image->object_key_web;
+
+        return $this->url(
+            $image->storage_provider,
+            $webKey ?: $image->object_key_original ?: $this->variantObjectKey($image, 'thumb') ?: $image->object_key_thumb,
+        );
     }
 
     public function temporaryThumbnailUrl(Image $image): ?string
     {
-        return $this->temporaryAssetUrl($image, 'web');
+        return $this->temporaryAssetUrl($image, 'thumb');
     }
 
     public function temporaryDisplayUrl(Image $image): ?string
@@ -33,7 +38,7 @@ class ImageUrlResolver
 
     public function temporarySharedAlbumThumbnailUrl(string $shareKey, Image $image): ?string
     {
-        return $this->temporarySharedAlbumAssetUrl($shareKey, $image, 'web');
+        return $this->temporarySharedAlbumAssetUrl($shareKey, $image, 'thumb');
     }
 
     public function temporarySharedAlbumDisplayUrl(string $shareKey, Image $image): ?string
@@ -47,9 +52,8 @@ class ImageUrlResolver
     public function assetSource(Image $image, string $variant): array
     {
         $objectKey = match ($variant) {
-            // Keep `thumb` as a backwards-compatible route alias, but all
-            // on-screen previews use the single lightweight web variant.
-            'thumb', 'web', 'display' => $this->webObjectKey($image),
+            'thumb' => $this->thumbnailObjectKey($image),
+            'web', 'display' => $this->displayObjectKey($image),
             default => null,
         };
 
@@ -71,6 +75,14 @@ class ImageUrlResolver
             ?->object_key;
 
         return is_string($objectKey) && $objectKey !== '' ? $objectKey : null;
+    }
+
+    private function isOriginalKey(Image $image, string $objectKey): bool
+    {
+        return in_array($objectKey, array_filter([
+            $image->object_key_original,
+            $image->object_key_hd,
+        ]), true);
     }
 
     private function temporaryAssetUrl(Image $image, string $variant): ?string
@@ -99,25 +111,46 @@ class ImageUrlResolver
         );
     }
 
-    private function webObjectKey(Image $image): ?string
+    private function thumbnailObjectKey(Image $image): ?string
     {
-        // The image column is the canonical source used by downloads and
-        // synchronization jobs. Variant rows are only a legacy fallback.
-        $webKey = $image->object_key_web ?: $this->variantObjectKey($image, 'web');
+        $thumbnailKey = $this->variantObjectKey($image, 'thumb') ?: $image->object_key_thumb;
 
-        if (! is_string($webKey) || trim($webKey) === '') {
-            return null;
+        if ($thumbnailKey && $this->isStandaloneThumbnailKey($image, $thumbnailKey)) {
+            return $thumbnailKey;
         }
 
-        // Never silently load the heavy original in an on-screen preview.
-        if (in_array($webKey, array_filter([
-            $image->object_key_original,
-            $image->object_key_hd,
-        ]), true)) {
+        return $this->thumbnailFallbackObjectKey($image);
+    }
+
+    private function thumbnailFallbackObjectKey(Image $image): ?string
+    {
+        $webKey = $this->variantObjectKey($image, 'web') ?: $image->object_key_web;
+
+        if (! $webKey || $this->isOriginalKey($image, $webKey)) {
             return null;
         }
 
         return $webKey;
+    }
+
+    private function isStandaloneThumbnailKey(Image $image, string $objectKey): bool
+    {
+        if ($this->isOriginalKey($image, $objectKey) || $objectKey === $image->object_key_web) {
+            return false;
+        }
+
+        $directory = '/'.strtolower(trim(dirname($objectKey), '/')).'/';
+
+        return str_contains($directory, '/miniatures/')
+            || str_contains($directory, '/thumbs/')
+            || str_contains($directory, '/images/thumbs/');
+    }
+
+    private function displayObjectKey(Image $image): ?string
+    {
+        $webKey = $this->variantObjectKey($image, 'web') ?: $image->object_key_web;
+
+        return $webKey ?: $image->object_key_original ?: $this->variantObjectKey($image, 'thumb') ?: $image->object_key_thumb;
     }
 
     public function downloadUrl(Image $image): ?string

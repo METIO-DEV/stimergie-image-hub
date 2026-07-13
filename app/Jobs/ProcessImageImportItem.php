@@ -98,7 +98,6 @@ class ProcessImageImportItem implements ShouldQueue
             $fileData = $imageVariants->generateFromOriginal(
                 $image,
                 $storagePath->prefix($project),
-                generateThumb: false,
             );
 
             DB::transaction(function () use ($fileData, $image, $imageVariants, $item): void {
