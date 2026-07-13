@@ -112,6 +112,7 @@ class SharedAlbumManagementTest extends TestCase
             'status' => 'ready',
             'storage_provider' => 'scaleway',
             'object_key_original' => 'photos/client-expiration/source.jpg',
+            'object_key_web' => 'photos/client-expiration/web/source.jpg',
         ]);
         $album = SharedAlbum::create([
             'client_id' => $client->id,

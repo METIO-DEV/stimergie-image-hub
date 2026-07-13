@@ -204,19 +204,17 @@ class ImageImportManagementTest extends TestCase
         $this->assertSame('ready', $image->status);
         $this->assertStringStartsWith('photos/projet-import/hd/', $image->object_key_original);
         $this->assertStringStartsWith('photos/projet-import/web/', $image->object_key_web);
-        $this->assertStringStartsWith('photos/projet-import/miniatures/', $image->object_key_thumb);
+        $this->assertNull($image->object_key_thumb);
         $this->assertSame($image->object_key_original, $image->object_key_hd);
         $this->assertSame('landscape', $image->orientation);
         $this->assertSame($image->id, $item->image_id);
         $this->assertSame('done', $item->status);
         $this->assertSame('completed', $import->status);
         $this->assertSame(1, $import->processed_items);
-        Storage::disk('scaleway')->assertExists($image->object_key_thumb);
         Storage::disk('scaleway')->assertExists($image->object_key_web);
-        $this->assertDatabaseHas('image_variants', [
+        $this->assertDatabaseMissing('image_variants', [
             'image_id' => $image->id,
             'kind' => 'thumb',
-            'object_key' => $image->object_key_thumb,
         ]);
         Storage::disk('scaleway')->assertExists($image->object_key_hd);
     }

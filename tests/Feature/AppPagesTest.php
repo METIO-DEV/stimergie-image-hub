@@ -13,6 +13,7 @@ use App\Models\ProjectAccessPeriod;
 use App\Models\Tag;
 use App\Models\User;
 use App\Support\ImageRightsExtensionRequestMailer;
+use App\Support\ImageUrlResolver;
 use App\Support\TransactionalMailer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -607,6 +608,10 @@ class AppPagesTest extends TestCase
             'legacy_url' => 'https://legacy.example/source.jpg',
             'legacy_thumbnail_url' => 'https://legacy.example/source-thumb.jpg',
         ]);
+        $image->variants()->create([
+            'kind' => 'web',
+            'object_key' => 'images/web/stale-source.jpg',
+        ]);
 
         $this->actingAs($admin)
             ->get(route('gallery.index'))
@@ -614,7 +619,7 @@ class AppPagesTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Gallery/Index')
                 ->where('images.0.thumbUrl', fn (string $url) => str_contains($url, "/image-assets/{$image->id}")
-                    && str_contains($url, 'variant=thumb')
+                    && str_contains($url, 'variant=web')
                     && str_contains($url, 'signature='))
                 ->where('images.0.imageUrl', fn (string $url) => str_contains($url, "/image-assets/{$image->id}")
                     && str_contains($url, 'variant=display')
@@ -623,6 +628,9 @@ class AppPagesTest extends TestCase
                 ->where('images.0.webDownloadUrl', route('images.download', ['image' => $image, 'variant' => 'web']))
                 ->where('images.0.hdDownloadUrl', route('images.download', ['image' => $image, 'variant' => 'hd']))
                 ->etc());
+
+        $source = app(ImageUrlResolver::class)->assetSource($image->load('variants'), 'web');
+        $this->assertSame('images/web/source.jpg', $source['objectKey']);
     }
 
     public function test_gallery_does_not_use_original_object_as_thumbnail(): void
@@ -662,9 +670,7 @@ class AppPagesTest extends TestCase
                 ->component('Gallery/Index')
                 ->where('images.0.id', $image->id)
                 ->where('images.0.thumbUrl', null)
-                ->where('images.0.imageUrl', fn (string $url) => str_contains($url, "/image-assets/{$image->id}")
-                    && str_contains($url, 'variant=display')
-                    && str_contains($url, 'signature='))
+                ->where('images.0.imageUrl', null)
                 ->etc());
     }
 
@@ -704,7 +710,7 @@ class AppPagesTest extends TestCase
                 ->component('Gallery/Index')
                 ->where('images.0.id', $image->id)
                 ->where('images.0.thumbUrl', fn (string $url) => str_contains($url, "/image-assets/{$image->id}")
-                    && str_contains($url, 'variant=thumb')
+                    && str_contains($url, 'variant=web')
                     && str_contains($url, 'signature='))
                 ->etc());
     }
@@ -746,6 +752,14 @@ class AppPagesTest extends TestCase
 
         $this->assertStringContainsString('images/web/signee.jpg', $response->headers->get('Location'));
         $this->assertStringContainsString('expiration=', $response->headers->get('Location'));
+
+        $legacyThumbnailResponse = $this->get(URL::temporarySignedRoute(
+            'images.asset',
+            now()->addMinutes(10),
+            ['image' => $image, 'variant' => 'thumb'],
+        ))->assertRedirect();
+
+        $this->assertStringContainsString('images/web/signee.jpg', $legacyThumbnailResponse->headers->get('Location'));
 
         $this->get(URL::temporarySignedRoute(
             'images.asset',
@@ -1504,7 +1518,7 @@ class AppPagesTest extends TestCase
                 ->where('downloads.0.images.0.id', $image->id)
                 ->where('downloads.0.images.0.title', 'Image historique')
                 ->where('downloads.0.images.0.thumbUrl', fn (string $url) => str_contains($url, "/image-assets/{$image->id}")
-                    && str_contains($url, 'variant=thumb')
+                    && str_contains($url, 'variant=web')
                     && str_contains($url, 'signature='))
                 ->etc());
     }
