@@ -1,0 +1,535 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Jobs\RunAssetTransferJob;
+use App\Jobs\RunBucketDatabaseSyncJob;
+use App\Jobs\RunMissingWebVariantGenerationJob;
+use App\Models\AssetTransferJob;
+use App\Models\Project;
+use App\Support\O2SwitchAssetBrowser;
+use App\Support\ProjectFolderMatcher;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
+use Inertia\Inertia;
+use Inertia\Response;
+use Throwable;
+
+class AssetTransferController extends Controller
+{
+    public function index(Request $request): Response
+    {
+        $this->authorizeSuperAdmin($request);
+
+        return Inertia::render('AssetTransfers/Index', [
+            'jobs' => $this->jobSummaries(),
+        ]);
+    }
+
+    public function sources(Request $request, O2SwitchAssetBrowser $browser, ProjectFolderMatcher $folderMatcher): JsonResponse
+    {
+        $this->authorizeSuperAdmin($request);
+
+        try {
+            $ftpFolders = $browser->ftpFolders();
+            $bucketFolders = $browser->bucketFolders();
+        } catch (Throwable $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'folders' => [],
+            ], 422);
+        }
+
+        return response()->json([
+            'folders' => $this->sourceRows($ftpFolders, $bucketFolders, $folderMatcher),
+            'webVariantAudits' => $this->webVariantAuditRows(),
+            'refreshedAt' => now()->toIso8601String(),
+        ]);
+    }
+
+    public function store(
+        Request $request,
+        O2SwitchAssetBrowser $browser,
+        ProjectFolderMatcher $folderMatcher,
+    ): JsonResponse {
+        $this->authorizeSuperAdmin($request);
+
+        abort_if($this->activeJob(), 409, 'Un transfert est déjà en cours.');
+
+        $data = $request->validate([
+            'folders' => ['nullable', 'array', 'max:100'],
+            'folders.*' => ['string', 'max:255'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $folders = collect($data['folders'] ?? [])
+            ->map(fn (string $folder) => trim($folder))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($folders->contains(fn (string $folder): bool => ! $this->isTransferableFolderName($folder))) {
+            return response()->json([
+                'message' => 'La sélection contient un dossier non transférable.',
+                'errors' => [
+                    'folders' => ['La sélection contient un dossier non transférable.'],
+                ],
+            ], 422);
+        }
+
+        $projects = Project::query()->get();
+
+        $foldersWithoutProject = $folders
+            ->filter(fn (string $folder): bool => $this->projectForTransferFolder($folder, $folderMatcher, $projects) === null)
+            ->values();
+
+        if ($foldersWithoutProject->isNotEmpty()) {
+            return response()->json([
+                'message' => 'La sélection contient un dossier sans projet associé.',
+                'errors' => [
+                    'folders' => ['Associez ces dossiers à un projet avant de lancer le transfert.'],
+                ],
+            ], 422);
+        }
+
+        if ($folders->isEmpty()) {
+            $limit = (int) ($data['limit'] ?? 0);
+            abort_if($limit < 1, 422, 'Sélectionnez des dossiers ou indiquez un nombre de dossiers à transférer.');
+
+            $bucketFolders = $browser->bucketFolders();
+            $folders = collect($browser->ftpFolders())
+                ->reject(fn (string $folder) => array_key_exists($folder, $bucketFolders))
+                ->filter(fn (string $folder): bool => $this->isTransferableFolderName($folder))
+                ->filter(fn (string $folder): bool => $this->projectForTransferFolder($folder, $folderMatcher, $projects) !== null)
+                ->take($limit)
+                ->values();
+        }
+
+        abort_if($folders->isEmpty(), 422, 'Aucun dossier FTP manquant ne correspond à un projet associé.');
+
+        $job = AssetTransferJob::create([
+            'started_by' => $request->user()->id,
+            'status' => 'pending',
+            'mode' => 'batch-copy',
+            'total_folders' => $folders->count(),
+            'folders' => $folders->all(),
+            'completed_folders' => [],
+            'failed_folder_details' => [],
+            'metadata' => [
+                'created_from' => 'temporary_asset_transfer_ui',
+            ],
+        ]);
+
+        RunAssetTransferJob::dispatch($job->id)->onQueue('sync');
+
+        return response()->json([
+            'job' => $this->jobSummary($job->fresh()),
+        ], 201);
+    }
+
+    public function resyncBucket(Request $request): JsonResponse
+    {
+        $this->authorizeSuperAdmin($request);
+
+        abort_if($this->activeBucketDatabaseSync(), 409, 'Une resynchro bucket/base est déjà en cours.');
+
+        $job = AssetTransferJob::create([
+            'started_by' => $request->user()->id,
+            'status' => 'pending',
+            'mode' => 'bucket-db-sync',
+            'total_folders' => 0,
+            'folders' => [],
+            'completed_folders' => [],
+            'failed_folder_details' => [],
+            'metadata' => [
+                'created_from' => 'temporary_asset_transfer_ui',
+            ],
+        ]);
+
+        RunBucketDatabaseSyncJob::dispatch($job->id)->onQueue('sync');
+
+        return response()->json([
+            'job' => $this->jobSummary($job->fresh()),
+        ], 201);
+    }
+
+    public function generateWebVariants(Request $request): JsonResponse
+    {
+        $this->authorizeSuperAdmin($request);
+
+        abort_if(
+            $this->activeWebVariantGeneration(),
+            409,
+            'Une génération web est déjà en cours.',
+        );
+
+        $data = $request->validate([
+            'project_id' => ['nullable', 'integer', 'exists:projects,id'],
+            'folder' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $scopeLabel = 'Tous les projets';
+
+        if (! empty($data['project_id'])) {
+            $project = Project::query()
+                ->with('client:id,name')
+                ->findOrFail((int) $data['project_id']);
+            $scopeLabel = trim(($project->client?->name ? "{$project->client->name} / " : '').$project->name);
+        } elseif (! empty($data['folder'])) {
+            $scopeLabel = trim((string) $data['folder']);
+        }
+
+        $job = AssetTransferJob::create([
+            'started_by' => $request->user()->id,
+            'status' => 'pending',
+            'mode' => 'web-variant-generation',
+            'total_folders' => 0,
+            'folders' => [$scopeLabel],
+            'completed_folders' => [],
+            'failed_folder_details' => [],
+            'metadata' => [
+                'created_from' => 'temporary_asset_transfer_ui',
+                'web_variant_generation' => [
+                    'project_id' => $data['project_id'] ?? null,
+                    'folder' => $data['folder'] ?? null,
+                    'source_prefix' => 'photos',
+                    'scope_label' => $scopeLabel,
+                ],
+            ],
+        ]);
+
+        RunMissingWebVariantGenerationJob::dispatch($job->id)->onQueue('sync');
+
+        return response()->json([
+            'job' => $this->jobSummary($job->fresh()),
+        ], 201);
+    }
+
+    public function show(Request $request, AssetTransferJob $assetTransferJob): JsonResponse
+    {
+        $this->authorizeSuperAdmin($request);
+
+        $assetTransferJob = $this->reconcileStaleCancellation($assetTransferJob->fresh());
+
+        return response()->json([
+            'job' => $this->jobSummary($assetTransferJob),
+        ]);
+    }
+
+    public function stop(Request $request, AssetTransferJob $assetTransferJob): JsonResponse
+    {
+        $this->authorizeSuperAdmin($request);
+
+        if ($assetTransferJob->isActive()) {
+            $assetTransferJob->forceFill([
+                'status' => 'cancelling',
+                'cancel_requested_at' => now(),
+                'metadata' => [
+                    ...($assetTransferJob->metadata ?? []),
+                    'cancelled_by' => $request->user()->id,
+                ],
+            ])->save();
+
+            if ($assetTransferJob->process_id) {
+                $this->signalProcess((int) $assetTransferJob->process_id);
+            } else {
+                $this->cancelStaleJob($assetTransferJob, 'Arrêt demandé avant démarrage du process.');
+            }
+        }
+
+        return response()->json([
+            'job' => $this->jobSummary($this->reconcileStaleCancellation($assetTransferJob->fresh())),
+        ]);
+    }
+
+    private function authorizeSuperAdmin(Request $request): void
+    {
+        abort_unless($request->user()?->isSuperAdmin(), 403);
+    }
+
+    private function activeJob(): ?AssetTransferJob
+    {
+        return AssetTransferJob::query()
+            ->whereIn('status', ['pending', 'running', 'cancelling'])
+            ->where('mode', 'batch-copy')
+            ->latest()
+            ->first();
+    }
+
+    private function activeBucketDatabaseSync(): ?AssetTransferJob
+    {
+        return AssetTransferJob::query()
+            ->whereIn('status', ['pending', 'running', 'cancelling'])
+            ->where('mode', 'bucket-db-sync')
+            ->latest()
+            ->first();
+    }
+
+    private function activeWebVariantGeneration(): ?AssetTransferJob
+    {
+        return AssetTransferJob::query()
+            ->whereIn('status', ['pending', 'running', 'cancelling'])
+            ->where('mode', 'web-variant-generation')
+            ->latest()
+            ->first();
+    }
+
+    /**
+     * @param  array<int, string>  $ftpFolders
+     * @param  array<string, int>  $bucketFolders
+     * @return array<int, array<string, mixed>>
+     */
+    private function sourceRows(array $ftpFolders, array $bucketFolders, ProjectFolderMatcher $folderMatcher): array
+    {
+        $projects = $this->projectsWithImageVariantCounts()
+            ->get();
+        $projectsById = $projects->keyBy('id');
+
+        return collect([...$ftpFolders, ...array_keys($bucketFolders)])
+            ->unique()
+            ->reject(fn (string $folder) => $this->isSystemFolder($folder))
+            ->sort(SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
+            ->map(function (string $folder) use ($bucketFolders, $folderMatcher, $ftpFolders, $projects, $projectsById): array {
+                $project = $this->projectForTransferFolder($folder, $folderMatcher, $projects);
+                $project = $project ? $projectsById->get($project->id, $project) : null;
+                $onFtp = in_array($folder, $ftpFolders, true);
+
+                return [
+                    'name' => $folder,
+                    'onFtp' => $onFtp,
+                    'onBucket' => array_key_exists($folder, $bucketFolders),
+                    'bucketFileCount' => $bucketFolders[$folder] ?? 0,
+                    'projectId' => $project?->id,
+                    'projectName' => $project?->name,
+                    'databaseImageCount' => $project?->images_count ?? 0,
+                    'imagesWithOriginalCount' => $project?->images_with_original_count ?? 0,
+                    'webVariantReadyCount' => max(0, ($project?->images_with_original_count ?? 0) - ($project?->missing_web_variant_count ?? 0)),
+                    'missingWebVariantCount' => $project?->missing_web_variant_count ?? 0,
+                    'transferable' => $onFtp && $this->isTransferableFolderName($folder) && $project !== null,
+                    'transferBlockedReason' => $this->transferBlockedReason($folder, $project),
+                ];
+            })
+            ->all();
+    }
+
+    private function isSystemFolder(string $folder): bool
+    {
+        return in_array(Str::lower(trim($folder)), ['assets'], true)
+            || str_contains($folder, ':');
+    }
+
+    private function isTransferableFolderName(string $folder): bool
+    {
+        $folder = trim($folder);
+
+        return $folder !== ''
+            && mb_strlen($folder) <= 255
+            && ! $this->isSystemFolder($folder)
+            && preg_match('/[\x00-\x1F\x7F]/', $folder) !== 1;
+    }
+
+    /**
+     * @param  Collection<int, Project>|null  $projects
+     */
+    private function projectForTransferFolder(
+        string $folder,
+        ProjectFolderMatcher $folderMatcher,
+        ?Collection $projects = null,
+    ): ?Project {
+        return $folderMatcher->exactProject($folder, $projects);
+    }
+
+    private function transferBlockedReason(string $folder, ?Project $project): ?string
+    {
+        if (! $this->isTransferableFolderName($folder)) {
+            return 'Dossier non transférable';
+        }
+
+        if (! $project) {
+            return 'Aucun projet existant pour ce dossier';
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function webVariantAuditRows(): array
+    {
+        return $this->projectsWithImageVariantCounts()
+            ->with('client:id,name')
+            ->orderByDesc('missing_web_variant_count')
+            ->orderBy('name')
+            ->get()
+            ->filter(fn (Project $project): bool => (int) $project->missing_web_variant_count > 0)
+            ->map(fn (Project $project): array => [
+                'projectId' => $project->id,
+                'projectName' => $project->name,
+                'clientName' => $project->client?->name,
+                'sourceFolder' => $project->source_folder,
+                'databaseImageCount' => (int) $project->images_count,
+                'imagesWithOriginalCount' => (int) $project->images_with_original_count,
+                'webVariantReadyCount' => max(0, (int) $project->images_with_original_count - (int) $project->missing_web_variant_count),
+                'missingWebVariantCount' => (int) $project->missing_web_variant_count,
+            ])
+            ->all();
+    }
+
+    private function projectsWithImageVariantCounts()
+    {
+        return Project::query()
+            ->withCount([
+                'images',
+                'images as images_with_original_count' => fn ($query) => $query->whereNotNull('object_key_original'),
+                'images as missing_web_variant_count' => fn ($query) => $this->constrainMissingProjectWeb($query),
+            ]);
+    }
+
+    private function constrainMissingProjectWeb($query): void
+    {
+        $query
+            ->whereNotNull('object_key_original')
+            ->where('object_key_original', 'not like', '%/JPG/%')
+            ->where(function ($query): void {
+                $query
+                    ->whereNull('object_key_web')
+                    ->orWhereColumn('object_key_web', 'object_key_original')
+                    ->orWhereColumn('object_key_web', 'object_key_hd')
+                    ->orWhere('object_key_web', 'not like', 'photos/%/JPG/%');
+            });
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function jobSummaries(): array
+    {
+        return AssetTransferJob::query()
+            ->with('starter:id,name')
+            ->latest()
+            ->limit(10)
+            ->get()
+            ->map(fn (AssetTransferJob $job) => $this->jobSummary($this->reconcileStaleCancellation($job)))
+            ->all();
+    }
+
+    private function reconcileStaleCancellation(AssetTransferJob $job): AssetTransferJob
+    {
+        if (
+            $job->status !== 'cancelling' ||
+            ! $job->cancel_requested_at ||
+            $job->cancel_requested_at->gt(now()->subMinute())
+        ) {
+            return $job;
+        }
+
+        return $this->cancelStaleJob($job, 'État corrigé après arrêt du process de transfert.');
+    }
+
+    private function cancelStaleJob(AssetTransferJob $job, string $reason): AssetTransferJob
+    {
+        $job->forceFill([
+            'status' => 'cancelled',
+            'current_folder' => null,
+            'process_id' => null,
+            'finished_at' => now(),
+        ])->save();
+
+        if ($job->log_file) {
+            File::append($job->log_file, PHP_EOL."Annulé: {$reason}".PHP_EOL);
+        }
+
+        return $job->fresh();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function jobSummary(AssetTransferJob $job): array
+    {
+        return [
+            'id' => $job->id,
+            'status' => $job->status,
+            'mode' => $job->mode,
+            'startedBy' => $job->starter?->name,
+            'totalFolders' => $job->total_folders,
+            'processedFolders' => $job->processed_folders,
+            'failedFolders' => $job->failed_folders,
+            'currentFolder' => $job->current_folder,
+            'folders' => $job->folders ?? [],
+            'completedFolders' => $job->completed_folders ?? [],
+            'failedFolderDetails' => $job->failed_folder_details ?? [],
+            'cancelRequestedAt' => $job->cancel_requested_at?->toIso8601String(),
+            'startedAt' => $job->started_at?->toIso8601String(),
+            'finishedAt' => $job->finished_at?->toIso8601String(),
+            'createdAt' => $job->created_at?->toIso8601String(),
+            'syncTotals' => $this->syncTotals($job),
+            'webVariantTotals' => $this->webVariantTotals($job),
+            'log' => $this->logTail($job),
+        ];
+    }
+
+    /**
+     * @return array{bucketImages: int, created: int, updated: int, skipped: int}|null
+     */
+    private function syncTotals(AssetTransferJob $job): ?array
+    {
+        if ($job->mode !== 'bucket-db-sync') {
+            return null;
+        }
+
+        $totals = ($job->metadata ?? [])['bucket_db_sync']['totals'] ?? [];
+
+        return [
+            'bucketImages' => (int) ($totals['bucket_images'] ?? 0),
+            'created' => (int) ($totals['created'] ?? 0),
+            'updated' => (int) ($totals['updated'] ?? 0),
+            'skipped' => (int) ($totals['skipped'] ?? 0),
+        ];
+    }
+
+    /**
+     * @return array{checked: int, generated: int, missingOriginals: int, failed: int}|null
+     */
+    private function webVariantTotals(AssetTransferJob $job): ?array
+    {
+        if ($job->mode !== 'web-variant-generation') {
+            return null;
+        }
+
+        $totals = ($job->metadata ?? [])['web_variant_generation']['totals'] ?? [];
+
+        return [
+            'checked' => (int) ($totals['checked'] ?? 0),
+            'generated' => (int) ($totals['generated'] ?? 0),
+            'missingOriginals' => (int) ($totals['missing_originals'] ?? 0),
+            'failed' => (int) ($totals['failed'] ?? 0),
+        ];
+    }
+
+    private function logTail(AssetTransferJob $job): string
+    {
+        if (! $job->log_file || ! File::exists($job->log_file)) {
+            return '';
+        }
+
+        $content = File::get($job->log_file);
+
+        return strlen($content) > 60000 ? substr($content, -60000) : $content;
+    }
+    private function signalProcess(int $pid): void
+    {
+        if ($pid < 1) {
+            return;
+        }
+
+        if (function_exists('posix_kill')) {
+            @posix_kill($pid, 15);
+        }
+    }
+}

@@ -1,0 +1,120 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: ${APP_URL:-https://stimergie.metio-dev.fr}
+      DB_CONNECTION: pgsql
+      DB_HOST: pgsql
+      DB_PORT: 5432
+      DB_DATABASE: ${POSTGRES_DB:-stimergie}
+      DB_USERNAME: ${POSTGRES_USER:-stimergie}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in Dokploy}
+      CACHE_STORE: ${CACHE_STORE:-database}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-database}
+      DB_QUEUE_RETRY_AFTER: ${DB_QUEUE_RETRY_AFTER:-1200}
+      SESSION_DRIVER: ${SESSION_DRIVER:-database}
+      LOG_CHANNEL: stderr
+      VITE_DEV_SERVER_URL: ""
+      RUN_MIGRATIONS: "true"
+      RUN_OPTIMIZE: "true"
+    depends_on:
+      pgsql:
+        condition: service_healthy
+    expose:
+      - "80"
+    volumes:
+      - storage-data:/var/www/html/storage
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/healthz.txt >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: ${APP_URL:-https://stimergie.metio-dev.fr}
+      DB_CONNECTION: pgsql
+      DB_HOST: pgsql
+      DB_PORT: 5432
+      DB_DATABASE: ${POSTGRES_DB:-stimergie}
+      DB_USERNAME: ${POSTGRES_USER:-stimergie}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in Dokploy}
+      CACHE_STORE: ${CACHE_STORE:-database}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-database}
+      DB_QUEUE_RETRY_AFTER: ${DB_QUEUE_RETRY_AFTER:-1200}
+      SESSION_DRIVER: ${SESSION_DRIVER:-database}
+      LOG_CHANNEL: stderr
+      VITE_DEV_SERVER_URL: ""
+      RUN_OPTIMIZE: "true"
+    depends_on:
+      app:
+        condition: service_healthy
+    volumes:
+      - storage-data:/var/www/html/storage
+    command: php artisan queue:work --sleep=1 --tries=3 --timeout=900
+
+  queue-sync:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: ${APP_URL:-https://stimergie.metio-dev.fr}
+      DB_CONNECTION: pgsql
+      DB_HOST: pgsql
+      DB_PORT: 5432
+      DB_DATABASE: ${POSTGRES_DB:-stimergie}
+      DB_USERNAME: ${POSTGRES_USER:-stimergie}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in Dokploy}
+      CACHE_STORE: ${CACHE_STORE:-database}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-database}
+      DB_QUEUE_RETRY_AFTER: ${DB_QUEUE_RETRY_AFTER:-1200}
+      SESSION_DRIVER: ${SESSION_DRIVER:-database}
+      LOG_CHANNEL: stderr
+      VITE_DEV_SERVER_URL: ""
+      RUN_OPTIMIZE: "true"
+    depends_on:
+      app:
+        condition: service_healthy
+    volumes:
+      - storage-data:/var/www/html/storage
+    command: php artisan queue:work --queue=sync --sleep=1 --tries=1 --timeout=0
+
+  pgsql:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-stimergie}
+      POSTGRES_USER: ${POSTGRES_USER:-stimergie}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in Dokploy}
+    volumes:
+      - pgsql-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  storage-data:
+  pgsql-data:
