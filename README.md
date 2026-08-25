@@ -20,6 +20,49 @@ Application Laravel + React/Inertia pour la gestion metier Stimergie Image Hub :
 - Albums partages publics temporaires et partage d'images entre clients.
 - Blog/ressources, pages legales, contact et emails transactionnels.
 
+## Monitoring
+
+La liveness existante est conservee : `GET /up` est la route Laravel native et
+`/healthz.txt` reste le healthcheck Docker statique. Elles sont publiques et ne
+realisent pas de controle de dependance.
+
+Les endpoints operationnels sont declares hors du groupe middleware `web` et
+necessitent le header `X-Monitoring-Token` egal a `MONITORING_OPS_TOKEN` :
+
+| Route | Reponse | Usage |
+| --- | --- | --- |
+| `GET /ready` | `200` lorsque PostgreSQL repond, `503` sinon | Readiness de l'application |
+| `GET /ops` | Toujours `200` lorsqu'un snapshot peut etre produit | Snapshot de supervision protege |
+
+Les deux routes repondent avec `Cache-Control: no-store`. Le token est envoye
+uniquement dans le header, jamais dans une URL. Une valeur vide ou absente
+refuse l'acces. Configurer ce token unique dans Dokploy ; ne pas le committer.
+
+`/ops` expose uniquement des signaux techniques : version de schema, nom du
+service, horodatage UTC, latence et etat PostgreSQL, attente par queue
+`database` (`default` et `sync` par defaut), age du job executable le plus
+ancien et nombre de jobs definitivement echoues sur les cinq dernieres minutes.
+Definir `MONITORING_RELEASE` pour ajouter la version de build et
+`MONITORING_QUEUE_NAMES` si les workers changent de queues.
+
+L'application ne conserve pas de heartbeat worker, de compteur d'erreurs
+applicatives general ni de sonde Scaleway bon marche. Ces champs sont donc
+deliberement absents du snapshot plutot que simules.
+
+Exemple de controle local, sans placer le token dans l'historique shell :
+
+```sh
+curl -H 'X-Monitoring-Token: <token>' https://stimergie.metio-dev.fr/ops
+```
+
+JSONPath Zabbix utiles quand les champs sont presents :
+
+- `$.status`
+- `$.checks.database.latency_ms`
+- `$.checks.queues.queues[?(@.name=="default")].pending.first()`
+- `$.checks.queues.queues[?(@.name=="sync")].oldest_job_age_s.first()`
+- `$.checks.failed_jobs.count_last_5m`
+
 ## Lancer en Docker
 
 Preparer l'environnement :
